@@ -1513,3 +1513,138 @@ button { font-family: inherit; cursor: pointer; }
   }
   .tooth-chart-form .tooth { font-size: 9px; min-height: 22px; }
 }
+/* ==========================================================================
+   Monthly grouping + stage workflow cells + Fișă PDF button + bold dates
+   ========================================================================== */
+
+.month-section { margin-bottom: 24px; }
+
+.month-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 20px 8px;
+  border-bottom: 0.5px solid var(--border);
+}
+.month-name { font-size: 15px; font-weight: 500; }
+.month-count { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+
+.tbl-due-bold {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.tbl-due-bold.late { color: var(--late); }
+.tbl-due-bold.warn { color: var(--warn); }
+
+/* Fișă PDF button in table */
+.fisa-btn {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--late);
+  cursor: pointer;
+  font-family: var(--font-mono);
+}
+.fisa-btn:hover {
+  background: var(--late-bg);
+  border-color: var(--late);
+}
+
+/* Stage workflow cells */
+.stage-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.08s;
+  min-height: 30px;
+}
+.stage-cell:hover { background: var(--bg-soft); }
+
+.stage-cell.empty .stage-cell-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.stage-cell.empty:hover .stage-cell-label {
+  color: var(--info);
+  font-style: normal;
+}
+
+.stage-cell.in-proces { background: var(--warn-bg); }
+.stage-cell.in-proces .stage-cell-label {
+  font-size: 11px;
+  color: var(--warn);
+  font-weight: 500;
+}
+
+.stage-cell.finalizat { background: var(--good-bg); }
+.stage-cell.finalizat .stage-cell-label {
+  font-size: 11px;
+  color: var(--good);
+  font-weight: 500;
+}
+
+.stage-ico {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.stage-ico.done {
+  background: var(--good);
+  color: white;
+}
+.stage-ico.working {
+  background: var(--warn);
+  position: relative;
+}
+.stage-ico.working::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--warn-bg);
+}
+
+.av-mini {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.stage-icon-inline {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.stage-icon-inline svg {
+  vertical-align: middle;
+}
+
+@media (max-width: 768px) {
+  .stage-cell { padding: 4px 6px; min-height: 24px; }
+  .stage-cell-label { display: none; }
+  .month-name { font-size: 13px; }
+}
