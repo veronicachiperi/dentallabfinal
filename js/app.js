@@ -514,7 +514,6 @@ function openNewCaseModal(defaultClinic) {
     renderClinic();
     if (typeof renderTable === 'function') renderTable();
   });
-};
 function renderClinic() {
   const root = document.getElementById('clinicShell');
   if (!root) return;
