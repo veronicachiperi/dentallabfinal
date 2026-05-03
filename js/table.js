@@ -1,39 +1,6 @@
 /* ==========================================================================
-   Table view — Monday-style spreadsheet of all cases with team handling
+   Table view — Monday-style with 3 stage assignee columns + CSV export
    ========================================================================== */
-
-// Derive the team (all employees who have/will work on the case based on stage progression)
-const STAGE_OWNER_DEFAULTS = {
-  design:    'pc',
-  cam:       'ik',
-  prelucrare:'vc',
-  ceramica:  'mt',
-  proba:     'an',
-  trimisa:   'an'
-};
-
-function getTeam(c) {
-  const team = new Set();
-  if (c.team && Array.isArray(c.team)) {
-    c.team.forEach(id => team.add(id));
-  }
-  const stageIdx = STAGES.findIndex(s => s.id === c.stage);
-  STAGES.slice(0, stageIdx + 1).forEach(s => {
-    const id = STAGE_OWNER_DEFAULTS[s.id];
-    if (id) team.add(id);
-  });
-  if (c.assignee) team.add(c.assignee);
-  return [...team];
-}
-
-// Hex tweak: returns rgba string with given alpha
-function withAlpha(hex, alpha) {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 function renderTable() {
   const root = document.getElementById('tableView');
@@ -46,13 +13,16 @@ function renderTable() {
       <table class="tbl">
         <thead>
           <tr>
-            <th style="width:60px">#</th>
+            <th style="width:50px">#</th>
             <th>Pacient</th>
             <th>Clinică</th>
             <th>Tip lucrare</th>
             <th>Etapă</th>
-            <th>Echipa</th>
+            <th>Design</th>
+            <th>Prelucrare</th>
+            <th>Ceramică</th>
             <th>Intrată</th>
+            <th>Probă</th>
             <th>Finală</th>
             <th>Prioritate</th>
             <th>Note</th>
@@ -65,24 +35,59 @@ function renderTable() {
     </div>
   `;
 
+  // Row click → case detail (but not when clicking inline selects)
   root.querySelectorAll('tbody tr').forEach(tr => {
-    tr.addEventListener('click', () => {
+    tr.addEventListener('click', e => {
+      if (e.target.tagName === 'SELECT' || e.target.closest('select')) return;
       window.location.href = `case.html?id=${tr.dataset.caseId}`;
     });
   });
+
+  // Inline assignee select handlers
+  root.querySelectorAll('.tbl-assignee-select').forEach(sel => {
+    sel.addEventListener('click', e => e.stopPropagation());
+    sel.addEventListener('change', e => {
+      e.stopPropagation();
+      const id = Number(sel.dataset.caseId);
+      const stage = sel.dataset.stage;
+      const c = getCase(id);
+      if (!c) return;
+      c.assignees = c.assignees || {};
+      c.assignees[stage] = sel.value || null;
+      // If updating design and case was notStarted, mark started
+      if (stage === 'design' && sel.value) c.notStarted = false;
+      // Update overall assignee to current stage's assignee
+      if (c.stage === stage) c.assignee = sel.value || c.assignee;
+
+      overrides.edits = overrides.edits || {};
+      overrides.edits[c.id] = overrides.edits[c.id] || {};
+      overrides.edits[c.id].assignees = c.assignees;
+      overrides.edits[c.id].notStarted = c.notStarted;
+      saveOverrides(overrides);
+    });
+  });
+}
+
+function withAlpha(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function inlineAssigneeSelect(caseId, stage, currentId) {
+  const opts = ['<option value="">—</option>']
+    .concat(EMPLOYEES.map(e => `<option value="${e.id}" ${e.id === currentId ? 'selected' : ''}>${e.name}</option>`))
+    .join('');
+  return `<select class="tbl-assignee-select" data-case-id="${caseId}" data-stage="${stage}">${opts}</select>`;
 }
 
 function renderTableRow(c) {
   const clinic = getClinic(c.clinic);
   const stage = getStage(c.stage);
-  const team = getTeam(c);
-  const teamHtml = team.map(id => {
-    const e = getEmployee(id);
-    return e ? `<div class="av" title="${e.name}">${e.initials}</div>` : '';
-  }).join('');
-
   const dueClass = c.late ? 'late' : c.warn ? 'warn' : '';
-  const dueText = c.late ? 'restant' : c.finala;
+  const finalText = c.late ? 'restant' : c.finala;
   const noteText = (c.notes || '—').replace(/</g, '&lt;');
 
   return `
@@ -96,13 +101,54 @@ function renderTableRow(c) {
           <span class="pdot" style="background:${stage.color}"></span>${stage.name}
         </span>
       </td>
-      <td><div class="tbl-team">${teamHtml}</div></td>
+      <td>${inlineAssigneeSelect(c.id, 'design', c.assignees?.design)}</td>
+      <td>${inlineAssigneeSelect(c.id, 'prelucrare', c.assignees?.prelucrare)}</td>
+      <td>${inlineAssigneeSelect(c.id, 'ceramica', c.assignees?.ceramica)}</td>
       <td><span class="tbl-due">${c.intrata}</span></td>
-      <td><span class="tbl-due ${dueClass}">${dueText}</span></td>
+      <td><span class="tbl-due"><b>${c.probaDate || '—'}</b></span></td>
+      <td><span class="tbl-due ${dueClass}"><b>${finalText}</b></span></td>
       <td><span class="tbl-prio ${c.priority}">${c.priority}</span></td>
       <td><span class="tbl-notes" title="${noteText}">${noteText}</span></td>
     </tr>
   `;
+}
+
+// CSV export --------------------------------------------------------------
+function exportCSV() {
+  const cases = applyFilter(CASES);
+  const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Design','Prelucrare','Ceramică','Intrată','Probă','Finală','Prioritate','Dinți','Implant','Amprentă','Note'];
+  const rows = cases.map(c => [
+    c.id,
+    c.name,
+    getClinic(c.clinic).name,
+    c.doctor || getClinic(c.clinic).doctor,
+    c.type,
+    c.color || '',
+    getStage(c.stage).name,
+    getEmployee(c.assignees?.design)?.name || '',
+    getEmployee(c.assignees?.prelucrare)?.name || '',
+    getEmployee(c.assignees?.ceramica)?.name || '',
+    c.intrata,
+    c.probaDate || '',
+    c.finala,
+    c.priority,
+    (c.teeth || []).join(' '),
+    c.implantType || '',
+    c.amprentaType || '',
+    (c.notes || '').replace(/[\r\n]+/g, ' ')
+  ]);
+  const csv = [headers, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `lucrari-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // View toggle (Tabel / Pipeline) ------------------------------------------
@@ -129,12 +175,10 @@ function setMainView(view) {
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('tableView')) return;
 
-  // Wire up view tabs
   document.querySelectorAll('.view-tab').forEach(tab => {
     tab.addEventListener('click', () => setMainView(tab.dataset.view));
   });
 
-  // Re-render table when filters change (app.js handles activeFilter, we re-render after)
   document.querySelectorAll('.subbar .tab').forEach(tab => {
     tab.addEventListener('click', () => setTimeout(renderTable, 0));
   });
@@ -142,7 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
     item.addEventListener('click', () => setTimeout(renderTable, 0));
   });
 
-  // Re-render table on search
   document.getElementById('searchInput')?.addEventListener('input', e => {
     const q = e.target.value.toLowerCase().trim();
     document.querySelectorAll('#tableView tbody tr').forEach(tr => {
@@ -151,7 +194,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Initial view (restore from localStorage if user previously chose pipeline)
+  document.getElementById('exportCsvBtn')?.addEventListener('click', exportCSV);
+
   const saved = localStorage.getItem('dental-lab-view') || 'table';
   setMainView(saved);
 });

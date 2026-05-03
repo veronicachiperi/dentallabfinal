@@ -160,3 +160,63 @@ function statsAvgDays() {
   });
   return n ? Math.round(total / n) : 0;
 }
+// =========================================================================
+// Stage-specific assignees + auto-priority
+// =========================================================================
+const STAGE_ASSIGNEE_DEFAULTS = {
+  design:    'pc',
+  cam:       'ik',
+  prelucrare:'vc',
+  ceramica:  'mt',
+  proba:     'an',
+  trimisa:   'an'
+};
+
+// Auto-populate per-stage assignees
+CASES.forEach(c => {
+  c.assignees = c.assignees || {};
+  const stageOrder = STAGES.findIndex(s => s.id === c.stage);
+  STAGES.forEach((s, i) => {
+    if (i <= stageOrder && !c.assignees[s.id]) {
+      c.assignees[s.id] = c.assignee || STAGE_ASSIGNEE_DEFAULTS[s.id];
+    }
+  });
+  if (!c.probaDate && (c.stage === 'proba' || c.stage === 'ceramica' || c.stage === 'prelucrare')) {
+    const fin = parseShortDate(c.finala);
+    if (fin) {
+      const probaD = new Date(fin); probaD.setDate(fin.getDate() - 2);
+      c.probaDate = fmtShortDate(probaD);
+    }
+  }
+});
+
+// Mark a couple cases as "neincepute" for demo
+[160, 162].forEach(id => {
+  const c = getCase(id);
+  if (c) {
+    c.assignees.design = null;
+    c.notStarted = true;
+  }
+});
+
+// Auto-priority based on final date / probă date / type
+function computePriority(c) {
+  const today = new Date(2026, 4, 2);
+  const finala = parseShortDate(c.finala);
+  const proba = c.probaDate ? parseShortDate(c.probaDate) : null;
+
+  if (!finala) return c.priority || 'mediu';
+
+  const daysToFinal = Math.ceil((finala - today) / 86400000);
+  const daysToProba = proba ? Math.ceil((proba - today) / 86400000) : null;
+
+  if (daysToFinal < 0) return 'urgent';
+  if (daysToProba !== null && daysToProba <= 1 && daysToProba >= 0) return 'urgent';
+  if ((c.type || '').includes('ZR') && daysToFinal < 4) return 'urgent';
+  if (daysToFinal <= 3) return 'urgent';
+  if (daysToFinal <= 7) return 'mediu';
+  return 'reusim';
+}
+
+// Apply computed priority to all cases
+CASES.forEach(c => { c.priority = computePriority(c); });

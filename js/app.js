@@ -48,6 +48,9 @@ function applyFilter(cases) {
       const fin = parseShortDate(c.finala);
       if (!fin || fin < today || fin > weekEnd) return false;
     }
+    if (activeFilter.tab === 'notstarted') {
+      if (!c.notStarted && c.assignees?.design) return false;
+    }
     return true;
   });
 }
@@ -111,7 +114,6 @@ function renderCard(c) {
   const clinic = getClinic(c.clinic);
   const emp = getEmployee(c.assignee);
   const dueClass = c.late ? 'late' : c.warn ? 'warn' : '';
-  const dueText = c.late ? 'restant' : c.finala;
 
   let probaPill = '';
   if (c.stage === 'proba' && c.probaState) {
@@ -119,28 +121,35 @@ function renderCard(c) {
     probaPill = `<span class="proba-pill ${c.probaState}" data-proba="${c.id}"><span class="pdot"></span>${label} · ${c.probaHours || 0}h</span>`;
   }
 
+  const probaDateBadge = c.probaDate
+    ? `<div class="date-row"><span class="date-lbl">Probă:</span><span class="date-val">${c.probaDate}</span></div>`
+    : '';
+  const finalDateBadge = `<div class="date-row"><span class="date-lbl">Finală:</span><span class="date-val ${dueClass}">${c.late ? 'restant' : c.finala}</span></div>`;
+
   card.innerHTML = `
+    <button class="case-menu-btn" type="button" title="Editare rapidă" data-edit="${c.id}">⋯</button>
     <div class="case-meta">
       <span class="case-num">#${c.id}</span><span>·</span><span>${clinic.name}</span>
     </div>
     <div class="case-name">${c.name}</div>
     <div class="case-row">
       <span class="tag">${c.type}</span>
+      <span class="tbl-prio ${c.priority}">${c.priority}</span>
       ${probaPill}
-      <span class="due ${dueClass}">${dueText}</span>
+    </div>
+    <div class="case-dates">
+      ${probaDateBadge}
+      ${finalDateBadge}
     </div>
     ${emp ? `<div class="case-row" style="margin-top:2px"><div class="av">${emp.initials}</div><span style="font-size:10px;color:var(--text-dim)">${emp.name}</span></div>` : ''}
   `;
 
-  // Probă pill cycling
   const pill = card.querySelector('[data-proba]');
   if (pill) {
     pill.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       const next = nextProbaState(c.probaState);
-      c.probaState = next;
-      c.probaHours = 0;
+      c.probaState = next; c.probaHours = 0;
       overrides.proba = overrides.proba || {};
       overrides.proba[c.id] = next;
       saveOverrides(overrides);
@@ -148,7 +157,15 @@ function renderCard(c) {
     });
   }
 
-  // Drag handlers
+  const menuBtn = card.querySelector('[data-edit]');
+  if (menuBtn) {
+    menuBtn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      openQuickEdit(c.id);
+    });
+    menuBtn.addEventListener('mousedown', e => e.stopPropagation());
+  }
+
   card.addEventListener('dragstart', e => {
     card.classList.add('dragging');
     e.dataTransfer.setData('text/plain', String(c.id));
@@ -158,7 +175,6 @@ function renderCard(c) {
 
   return card;
 }
-
 function attachDropZone(col, stageId) {
   col.addEventListener('dragover', e => {
     e.preventDefault();
@@ -232,7 +248,7 @@ function attachFilters() {
   const tabs = document.querySelectorAll('.subbar .tab');
   if (!tabs.length) return;
 
-  const tabMap = ['all', 'mine', 'late', 'week'];
+  const tabMap = ['all', 'mine', 'late', 'week', 'notstarted'];
   tabs.forEach((tab, i) => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('on'));
@@ -317,36 +333,69 @@ function openNewCaseModal(defaultClinic) {
   ).join('');
   const empOpts = EMPLOYEES.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
   const typeOpts = COMMON_TYPES.map(t => `<option>${t}</option>`).join('');
-  const stageOpts = STAGES.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 
   const today = new Date(2026, 4, 2);
-  const future = new Date(today); future.setDate(today.getDate() + 7);
+  const probaD = new Date(today); probaD.setDate(today.getDate() + 5);
+  const finalD = new Date(today); finalD.setDate(today.getDate() + 7);
+
+  const colorOpts = ['A1','A2','A3','A3.5','A4','B1','B2','B3','B4','C1','C2','C3','D2','D3','BL1','BL2','BL3','BL4']
+    .map(c => `<option>${c}</option>`).join('');
+
+  // FDI tooth grid: upper jaw 18-11 | 21-28; lower jaw 48-41 | 31-38
+  const upperRow = [18,17,16,15,14,13,12,11, 21,22,23,24,25,26,27,28];
+  const lowerRow = [48,47,46,45,44,43,42,41, 31,32,33,34,35,36,37,38];
+  const toothBtn = n => `<button type="button" class="tooth" data-tooth="${n}">${n}</button>`;
 
   openModal(`
     <div class="modal-head">
-      <div class="modal-title">Caz nou</div>
+      <div class="modal-title">Caz nou — fișă completă</div>
       <button class="modal-close" type="button">×</button>
     </div>
     <div class="modal-body">
-      <div class="field">
-        <label>Pacient</label>
-        <input id="ncName" placeholder="Numele pacientului" autofocus>
+      <div class="field-row">
+        <div class="field"><label>Nume pacient</label><input id="ncLastName" placeholder="Bengoi" autofocus></div>
+        <div class="field"><label>Prenume</label><input id="ncFirstName" placeholder="Elvis Marius"></div>
       </div>
       <div class="field-row">
         <div class="field"><label>Clinică</label><select id="ncClinic">${clinicOpts}</select></div>
+        <div class="field"><label>Medic</label><input id="ncDoctor" placeholder="Dr. Popescu A."></div>
+      </div>
+      <div class="field-row">
         <div class="field"><label>Tip lucrare</label><select id="ncType">${typeOpts}</select></div>
+        <div class="field"><label>Culoare</label><select id="ncColor">${colorOpts}</select></div>
       </div>
-      <div class="field-row">
-        <div class="field"><label>Intrată</label><input id="ncIntrata" value="${fmtShortDate(today)}"></div>
-        <div class="field"><label>Finală</label><input id="ncFinala" value="${fmtShortDate(future)}"></div>
-      </div>
-      <div class="field-row">
-        <div class="field"><label>Etapa start</label><select id="ncStage">${stageOpts}</select></div>
-        <div class="field"><label>Tehnician</label><select id="ncAssignee">${empOpts}</select></div>
+      <div class="field-row" style="grid-template-columns: 1fr 1fr 1fr">
+        <div class="field"><label>Data intrării</label><input id="ncIntrata" value="${fmtShortDate(today)}"></div>
+        <div class="field"><label>Data probei</label><input id="ncProbaDate" value="${fmtShortDate(probaD)}"></div>
+        <div class="field"><label>Data finală</label><input id="ncFinala" value="${fmtShortDate(finalD)}"></div>
       </div>
       <div class="field">
-        <label>Note (opțional)</label>
-        <textarea id="ncNotes" placeholder="Detalii suplimentare, indicații speciale..."></textarea>
+        <label>Schema dentară (FDI) — click pe dinți pentru a-i selecta</label>
+        <div class="tooth-chart-form">
+          <div class="tooth-row">
+            ${upperRow.slice(0,8).map(toothBtn).join('')}
+            <div class="tooth-divider"></div>
+            ${upperRow.slice(8).map(toothBtn).join('')}
+          </div>
+          <div class="tooth-row">
+            ${lowerRow.slice(0,8).map(toothBtn).join('')}
+            <div class="tooth-divider"></div>
+            ${lowerRow.slice(8).map(toothBtn).join('')}
+          </div>
+        </div>
+        <div id="selectedTeethDisplay" class="selected-teeth-display">Niciun dinte selectat</div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Tip implant</label><input id="ncImplant" placeholder="Straumann, Nobel, AlphaBio..."></div>
+        <div class="field"><label>Tip amprentă</label><input id="ncAmprenta" placeholder="Silicon, digital, alginat..."></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Tehnician design</label><select id="ncAssigneeDesign"><option value="">— neasignat —</option>${empOpts}</select></div>
+        <div class="field"><label>Tehnician ceramică</label><select id="ncAssigneeCeram"><option value="">— neasignat —</option>${empOpts}</select></div>
+      </div>
+      <div class="field">
+        <label>Note generale</label>
+        <textarea id="ncNotes" placeholder="Detalii suplimentare, indicații..."></textarea>
       </div>
     </div>
     <div class="modal-foot">
@@ -355,36 +404,68 @@ function openNewCaseModal(defaultClinic) {
     </div>
   `);
 
+  // Tooth selection
+  const selectedTeeth = new Set();
+  const display = document.getElementById('selectedTeethDisplay');
+  document.querySelectorAll('.tooth-chart-form .tooth').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.tooth;
+      if (selectedTeeth.has(t)) {
+        selectedTeeth.delete(t);
+        btn.classList.remove('selected');
+      } else {
+        selectedTeeth.add(t);
+        btn.classList.add('selected');
+      }
+      const sorted = [...selectedTeeth].map(Number).sort((a,b) => a - b);
+      display.textContent = sorted.length ? 'Dinți selectați: ' + sorted.join(', ') : 'Niciun dinte selectat';
+    });
+  });
+
   document.getElementById('ncSave').addEventListener('click', () => {
-    const name = document.getElementById('ncName').value.trim();
-    if (!name) {
-      document.getElementById('ncName').style.borderColor = '#A32D2D';
+    const last = document.getElementById('ncLastName').value.trim();
+    const first = document.getElementById('ncFirstName').value.trim();
+    if (!last && !first) {
+      document.getElementById('ncLastName').style.borderColor = '#A32D2D';
       return;
     }
+    const fullName = (last + ' ' + first).trim();
+    const designAssignee = document.getElementById('ncAssigneeDesign').value || null;
+    const ceramAssignee = document.getElementById('ncAssigneeCeram').value || null;
+
     const newCase = {
       id: nextCaseId(),
-      name,
+      name: fullName,
+      lastName: last,
+      firstName: first,
       clinic: document.getElementById('ncClinic').value,
+      doctor: document.getElementById('ncDoctor').value,
       type: document.getElementById('ncType').value,
-      stage: document.getElementById('ncStage').value,
+      color: document.getElementById('ncColor').value,
+      stage: 'design',
       priority: 'mediu',
-      intrata: document.getElementById('ncIntrata').value || fmtShortDate(today),
-      finala: document.getElementById('ncFinala').value || fmtShortDate(future),
-      assignee: document.getElementById('ncAssignee').value,
-      notes: document.getElementById('ncNotes').value
+      intrata: document.getElementById('ncIntrata').value,
+      probaDate: document.getElementById('ncProbaDate').value,
+      finala: document.getElementById('ncFinala').value,
+      teeth: [...selectedTeeth].map(Number).sort((a,b) => a - b),
+      implantType: document.getElementById('ncImplant').value,
+      amprentaType: document.getElementById('ncAmprenta').value,
+      notes: document.getElementById('ncNotes').value,
+      assignee: designAssignee,
+      assignees: { design: designAssignee, ceramica: ceramAssignee },
+      notStarted: !designAssignee
     };
-    if (newCase.stage === 'proba') { newCase.probaState = 'lab'; newCase.probaHours = 0; }
+    newCase.priority = computePriority(newCase);
+
     CASES.push(newCase);
     persistNewCase(newCase);
     closeModal();
     renderPipeline();
     renderClinic();
+    if (typeof renderTable === 'function') renderTable();
   });
 }
-
-// =========================================================================
-// Clinic portal page (clinic.html)
-// =========================================================================
+===================================================
 function renderClinic() {
   const root = document.getElementById('clinicShell');
   if (!root) return;

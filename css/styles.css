@@ -1379,3 +1379,137 @@ button { font-family: inherit; cursor: pointer; }
   .tbl thead th { padding: 8px 10px; font-size: 9px; }
   .tbl tbody td { padding: 9px 10px; }
 }
+/* ==========================================================================
+   Bold dates on pipeline cards + tooth chart + inline selects
+   ========================================================================== */
+
+.case-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 0.5px solid var(--border);
+}
+
+.date-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.date-lbl {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.date-val {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.date-val.late { color: var(--late); }
+.date-val.warn { color: var(--warn); }
+
+/* Tooth chart in new case form */
+.tooth-chart-form {
+  background: var(--bg-soft);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 0.5px solid var(--border);
+}
+
+.tooth-chart-form .tooth-row {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr) 6px repeat(8, 1fr);
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.tooth-chart-form .tooth-row:last-child { margin-bottom: 0; }
+
+.tooth-chart-form .tooth {
+  aspect-ratio: 1;
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  padding: 0;
+  min-height: 26px;
+  transition: all 0.08s;
+}
+
+.tooth-chart-form .tooth:hover {
+  background: var(--bg-page);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.tooth-chart-form .tooth.selected {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font-weight: 500;
+}
+
+.tooth-chart-form .tooth-divider {
+  background: transparent;
+  border-left: 0.5px dashed var(--border-strong);
+}
+
+.selected-teeth-display {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-soft);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+}
+
+/* Inline assignee selects in table */
+.tbl-assignee-select {
+  width: 100%;
+  padding: 5px 6px;
+  font-size: 12px;
+  border: 0.5px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='%239ca3af'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  padding-right: 18px;
+}
+
+.tbl-assignee-select:hover {
+  background-color: var(--bg-soft);
+  border-color: var(--border);
+}
+
+.tbl-assignee-select:focus {
+  background-color: var(--bg);
+  border-color: var(--border-strong);
+}
+
+/* Mobile: tooth chart adjustments */
+@media (max-width: 768px) {
+  .tooth-chart-form .tooth-row {
+    grid-template-columns: repeat(8, 1fr) 4px repeat(8, 1fr);
+    gap: 2px;
+  }
+  .tooth-chart-form .tooth { font-size: 9px; min-height: 22px; }
+}
