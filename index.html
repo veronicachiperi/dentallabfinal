@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laborator Dentar — Pipeline</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">L</div>
+      <div class="brand-name">Laborator</div>
+    </div>
+
+    <div class="nav-section">Workflow</div>
+    <a class="nav-item active" href="index.html"><span class="nav-icon"></span>Pipeline<span class="nav-count">100</span></a>
+    <a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a>
+    <div class="nav-item"><span class="nav-icon"></span>Deadlines<span class="nav-count">4</span></div>
+
+    <div class="nav-section">Date</div>
+    <a class="nav-item" href="clinic.html?id=crisdent"><span class="nav-icon round"></span>Clinici<span class="nav-count">5</span></a>
+    <div class="nav-item"><span class="nav-icon round"></span>Echipa</div>
+    <a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a>
+
+    <div class="nav-section">Setări</div>
+    <div class="nav-item"><span class="nav-icon"></span>Tipuri lucrări</div>
+    <div class="nav-item"><span class="nav-icon"></span>Etape</div>
+    <a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <button class="mobile-menu-btn" type="button" aria-label="Meniu">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="crumb">Workflow / <b>Pipeline</b></div>
+      <input class="search" id="searchInput" placeholder="Caută pacient sau caz #">
+      <div class="spacer"></div>
+      <button class="btn primary" id="newCaseBtnGlobal" type="button">+ Caz nou</button>
+      <div class="icon-btn" title="Notificări">
+        N<span class="bell-dot"></span>
+      </div>
+      <div class="avatar">VC</div>
+    </div>
+
+    <div class="deadline-strip" id="lateBanner">
+      <span class="dot-pulse"></span>
+      <b>0 lucrări în întârziere</b>
+      <span style="opacity:0.85">— necesită atenție pentru a respecta data finală</span>
+    </div>
+
+    <div class="subbar">
+      <div class="tab on">Toate</div>
+      <div class="tab">Lucrările mele</div>
+      <div class="tab">În întârziere</div>
+      <div class="tab">Săptămâna asta</div>
+      <div class="spacer"></div>
+      <div class="chip-dropdown">
+        <button class="chip" id="clinicFilterChip" type="button">Clinică: toate</button>
+        <div class="chip-menu" id="clinicFilterMenu">
+          <div class="chip-menu-item on" data-value="all">Toate clinicile</div>
+          <div class="chip-menu-item" data-value="crisdent">CRISDENT</div>
+          <div class="chip-menu-item" data-value="pana">PANA DENT</div>
+          <div class="chip-menu-item" data-value="elite">ELITE MED</div>
+          <div class="chip-menu-item" data-value="fav">FAV Dental</div>
+          <div class="chip-menu-item" data-value="esthetic">Dental Esthetic</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipeline" id="pipeline">
+      <!-- columns rendered by JS -->
+    </div>
+  </main>
+
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
