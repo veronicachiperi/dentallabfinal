@@ -1,6 +1,7 @@
 /* ==========================================================================
    Demo data — replace with API calls when backend is ready
    ========================================================================== */
+CASES.forEach(c => { if (c.stage === 'trimisa') c.stage = 'trimis'; });
 
 const STAGES = [
   { id: 'design',     name: 'Design',     color: '#85B7EB', order: 1 },
