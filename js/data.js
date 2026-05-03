@@ -3,13 +3,44 @@
    ========================================================================== */
 
 const STAGES = [
-  { id: 'design',    name: 'Design',    color: '#7F77DD', order: 1 },
-  { id: 'cam',       name: 'CAM',       color: '#1D9E75', order: 2 },
-  { id: 'prelucrare',name: 'Prelucrare',color: '#D85A30', order: 3 },
-  { id: 'ceramica',  name: 'Ceramică',  color: '#BA7517', order: 4 },
-  { id: 'proba',     name: 'Probă',     color: '#185FA5', order: 5 },
-  { id: 'trimisa',   name: 'Trimisă',   color: '#1D9E75', order: 6 }
+  { id: 'design',     name: 'Design',     color: '#85B7EB', order: 1 },
+  { id: 'cam',        name: 'CAM',        color: '#444441', order: 2 },
+  { id: 'la_print',   name: 'La print',   color: '#185FA5', order: 3 },
+  { id: 'prelucrare', name: 'Prelucrare', color: '#854F0B', order: 4 },
+  { id: 'ceramica',   name: 'Ceramică',   color: '#EF9F27', order: 5 },
+  { id: 'proba',      name: 'La probă',   color: '#EAC04A', order: 6 },
+  { id: 'terminat',   name: 'Terminat',   color: '#97C459', order: 7 },
+  { id: 'trimis',     name: 'Trimis',     color: '#27500A', order: 8 }
 ];
+
+// Stage SVG icons (Feather-style)
+const STAGE_ICONS = {
+  design:     '<polygon points="12,3 21,21 3,21"/>',
+  cam:        '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
+  la_print:   '<rect x="6" y="9" width="12" height="8"/><polyline points="6,9 6,3 18,3 18,9"/><circle cx="18" cy="13" r="1"/>',
+  prelucrare: '<path d="M14.7 6.3l3 3-9 9-4 1 1-4z"/>',
+  ceramica:   '<circle cx="12" cy="13" r="6"/><path d="M9 7 L9 4 L15 4 L15 7"/>',
+  proba:      '<polyline points="20,6 9,17 4,12"/>',
+  terminat:   '<circle cx="12" cy="12" r="9"/><polyline points="9,12 11,14 15,10"/>',
+  trimis:     '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/>'
+};
+
+function stageIconSVG(stageId) {
+  const path = STAGE_ICONS[stageId] || '';
+  return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;">${path}</svg>`;
+}
+
+// Migrate old 'trimisa' stage name to new 'trimis'
+CASES.forEach(c => { if (c.stage === 'trimisa') c.stage = 'trimis'; });
+
+// Current logged-in user (from login.html)
+function getCurrentUser() {
+  try { return JSON.parse(localStorage.getItem('dental-lab-user') || 'null'); }
+  catch { return null; }
+}
+function setCurrentUser(user) {
+  localStorage.setItem('dental-lab-user', JSON.stringify(user));
+}
 
 const PROBA_STATES = [
   { id: 'lab',    label: 'La lab' },

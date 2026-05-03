@@ -41,6 +41,11 @@ function applyFilter(cases) {
   const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7);
 
   return cases.filter(c => {
+    const isTrimis = c.stage === 'trimis';
+
+    if (activeFilter.tab === 'trimise') return isTrimis;
+    if (isTrimis) return false; // hide from all other views
+
     if (activeFilter.clinic !== 'all' && c.clinic !== activeFilter.clinic) return false;
     if (activeFilter.tab === 'mine' && c.assignee !== 'vc') return false;
     if (activeFilter.tab === 'late' && !c.late) return false;
@@ -248,7 +253,7 @@ function attachFilters() {
   const tabs = document.querySelectorAll('.subbar .tab');
   if (!tabs.length) return;
 
-  const tabMap = ['all', 'mine', 'late', 'week', 'notstarted'];
+  const tabMap = ['all', 'mine', 'late', 'week', 'notstarted', 'trimise'];
   tabs.forEach((tab, i) => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('on'));
@@ -331,7 +336,6 @@ function openNewCaseModal(defaultClinic) {
   const clinicOpts = CLINICS.map(c =>
     `<option value="${c.id}" ${c.id === defaultClinic ? 'selected' : ''}>${c.name}</option>`
   ).join('');
-  const empOpts = EMPLOYEES.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
   const typeOpts = COMMON_TYPES.map(t => `<option>${t}</option>`).join('');
 
   const today = new Date(2026, 4, 2);
@@ -341,7 +345,6 @@ function openNewCaseModal(defaultClinic) {
   const colorOpts = ['A1','A2','A3','A3.5','A4','B1','B2','B3','B4','C1','C2','C3','D2','D3','BL1','BL2','BL3','BL4']
     .map(c => `<option>${c}</option>`).join('');
 
-  // FDI tooth grid: upper jaw 18-11 | 21-28; lower jaw 48-41 | 31-38
   const upperRow = [18,17,16,15,14,13,12,11, 21,22,23,24,25,26,27,28];
   const lowerRow = [48,47,46,45,44,43,42,41, 31,32,33,34,35,36,37,38];
   const toothBtn = n => `<button type="button" class="tooth" data-tooth="${n}">${n}</button>`;
@@ -389,10 +392,6 @@ function openNewCaseModal(defaultClinic) {
         <div class="field"><label>Tip implant</label><input id="ncImplant" placeholder="Straumann, Nobel, AlphaBio..."></div>
         <div class="field"><label>Tip amprentă</label><input id="ncAmprenta" placeholder="Silicon, digital, alginat..."></div>
       </div>
-      <div class="field-row">
-        <div class="field"><label>Tehnician design</label><select id="ncAssigneeDesign"><option value="">— neasignat —</option>${empOpts}</select></div>
-        <div class="field"><label>Tehnician ceramică</label><select id="ncAssigneeCeram"><option value="">— neasignat —</option>${empOpts}</select></div>
-      </div>
       <div class="field">
         <label>Note generale</label>
         <textarea id="ncNotes" placeholder="Detalii suplimentare, indicații..."></textarea>
@@ -403,6 +402,57 @@ function openNewCaseModal(defaultClinic) {
       <button class="btn primary" id="ncSave" type="button">Salvează caz</button>
     </div>
   `);
+
+  const selectedTeeth = new Set();
+  const display = document.getElementById('selectedTeethDisplay');
+  document.querySelectorAll('.tooth-chart-form .tooth').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.tooth;
+      if (selectedTeeth.has(t)) { selectedTeeth.delete(t); btn.classList.remove('selected'); }
+      else { selectedTeeth.add(t); btn.classList.add('selected'); }
+      const sorted = [...selectedTeeth].map(Number).sort((a,b) => a - b);
+      display.textContent = sorted.length ? 'Dinți selectați: ' + sorted.join(', ') : 'Niciun dinte selectat';
+    });
+  });
+
+  document.getElementById('ncSave').addEventListener('click', () => {
+    const last = document.getElementById('ncLastName').value.trim();
+    const first = document.getElementById('ncFirstName').value.trim();
+    if (!last && !first) { document.getElementById('ncLastName').style.borderColor = '#A32D2D'; return; }
+    const fullName = (last + ' ' + first).trim();
+
+    const newCase = {
+      id: nextCaseId(),
+      name: fullName,
+      lastName: last,
+      firstName: first,
+      clinic: document.getElementById('ncClinic').value,
+      doctor: document.getElementById('ncDoctor').value,
+      type: document.getElementById('ncType').value,
+      color: document.getElementById('ncColor').value,
+      stage: 'design',
+      priority: 'mediu',
+      intrata: document.getElementById('ncIntrata').value,
+      probaDate: document.getElementById('ncProbaDate').value,
+      finala: document.getElementById('ncFinala').value,
+      teeth: [...selectedTeeth].map(Number).sort((a,b) => a - b),
+      implantType: document.getElementById('ncImplant').value,
+      amprentaType: document.getElementById('ncAmprenta').value,
+      notes: document.getElementById('ncNotes').value,
+      assignees: {},
+      stageStatuses: {},
+      notStarted: true
+    };
+    newCase.priority = computePriority(newCase);
+
+    CASES.push(newCase);
+    persistNewCase(newCase);
+    closeModal();
+    renderPipeline();
+    renderClinic();
+    if (typeof renderTable === 'function') renderTable();
+  });
+}
 
   // Tooth selection
   const selectedTeeth = new Set();
