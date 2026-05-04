@@ -181,3 +181,21 @@ function setCurrentUser(user) { localStorage.setItem('dental-lab-user', JSON.str
 
 const COMMON_TYPES = ['ZR FULL', 'ZR FULL IMPL', 'ZR STR DINTE', 'ZR STR IMPL', 'PROVIZORIE', 'STANDART', 'EMAX', 'PMMA DINTI', 'PMMA IMPL', 'PMMA DINTI/IMPL', 'SUPERIOR', 'SUPERIOR TITAN', 'COMPLEX', 'MOCKUP', 'MARYLAND', 'MODEL', 'GHID', 'REFACERE'];
 const COLORS_VITA = ['A1','A2','A3','A3.5','A4','B1','B2','B3','B4','C1','C2','C3','D2','D3','BL1','BL2','BL3','BL4'];
+// Mapare tehnician → etapă
+const TECH_STAGE_MAP = {
+  pc: 'design',
+  ik: 'cam',
+  vc: 'prelucrare',
+  mt: 'ceramica',
+  an: 'prelucrare'
+};
+function techStage(techId) { return TECH_STAGE_MAP[techId] || 'design'; }
+
+// Cazuri arhivate (trimise) — adaugă pentru demo în arhivă
+const ARCHIVED_CASES = [
+  { id: 11, name: 'Iordan Mihai', clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'ZR FULL', color: 'A2', stage: 'trimis', intrata: 'Apr 10', finala: 'Apr 16', sentDate: 'Apr 16', durationDays: 6, finalTech: 'mt', teeth: [{n:14,type:'crown'}] },
+  { id: 15, name: 'Murariu Tatiana', clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'STANDART', color: 'A2', stage: 'trimis', intrata: 'Apr 14', finala: 'Apr 19', sentDate: 'Apr 19', durationDays: 5, finalTech: 'an', teeth: [] },
+  { id: 19, name: 'Bostan Vlad', clinic: 'fav', doctor: 'Dr. Favorov S.', type: 'PROVIZORIE', color: 'A3', stage: 'trimis', intrata: 'Apr 17', finala: 'Apr 22', sentDate: 'Apr 22', durationDays: 5, finalTech: 'vc', teeth: [] },
+  { id: 22, name: 'Constanta R.', clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'EMAX', color: 'A1', stage: 'trimis', intrata: 'Apr 22', finala: 'Apr 28', sentDate: 'Apr 28', durationDays: 6, finalTech: 'mt', teeth: [{n:11,type:'emax'}] }
+];
+ARCHIVED_CASES.forEach(c => { if (!CASES.find(x => x.id === c.id)) { c.priority = computePriority(c); CASES.push(c); } });
