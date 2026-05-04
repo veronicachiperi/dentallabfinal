@@ -8,7 +8,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
-
 <div class="app">
 
   <aside class="sidebar">
@@ -16,37 +15,26 @@
       <div class="brand-mark">L</div>
       <div class="brand-name">Laborator</div>
     </div>
-
     <div class="nav-section">Workflow</div>
-    <a class="nav-item active" href="index.html"><span class="nav-icon"></span>Lucrări<span class="nav-count">100</span></a>
+    <a class="nav-item active" href="index.html"><span class="nav-icon"></span>Lucrări<span class="nav-count">19</span></a>
     <a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a>
-    <div class="nav-item"><span class="nav-icon"></span>Deadlines<span class="nav-count">4</span></div>
-
+    <a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a>
     <div class="nav-section">Date</div>
     <a class="nav-item" href="clinic.html?id=crisdent"><span class="nav-icon round"></span>Clinici<span class="nav-count">5</span></a>
     <div class="nav-item"><span class="nav-icon round"></span>Echipa</div>
-    <a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a>
-
     <div class="nav-section">Setări</div>
-    <div class="nav-item"><span class="nav-icon"></span>Tipuri lucrări</div>
-    <div class="nav-item"><span class="nav-icon"></span>Etape</div>
     <a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a>
   </aside>
 
   <main class="main">
-
     <div class="topbar">
-      <button class="mobile-menu-btn" type="button" aria-label="Meniu">
-        <span></span><span></span><span></span>
-      </button>
+      <button class="mobile-menu-btn" type="button" aria-label="Meniu"><span></span><span></span><span></span></button>
       <div class="crumb">Workflow / <b>Lucrări</b></div>
       <input class="search" id="searchInput" placeholder="Caută pacient sau caz #">
       <div class="spacer"></div>
       <button class="btn" id="exportCsvBtn" type="button">Export CSV</button>
       <button class="btn primary" id="newCaseBtnGlobal" type="button">+ Caz nou</button>
-      <div class="icon-btn" title="Notificări">
-        N<span class="bell-dot"></span>
-      </div>
+      <div class="icon-btn" title="Notificări">N<span class="bell-dot"></span></div>
       <div class="avatar">VC</div>
     </div>
 
@@ -83,12 +71,10 @@
     </div>
 
     <div id="tableView"></div>
-    <div class="pipeline" id="pipeline" style="display:none"></div>
-
+    <div class="pipeline-board" id="pipeline" style="display:none"></div>
   </main>
 
 </div>
-
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 <script src="js/table.js"></script>
