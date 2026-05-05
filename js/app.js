@@ -149,22 +149,106 @@ function renderCalendar(){
   const cells=Math.ceil((startWk+days)/7)*7;
   const filt=c=>calClinicFilter==='all'||c.clinic===calClinicFilter;
   const byDate={};
-  CASES.filter(filt).forEach(c=>{const d=parseShortDate(c.finala);if(d){const k=d.toDateString();(byDate[k]=byDate[k]||[]).push(c)}});
+  CASES.filter(filt).forEach(c=>{
+    const d=parseShortDate(c.finala);
+    if(d){const k=d.toDateString();(byDate[k]=byDate[k]||[]).push(c)}
+  });
   const cnt={all:CASES.filter(filt).length};
   CLINICS.forEach(cl=>cnt[cl.id]=casesForClinic(cl.id).length);
-  let h=`<div class="cal-shell"><div class="cal-topbar"><button class="cal-nav-btn" id="calPrev">‹</button><div class="cal-month-title">${MONTH_NAMES_RO[calMonth]} ${calYear}</div><button class="cal-nav-btn" id="calNext">›</button><button class="cal-today-btn" id="calToday">Astăzi</button><div class="spacer"></div><a href="index.html" class="btn">Lucrări</a></div><div class="cal-clinic-tabs"><button class="cal-clinic-tab ${calClinicFilter==='all'?'on':''}" data-clinic="all">Toate <span class="cal-clinic-count">${cnt.all}</span></button>${CLINICS.map(cl=>`<button class="cal-clinic-tab ${calClinicFilter===cl.id?'on':''}" data-clinic="${cl.id}">${cl.name} <span class="cal-clinic-count">${cnt[cl.id]}</span></button>`).join('')}</div><div class="cal-weekdays">${['Luni','Marți','Mie','Joi','Vin','Sâmb','Dum'].map(d=>`<div class="cal-weekday">${d}</div>`).join('')}</div><div class="cal-grid">`;
+
+  let h=`<div class="cal-shell">
+    <div class="cal-topbar">
+      <button class="cal-nav-btn" id="calPrev">‹</button>
+      <div class="cal-month-title">${MONTH_NAMES_RO[calMonth]} ${calYear}</div>
+      <button class="cal-nav-btn" id="calNext">›</button>
+      <button class="cal-today-btn" id="calToday">Astăzi</button>
+      <div class="spacer"></div>
+      <a href="index.html" class="btn">Lucrări</a>
+    </div>
+    <div class="cal-clinic-tabs">
+      <button class="cal-clinic-tab ${calClinicFilter==='all'?'on':''}" data-clinic="all">Toate <span class="cal-clinic-count">${cnt.all}</span></button>
+      ${CLINICS.map(cl=>`<button class="cal-clinic-tab ${calClinicFilter===cl.id?'on':''}" data-clinic="${cl.id}">${cl.name} <span class="cal-clinic-count">${cnt[cl.id]}</span></button>`).join('')}
+    </div>
+    <div class="cal-weekdays">${['Luni','Marți','Mie','Joi','Vin','Sâmb','Dum'].map(d=>`<div class="cal-weekday">${d}</div>`).join('')}</div>
+    <div class="cal-grid">`;
+
   for(let i=0;i<cells;i++){
-    const dn=i-startWk+1;const d=new Date(calYear,calMonth,dn);const out=dn<1||dn>days;const td=d.toDateString()===today.toDateString();const we=i%7>=5;
-    let cls='';if(out)cls+=' outside';if(td)cls+=' today';if(we)cls+=' weekend';
+    const dn=i-startWk+1;
+    const d=new Date(calYear,calMonth,dn);
+    const out=dn<1||dn>days;
+    const td=d.toDateString()===today.toDateString();
+    const we=i%7>=5;
+    let cls='';
+    if(out)cls+=' outside';
+    if(td)cls+=' today';
+    if(we)cls+=' weekend';
     const dc=byDate[d.toDateString()]||[];
-    h+=`<div class="cal-day${cls}"><div class="cal-day-num">${d.getDate()}${td?' <span class="cal-today-pill">azi</span>':''}</div><div class="cal-day-cases">${dc.slice(0,3).map(c=>{const s=getCalendarStatus(c);return `<a href="case.html?id=${c.id}" class="cal-case-pill ${s}" title="${c.name}">${c.name.split(' ')[0]} · ${getClinic(c.clinic).name.slice(0,4)}</a>`}).join('')}${dc.length>3?`<div class="cal-day-more">+${dc.length-3} alte</div>`:''}</div></div>`;
+    h+=`<div class="cal-day${cls}">
+      <div class="cal-day-num">${d.getDate()}${td?' <span class="cal-today-pill">azi</span>':''}</div>
+      <div class="cal-day-cases">
+        ${dc.slice(0,3).map(c=>{
+          const s=getCalendarStatus(c);
+          return `<a href="case.html?id=${c.id}" class="cal-case-pill ${s}" title="${c.name}">${c.name.split(' ')[0]} · ${getClinic(c.clinic).name.slice(0,4)}</a>`;
+        }).join('')}
+        ${dc.length>3?`<div class="cal-day-more" data-day="${d.toDateString()}" style="cursor:pointer;color:var(--info);font-weight:500">+${dc.length-3} alte — vezi toate</div>`:''}
+      </div>
+    </div>`;
   }
-  h+=`</div><div class="cal-legend-row"><div class="cal-legend-item"><span class="cal-legend-swatch neincepute"></span>Neincepute</div><div class="cal-legend-item"><span class="cal-legend-swatch proces"></span>În proces</div><div class="cal-legend-item"><span class="cal-legend-swatch terminat"></span>Terminat</div></div></div>`;
+
+  h+=`</div>
+    <div class="cal-legend-row">
+      <div class="cal-legend-item"><span class="cal-legend-swatch neincepute"></span>Neincepute</div>
+      <div class="cal-legend-item"><span class="cal-legend-swatch proces"></span>În proces</div>
+      <div class="cal-legend-item"><span class="cal-legend-swatch terminat"></span>Terminat</div>
+    </div>
+  </div>`;
+
   root.innerHTML=h;
-  document.getElementById('calPrev')?.addEventListener('click',()=>{if(calMonth===0){calMonth=11;calYear--}else calMonth--;renderCalendar()});
-  document.getElementById('calNext')?.addEventListener('click',()=>{if(calMonth===11){calMonth=0;calYear++}else calMonth++;renderCalendar()});
-  document.getElementById('calToday')?.addEventListener('click',()=>{calMonth=4;calYear=2026;renderCalendar()});
-  document.querySelectorAll('.cal-clinic-tab').forEach(t=>t.addEventListener('click',()=>{calClinicFilter=t.dataset.clinic;renderCalendar()}));
+
+  document.getElementById('calPrev')?.addEventListener('click',()=>{
+    if(calMonth===0){calMonth=11;calYear--}else calMonth--;
+    renderCalendar();
+  });
+  document.getElementById('calNext')?.addEventListener('click',()=>{
+    if(calMonth===11){calMonth=0;calYear++}else calMonth++;
+    renderCalendar();
+  });
+  document.getElementById('calToday')?.addEventListener('click',()=>{
+    calMonth=4;calYear=2026;
+    renderCalendar();
+  });
+  document.querySelectorAll('.cal-clinic-tab').forEach(t=>t.addEventListener('click',()=>{
+    calClinicFilter=t.dataset.clinic;
+    renderCalendar();
+  }));
+
+  // Click pe "+N alte" deschide modal cu toate cazurile zilei
+  document.querySelectorAll('.cal-day-more[data-day]').forEach(el=>{
+    el.addEventListener('click',e=>{
+      e.stopPropagation();
+      const day=el.dataset.day;
+      const cs=byDate[day]||[];
+      const date=new Date(day);
+      const html=`<div class="modal-head">
+          <div class="modal-title">${date.getDate()} ${MONTH_NAMES_RO[date.getMonth()]} ${date.getFullYear()} — ${cs.length} lucrări</div>
+          <button class="modal-close" type="button">×</button>
+        </div>
+        <div class="modal-body" style="max-height:60vh;overflow-y:auto">
+          ${cs.map(c=>{
+            const s=getCalendarStatus(c);
+            const cl=getClinic(c.clinic);
+            return `<a href="case.html?id=${c.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;border:0.5px solid var(--border);margin-bottom:6px;text-decoration:none;color:var(--text)" class="cal-case-pill ${s}">
+              <div style="flex:1">
+                <div style="font-weight:500;font-size:13px">${c.name}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${cl.name} · ${c.type}</div>
+              </div>
+              <div style="font-size:11px;color:var(--text-secondary)">${c.late?'restant':c.finala}</div>
+            </a>`;
+          }).join('')}
+        </div>`;
+      openModal(html);
+    });
+  });
 }
 
 // === TECHNICIAN PORTAL ===
