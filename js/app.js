@@ -672,6 +672,52 @@ function attachFilters(){
     document.querySelectorAll('#clinicFilterMenu .chip-menu-item').forEach(it=>it.addEventListener('click',()=>{activeFilter.clinic=it.dataset.value;ch.textContent='Clinică: '+(it.dataset.value==='all'?'toate':getClinic(it.dataset.value).name);renderPipeline();if(typeof renderTable==='function')renderTable()}));
   }
 }
+function renderClinici(){
+  const root=document.getElementById('cliniciShell');if(!root)return;
+  root.innerHTML=`<div class="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div>
+      <div class="nav-section">Workflow</div>
+      <a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a>
+      <a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a>
+      <a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a>
+      <a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a>
+      <div class="nav-section">Date</div>
+      <a class="nav-item active" href="clinici.html"><span class="nav-icon round"></span>Clinici</a>
+      <a class="nav-item" href="echipa.html"><span class="nav-icon round"></span>Echipa</a>
+    </aside>
+    <main class="main">
+      <div style="padding:24px;max-width:1100px">
+        <h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Clinici</h1>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${CLINICS.length} clinici · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active total</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+          ${CLINICS.map(cl=>{
+            const cases=casesForClinic(cl.id);
+            const active=cases.filter(c=>c.stage!=='trimis').length;
+            const late=cases.filter(c=>c.late).length;
+            const ready=cases.filter(c=>c.stage==='terminat').length;
+            const proba=cases.filter(c=>c.stage==='proba').length;
+            return `<a href="clinic.html?id=${cl.id}" style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:18px;text-decoration:none;color:var(--text);display:block">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <div style="width:42px;height:42px;border-radius:8px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--text-muted)">${cl.name.slice(0,2)}</div>
+                <div>
+                  <div style="font-size:15px;font-weight:500">${cl.name}</div>
+                  <div style="font-size:11px;color:var(--text-dim)">${cl.doctor}</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:12px;border-top:0.5px solid var(--border)">
+                <div><div style="font-size:18px;font-weight:500">${active}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Active</div></div>
+                <div><div style="font-size:18px;font-weight:500;color:#BA7517">${proba}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Probă</div></div>
+                <div><div style="font-size:18px;font-weight:500;color:#1D9E75">${ready}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Gata</div></div>
+                <div><div style="font-size:18px;font-weight:500;color:${late?'#A32D2D':'var(--text-dim)'}">${late}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Restant</div></div>
+              </div>
+            </a>`;
+          }).join('')}
+        </div>
+      </div>
+    </main>
+  </div>`;
+}
 function attachMobileMenu(){const b=document.querySelector('.mobile-menu-btn'),s=document.querySelector('.sidebar');if(!b||!s)return;b.addEventListener('click',()=>s.classList.toggle('open'))}
 
 // === CLINICI LIST (admin) ===
@@ -726,10 +772,25 @@ function renderClinici(){
 
 document.addEventListener('DOMContentLoaded',()=>{
   applySidebarRoles();
+<<<<<<< HEAD
   renderClinic();renderCaseDetail();renderCalendar();renderTechnicianPortal();renderArchive();renderLogin();
   if(typeof renderStats==='function')renderStats();
   if(typeof renderEchipa==='function')renderEchipa();
   renderClinici();
   attachSearch();attachFilters();attachMobileMenu();
+=======
+  renderClinic();
+  renderCaseDetail();
+  renderCalendar();
+  renderTechnicianPortal();
+  renderArchive();
+  renderLogin();
+  if(typeof renderStats==='function')renderStats();
+  if(typeof renderEchipa==='function')renderEchipa();
+  if(typeof renderClinici==='function')renderClinici();
+  attachSearch();
+  attachFilters();
+  attachMobileMenu();
+>>>>>>> a04722819b19d6c4b19d5746be42d2be4e42ae35
   document.getElementById('newCaseBtnGlobal')?.addEventListener('click',()=>openNewCaseModal());
 });
