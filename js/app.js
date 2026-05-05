@@ -96,18 +96,105 @@ function renderClinic(){
   const ready=cases.filter(c=>c.stage==='terminat');
   const late=cases.filter(c=>c.late);
   const trimise=cases.filter(c=>c.stage==='trimis');
-  function ps(c){if(c.stage==='trimis')return{cls:'trimis',label:'Trimisă'};if(c.stage==='terminat')return{cls:'gata',label:'Gata de ridicat'};if(c.stage==='proba')return{cls:'proba',label:'La probă'};return{cls:'lucru',label:'În lucru'}}
-  function ra(c){if(c.stage==='proba')return{cls:'primary',label:'Aprobă probă',action:'approve'};if(c.stage==='terminat')return{cls:'primary',label:'Confirmă ridicare',action:'pickup'};return{cls:'note',label:'Adaugă notă',action:'note'}}
-  root.innerHTML=`<div class="pc-shell"><div class="pc-topbar"><div class="pc-logo">${clinic.name.slice(0,2)}</div><div><div class="pc-clinic-name">${clinic.name}</div><div class="pc-clinic-sub">Portalul clinicii</div></div><div class="spacer"></div><button class="btn primary" id="newCaseBtnClinic">+ Caz nou</button><div class="icon-btn">N<span class="bell-dot"></span></div><div class="avatar">${clinic.doctor.split(' ').map(s=>s[0]).join('').slice(0,2)}</div></div><div class="pc-greet"><h1 class="pc-greet-title">Bună, ${clinic.doctor.split(' ').slice(-1)[0]}</h1><div class="pc-greet-sub">Ai ${proba.length+ready.length} lucrări care necesită atenție · ${active.length} active</div></div><div class="pc-stats"><div class="pc-stat"><div class="pc-stat-num">${active.length}</div><div class="pc-stat-lbl">Active</div></div><div class="pc-stat"><div class="pc-stat-num proba">${proba.length}</div><div class="pc-stat-lbl">La probă</div></div><div class="pc-stat"><div class="pc-stat-num ready">${ready.length}</div><div class="pc-stat-lbl">Gata de ridicat</div></div><div class="pc-stat"><div class="pc-stat-num ${late.length?'late':''}">${late.length}</div><div class="pc-stat-lbl">În întârziere</div></div></div><div class="pc-table">${[`<div class="pc-row-grid head"><div>Caz</div><div>Pacient</div><div>Tip</div><div>Etapă</div><div>Probă</div><div>Finală</div><div>Acțiune</div></div>`].concat(cases.map(c=>{const p=ps(c);const a=ra(c);return `<div class="pc-row-grid" data-case-id="${c.id}"><div class="tbl-num">#${c.id}</div><div class="tbl-name">${c.name}</div><div><span class="tag">${c.type}</span></div><div><span class="pc-public-stage ${p.cls}">${p.label}</span></div><div class="tbl-due-bold">${c.probaDate||'—'}</div><div class="tbl-due-bold ${c.late?'late':''}">${c.late?'restant':c.finala}</div><div><button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button></div></div>`})).join('')}</div></div>`;
+
+  // Etapa exactă cu numele și culoarea reală (ca în pipeline-ul echipei)
+  function ps(c){
+    const s=getStage(c.stage);
+    return {label:s.name,color:s.color};
+  }
+
+  // Acțiunea contextuală în funcție de etapă
+  function ra(c){
+    if(c.stage==='proba')return{cls:'primary',label:'Aprobă probă',action:'approve'};
+    if(c.stage==='terminat')return{cls:'primary',label:'Confirmă ridicare',action:'pickup'};
+    return{cls:'note',label:'Adaugă notă',action:'note'};
+  }
+
+  root.innerHTML=`<div class="pc-shell">
+    <div class="pc-topbar">
+      <div class="pc-logo">${clinic.name.slice(0,2)}</div>
+      <div>
+        <div class="pc-clinic-name">${clinic.name}</div>
+        <div class="pc-clinic-sub">Portalul clinicii</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn primary" id="newCaseBtnClinic">+ Caz nou</button>
+      <div class="icon-btn">N<span class="bell-dot"></span></div>
+      <div class="avatar">${clinic.doctor.split(' ').map(s=>s[0]).join('').slice(0,2)}</div>
+    </div>
+
+    <div class="pc-greet">
+      <h1 class="pc-greet-title">Bună, ${clinic.doctor.split(' ').slice(-1)[0]}</h1>
+      <div class="pc-greet-sub">Ai ${proba.length+ready.length} lucrări care necesită atenție · ${active.length} active</div>
+    </div>
+
+    <div class="pc-stats">
+      <div class="pc-stat">
+        <div class="pc-stat-num">${active.length}</div>
+        <div class="pc-stat-lbl">Active</div>
+      </div>
+      <div class="pc-stat">
+        <div class="pc-stat-num proba">${proba.length}</div>
+        <div class="pc-stat-lbl">La probă</div>
+      </div>
+      <div class="pc-stat">
+        <div class="pc-stat-num ready">${ready.length}</div>
+        <div class="pc-stat-lbl">Gata de ridicat</div>
+      </div>
+      <div class="pc-stat">
+        <div class="pc-stat-num ${late.length?'late':''}">${late.length}</div>
+        <div class="pc-stat-lbl">În întârziere</div>
+      </div>
+    </div>
+
+    <div class="pc-table">
+      <div class="pc-row-grid head">
+        <div>Caz</div>
+        <div>Pacient</div>
+        <div>Tip</div>
+        <div>Etapă</div>
+        <div>Probă</div>
+        <div>Finală</div>
+        <div>Acțiune</div>
+      </div>
+      ${cases.map(c=>{
+        const p=ps(c);
+        const a=ra(c);
+        return `<div class="pc-row-grid" data-case-id="${c.id}">
+          <div class="tbl-num">#${c.id}</div>
+          <div class="tbl-name">${c.name}</div>
+          <div><span class="tag">${c.type}</span></div>
+          <div>
+            <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:4px;font-weight:500;background:${p.color}22;color:${p.color}">
+              <span style="width:5px;height:5px;border-radius:50%;background:${p.color};display:inline-block"></span>${p.label}
+            </span>
+          </div>
+          <div class="tbl-due-bold">${c.probaDate||'—'}</div>
+          <div class="tbl-due-bold ${c.late?'late':''}">${c.late?'restant':c.finala}</div>
+          <div><button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button></div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // Buton "+ Caz nou"
   document.getElementById('newCaseBtnClinic')?.addEventListener('click',()=>openNewCaseModal(clinicId));
-  document.querySelectorAll('.pc-row-grid[data-case-id]').forEach(r=>r.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${r.dataset.caseId}`}));
-  document.querySelectorAll('.pc-action[data-action]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();handleClinicAction(b.dataset.action,Number(b.dataset.caseId))}));
-}
-function handleClinicAction(action,caseId){
-  const c=getCase(caseId);if(!c)return;
-  if(action==='approve'){c.stage='terminat';overrides.stages=overrides.stages||{};overrides.stages[c.id]='terminat';saveOverrides(overrides);alert('Probă aprobată — lucrarea a trecut la finalizare');renderClinic()}
-  else if(action==='pickup'){c.stage='trimis';c.sentDate=fmtShortDate(new Date(2026,4,4));overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';saveOverrides(overrides);alert('Ridicare confirmată — lucrarea a fost arhivată');renderClinic()}
-  else if(action==='note'){const n=prompt('Adaugă notă:');if(n){c.notes=(c.notes||'')+'\n'+n;overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};saveOverrides(overrides);alert('Notă salvată')}}
+
+  // Click pe rând → pagina detalii caz (dar nu când dau click pe buton)
+  document.querySelectorAll('.pc-row-grid[data-case-id]').forEach(r=>{
+    r.addEventListener('click',e=>{
+      if(e.target.tagName==='BUTTON')return;
+      location.href=`case.html?id=${r.dataset.caseId}`;
+    });
+  });
+
+  // Acțiuni contextuale: Aprobă probă / Confirmă ridicare / Adaugă notă
+  document.querySelectorAll('.pc-action[data-action]').forEach(b=>{
+    b.addEventListener('click',e=>{
+      e.stopPropagation();
+      handleClinicAction(b.dataset.action,Number(b.dataset.caseId));
+    });
+  });
 }
 
 // === CASE DETAIL ===
