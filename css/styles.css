@@ -444,3 +444,61 @@ button{font-family:inherit;cursor:pointer}
 .kb-col-popover{position:absolute;top:28px;right:0;background:var(--bg);border:0.5px solid var(--border-strong);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,0.15);z-index:50;padding:4px;min-width:180px;display:flex;flex-direction:column;gap:1px}
 .kb-pop-item{background:none;border:none;padding:7px 10px;text-align:left;font-size:12px;color:var(--text);border-radius:4px;cursor:pointer;font-family:inherit}
 .kb-pop-item:hover{background:var(--bg-soft)}
+
+/* Progress bar pe portalul clinicii */
+.pc-progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pc-progress-bar {
+  width: 90px;
+  height: 6px;
+  background: rgba(0,0,0,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.pc-progress-fill {
+  height: 100%;
+  background: #444441;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.pc-progress-label {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Modificare grid pc-row-grid (era 7 coloane, acum 6) */
+.pc-row-grid {
+  grid-template-columns: 60px 1.6fr 1fr 200px 100px 130px;
+}
+
+/* Tab-uri clinici sus */
+.pc-clinic-tabs-row {
+  padding: 0 24px 16px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pc-clinic-tab {
+  font-size: 12px;
+  padding: 6px 14px;
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.pc-clinic-tab:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+.pc-clinic-tab.on {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}

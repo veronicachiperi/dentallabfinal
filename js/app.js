@@ -297,7 +297,6 @@ function renderClinic(){
       handleClinicAction(b.dataset.action,Number(b.dataset.caseId));
     });
   });
-}
 
 // === CASE DETAIL ===
 function renderCaseDetail(){
