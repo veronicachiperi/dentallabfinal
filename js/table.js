@@ -62,7 +62,7 @@ function renderTableRow(c) {
   const dueClass = c.late ? 'late' : c.warn ? 'warn' : '';
   const finalText = c.late ? 'restant' : c.finala;
   const noteText = (c.notes || '—').replace(/</g, '&lt;');
-  return `<tr data-case-id="${c.id}">
+ return `<tr data-case-id="${c.id}" class="${c.notStarted?'tbl-row-faded':''}">
     <td><span class="tbl-num">#${c._monthlyNum || c.id}</span></td>
     <td><span class="tbl-name">${c.name}</span></td>
     <td><span class="tbl-clinic">${clinic.name}</span></td>
