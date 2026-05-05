@@ -516,6 +516,26 @@ function renderArchive(){
   document.querySelectorAll('.ar-tbl tbody tr').forEach(r=>r.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${r.dataset.caseId}`}));
   document.getElementById('arExport')?.addEventListener('click',()=>{if(typeof exportCSV==='function')exportCSV()});
 }
+function renderStats(){
+  const root=document.getElementById('statsShell');if(!root)return;
+  const onTime=statsOnTimeRate();
+  const trimise=CASES.filter(c=>c.stage==='trimis').length;
+  const active=CASES.length-trimise;
+  root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><a class="nav-item active" href="stats.html"><span class="nav-icon"></span>Statistici</a><div class="nav-section">Date</div><a class="nav-item" href="clinici.html"><span class="nav-icon round"></span>Clinici</a><a class="nav-item" href="echipa.html"><span class="nav-icon round"></span>Echipa</a></aside><main class="main"><div style="padding:24px"><h1 style="font-size:22px;font-weight:500;margin:0 0 16px">Statistici</h1><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px"><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${CASES.length}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Total cazuri</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:${onTime.late?'#A32D2D':'#1D9E75'}">${onTime.rate}%</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">La timp</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${active}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Active</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:#27500A">${trimise}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Trimise</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe etapă</div><div style="position:relative;height:240px"><canvas id="chartStage"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe clinică</div><div style="position:relative;height:240px"><canvas id="chartClinic"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Pe tehnician</div><div style="position:relative;height:240px"><canvas id="chartTech"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">La timp vs întârziere</div><div style="position:relative;height:240px"><canvas id="chartOnTime"></canvas></div></div></div></div></main></div>`;
+  setTimeout(()=>{
+    if(typeof Chart==='undefined')return;
+    Chart.defaults.font.size=11;Chart.defaults.color='#6b7280';
+    const sd=statsCountsByStage();
+    new Chart(document.getElementById('chartStage'),{type:'bar',data:{labels:sd.map(s=>s.name),datasets:[{data:sd.map(s=>s.count),backgroundColor:sd.map(s=>s.color)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+    const cd=statsCountsByClinic();
+    new Chart(document.getElementById('chartClinic'),{type:'bar',data:{labels:cd.map(c=>c.name),datasets:[{data:cd.map(c=>c.count),backgroundColor:'#1a1a1a'}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}});
+    const techCnt={};EMPLOYEES.forEach(e=>techCnt[e.id]=0);
+    CASES.forEach(c=>{Object.values(c.assignees||{}).forEach(t=>{if(techCnt[t]!==undefined)techCnt[t]++})});
+    new Chart(document.getElementById('chartTech'),{type:'bar',data:{labels:EMPLOYEES.map(e=>e.name),datasets:[{data:EMPLOYEES.map(e=>techCnt[e.id]),backgroundColor:['#D85A30','#185FA5','#534AB7','#444441','#1D9E75']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+    new Chart(document.getElementById('chartOnTime'),{type:'doughnut',data:{labels:['La timp','Întârziate'],datasets:[{data:[onTime.onTime,onTime.late],backgroundColor:['#1D9E75','#A32D2D'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%'}});
+  },50);
+}
+
 function renderEchipa(){
   const root=document.getElementById('echipaShell');if(!root)return;
   const stats={};EMPLOYEES.forEach(e=>{stats[e.id]={active:0,done:0,late:0}});
@@ -654,9 +674,62 @@ function attachFilters(){
 }
 function attachMobileMenu(){const b=document.querySelector('.mobile-menu-btn'),s=document.querySelector('.sidebar');if(!b||!s)return;b.addEventListener('click',()=>s.classList.toggle('open'))}
 
+// === CLINICI LIST (admin) ===
+function renderClinici(){
+  const root=document.getElementById('cliniciShell');if(!root)return;
+  root.innerHTML=`<div class="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div>
+      <div class="nav-section">Workflow</div>
+      <a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a>
+      <a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a>
+      <a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a>
+      <a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a>
+      <div class="nav-section">Date</div>
+      <a class="nav-item active" href="clinici.html"><span class="nav-icon round"></span>Clinici</a>
+      <a class="nav-item" href="echipa.html"><span class="nav-icon round"></span>Echipa</a>
+      <div class="nav-section">Setări</div>
+      <a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a>
+    </aside>
+    <main class="main">
+      <div style="padding:24px;max-width:1100px">
+        <h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Clinici</h1>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${CLINICS.length} clinici · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active total</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+          ${CLINICS.map(cl=>{
+            const cases=casesForClinic(cl.id);
+            const active=cases.filter(c=>c.stage!=='trimis').length;
+            const late=cases.filter(c=>c.late).length;
+            const ready=cases.filter(c=>c.stage==='terminat').length;
+            const proba=cases.filter(c=>c.stage==='proba').length;
+            return `<a href="clinic.html?id=${cl.id}" style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:18px;text-decoration:none;color:var(--text);display:block">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <div style="width:42px;height:42px;border-radius:8px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--text-muted)">${cl.name.slice(0,2)}</div>
+                <div>
+                  <div style="font-size:15px;font-weight:500">${cl.name}</div>
+                  <div style="font-size:11px;color:var(--text-dim)">${cl.doctor}</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:12px;border-top:0.5px solid var(--border)">
+                <div><div style="font-size:18px;font-weight:500">${active}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Active</div></div>
+                <div><div style="font-size:18px;font-weight:500;color:#BA7517">${proba}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Probă</div></div>
+                <div><div style="font-size:18px;font-weight:500;color:#1D9E75">${ready}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Gata</div></div>
+                <div><div style="font-size:18px;font-weight:500;color:${late?'#A32D2D':'var(--text-dim)'}">${late}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Restant</div></div>
+              </div>
+            </a>`;
+          }).join('')}
+        </div>
+      </div>
+    </main>
+  </div>`;
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   applySidebarRoles();
   renderClinic();renderCaseDetail();renderCalendar();renderTechnicianPortal();renderArchive();renderLogin();
+  if(typeof renderStats==='function')renderStats();
+  if(typeof renderEchipa==='function')renderEchipa();
+  renderClinici();
   attachSearch();attachFilters();attachMobileMenu();
   document.getElementById('newCaseBtnGlobal')?.addEventListener('click',()=>openNewCaseModal());
 });
