@@ -111,7 +111,93 @@ function renderClinic(){
   const proba=cases.filter(c=>c.stage==='proba');
   const ready=cases.filter(c=>c.stage==='terminat');
   const late=cases.filter(c=>c.late);
-  const trimise=cases.filter(c=>c.stage==='trimis');
+
+  // Etape vizibile clinicii (in ordine), fără la_print/trimis
+  const CLINIC_STAGES=['design','cam','prelucrare','ceramica','proba','terminat'];
+
+  function progressPct(stageId){
+    if(stageId==='trimis')return 100;
+    const idx=CLINIC_STAGES.indexOf(stageId);
+    if(idx===-1)return 0;
+    return Math.round(((idx+1)/CLINIC_STAGES.length)*100);
+  }
+
+  function ra(c){
+    if(c.stage==='proba')return{cls:'primary',label:'Aprobă probă',action:'approve'};
+    if(c.stage==='terminat')return{cls:'primary',label:'Confirmă ridicare',action:'pickup'};
+    return{cls:'note',label:'Adaugă notă',action:'note'};
+  }
+
+  // Toate clinicile pentru tab-uri
+  const clinicTabs=CLINICS.map(cl=>`<button class="pc-clinic-tab ${cl.id===clinicId?'on':''}" data-clinic-id="${cl.id}">${cl.name}</button>`).join('');
+
+  root.innerHTML=`<div class="pc-shell">
+    <div class="pc-topbar">
+      <div class="pc-logo">${clinic.name.slice(0,2)}</div>
+      <div>
+        <div class="pc-clinic-name">${clinic.name}</div>
+        <div class="pc-clinic-sub">Portalul clinicii · ${active.length} lucrări active</div>
+      </div>
+      <div class="spacer"></div>
+      <a href="index.html" class="btn">Vezi panoul echipei</a>
+      <button class="btn primary" id="newCaseBtnClinic">+ Caz nou</button>
+    </div>
+
+    <div class="pc-clinic-tabs-row">${clinicTabs}</div>
+
+    <div class="pc-stats">
+      <div class="pc-stat"><div class="pc-stat-num">${active.length}</div><div class="pc-stat-lbl">Active</div></div>
+      <div class="pc-stat"><div class="pc-stat-num proba">${proba.length}</div><div class="pc-stat-lbl">La probă</div></div>
+      <div class="pc-stat"><div class="pc-stat-num ready">${ready.length}</div><div class="pc-stat-lbl">Gata de ridicat</div></div>
+      <div class="pc-stat"><div class="pc-stat-num ${late.length?'late':''}">${late.length}</div><div class="pc-stat-lbl">În întârziere</div></div>
+    </div>
+
+    <div class="pc-table">
+      <div class="pc-row-grid head">
+        <div>Caz</div>
+        <div>Pacient</div>
+        <div>Tip lucrare</div>
+        <div>Etapă</div>
+        <div>Finală</div>
+        <div></div>
+      </div>
+      ${cases.map(c=>{
+        const a=ra(c);
+        const stage=getStage(c.stage);
+        const pct=progressPct(c.stage);
+        const stageName=c.stage==='trimis'?'Trimisă':c.stage==='terminat'?'Gata':stage.name;
+        return `<div class="pc-row-grid" data-case-id="${c.id}">
+          <div class="tbl-num">#${c.id}</div>
+          <div class="tbl-name">${c.name}</div>
+          <div><span class="tag">${c.type}</span></div>
+          <div class="pc-progress-cell">
+            <div class="pc-progress-bar"><div class="pc-progress-fill" style="width:${pct}%"></div></div>
+            <span class="pc-progress-label">${stageName}</span>
+          </div>
+          <div class="tbl-due-bold ${c.late?'late':''}">${c.late?'restant':c.finala}</div>
+          <div><button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button></div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  document.getElementById('newCaseBtnClinic')?.addEventListener('click',()=>openNewCaseModal(clinicId));
+  document.querySelectorAll('.pc-row-grid[data-case-id]').forEach(r=>{
+    r.addEventListener('click',e=>{
+      if(e.target.tagName==='BUTTON')return;
+      location.href=`case.html?id=${r.dataset.caseId}`;
+    });
+  });
+  document.querySelectorAll('.pc-action[data-action]').forEach(b=>{
+    b.addEventListener('click',e=>{
+      e.stopPropagation();
+      handleClinicAction(b.dataset.action,Number(b.dataset.caseId));
+    });
+  });
+  document.querySelectorAll('.pc-clinic-tab[data-clinic-id]').forEach(t=>{
+    t.addEventListener('click',()=>{location.href=`clinic.html?id=${t.dataset.clinicId}`});
+  });
+}
 
   // Etapa exactă cu numele și culoarea reală (ca în pipeline-ul echipei)
   function ps(c){
