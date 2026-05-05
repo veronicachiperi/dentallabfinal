@@ -656,7 +656,17 @@ function attachMobileMenu(){const b=document.querySelector('.mobile-menu-btn'),s
 
 document.addEventListener('DOMContentLoaded',()=>{
   applySidebarRoles();
-  renderClinic();renderCaseDetail();renderCalendar();renderTechnicianPortal();renderArchive();renderLogin();
-  attachSearch();attachFilters();attachMobileMenu();
+  renderClinic();
+  renderCaseDetail();
+  renderCalendar();
+  renderTechnicianPortal();
+  renderArchive();
+  renderLogin();
+  if(typeof renderStats==='function')renderStats();
+  if(typeof renderEchipa==='function')renderEchipa();
+  if(typeof renderClinici==='function')renderClinici();
+  attachSearch();
+  attachFilters();
+  attachMobileMenu();
   document.getElementById('newCaseBtnGlobal')?.addEventListener('click',()=>openNewCaseModal());
 });
