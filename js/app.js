@@ -79,6 +79,22 @@ function attachDropZone(col,stageId){
       c.stage=stageId;
       overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;saveOverrides(overrides);
       renderPipeline();if(typeof renderTable==='function')renderTable();
+      document.querySelectorAll('.kb-col-toggle').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();b.closest('.kb-col').classList.toggle('collapsed')}));
+document.querySelectorAll('.kb-col-menu').forEach(b=>b.addEventListener('click',e=>{
+  e.stopPropagation();
+  document.querySelectorAll('.kb-col-popover').forEach(p=>p.remove());
+  const sid=b.dataset.stage;
+  const m=document.createElement('div');m.className='kb-col-popover';
+  m.innerHTML=`<button class="kb-pop-item" data-act="add">+ Caz nou la această etapă</button><button class="kb-pop-item" data-act="sort">Sortează după dată finală</button><button class="kb-pop-item" data-act="collapse">Restrânge coloana</button>`;
+  b.parentElement.appendChild(m);
+  m.querySelectorAll('.kb-pop-item').forEach(it=>it.addEventListener('click',ev=>{
+    ev.stopPropagation();const a=it.dataset.act;
+    if(a==='add')openNewCaseModal();
+    if(a==='collapse')b.closest('.kb-col').classList.toggle('collapsed');
+    m.remove();
+  }));
+  setTimeout(()=>{const cl=ev=>{if(!m.contains(ev.target)&&ev.target!==b){m.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
+}));
     }
   });
 }
