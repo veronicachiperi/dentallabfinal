@@ -415,7 +415,17 @@ function renderArchive(){
   document.querySelectorAll('.ar-tbl tbody tr').forEach(r=>r.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${r.dataset.caseId}`}));
   document.getElementById('arExport')?.addEventListener('click',()=>{if(typeof exportCSV==='function')exportCSV()});
 }
-
+function renderEchipa(){
+  const root=document.getElementById('echipaShell');if(!root)return;
+  const stats={};EMPLOYEES.forEach(e=>{stats[e.id]={active:0,done:0,late:0}});
+  CASES.forEach(c=>Object.entries(c.assignees||{}).forEach(([s,t])=>{
+    if(!stats[t])return;
+    const st=c.stageStatuses?.[s];
+    if(st==='finalizat')stats[t].done++;
+    else if(st==='in_lucru'||st==='la_proba'){stats[t].active++;if(c.late)stats[t].late++}
+  }));
+  root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a><div class="nav-section">Date</div><a class="nav-item active" href="echipa.html"><span class="nav-icon round"></span>Echipa</a></aside><main class="main"><div style="padding:24px;max-width:900px"><h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Echipa</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id];const stageColor={pc:'#D85A30',ik:'#185FA5',vc:'#534AB7',mt:'#1D9E75',an:'#444441'}[e.id];const role={pc:'Designer (CAD)',ik:'Tehnician CAM',vc:'Tehnician prelucrare',mt:'Tehnician ceramică',an:'Tehnician finisaj'}[e.id]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${e.initials}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${e.name}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div></div></main></div>`;
+}
 // === MODAL + NEW CASE ===
 function openModal(content){
   const o=document.createElement('div');o.className='modal-overlay';
