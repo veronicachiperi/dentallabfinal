@@ -49,7 +49,7 @@ function renderPipeline(){
     const cases=applyFilter(casesInStage(stageId));
     const col=document.createElement('div');
     col.className='kb-col';col.dataset.stage=stageId;
-    col.innerHTML=`<div class="kb-col-head"><span class="kb-stage-dot" style="background:${stage.color}"></span><span class="kb-col-name">${stageId==='terminat'?'Finalizat':stage.name}</span><span class="kb-col-count">${cases.length}</span></div>`;
+col.innerHTML=`<div class="kb-col-head" data-stage="${stageId}"><span class="kb-stage-dot" style="background:${stage.color}"></span><span class="kb-col-name">${stageId==='terminat'?'Finalizat':stage.name}</span><span class="kb-col-count">${cases.length}</span><button class="kb-col-toggle" type="button" title="Restrânge/extinde">▾</button><button class="kb-col-menu" type="button" data-stage="${stageId}" title="Acțiuni">⋯</button></div>`;
     cases.forEach(c=>col.appendChild(renderKanbanCard(c)));
     attachDropZone(col,stageId);
     root.appendChild(col);
