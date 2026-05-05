@@ -430,8 +430,7 @@ button{font-family:inherit;cursor:pointer}
 .login-foot{font-size:11px;color:var(--text-dim);text-align:center;margin-top:16px}
 
 /* role-based hidden items */
-.nav-item[data-roles]{display:none}
-.nav-item.role-visible{display:flex}
+.nav-item[data-roles]{display:flex}
 .tbl tbody tr.tbl-row-faded { opacity: 0.55; background: var(--bg-soft); }
 .tbl tbody tr.tbl-row-faded:hover { opacity: 1; background: var(--bg); }
 .tbl tbody tr.tbl-row-faded .tbl-name::after { content: ' · neînceput'; font-weight: 400; color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; margin-left: 6px; }
