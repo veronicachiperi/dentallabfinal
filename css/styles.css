@@ -429,11 +429,7 @@ button{font-family:inherit;cursor:pointer}
 .login-clinic-select.show{display:flex}
 .login-foot{font-size:11px;color:var(--text-dim);text-align:center;margin-top:16px}
 
-<<<<<<< HEAD
 /* All nav items always visible regardless of role */
-=======
-/* role-based hidden items */
->>>>>>> a04722819b19d6c4b19d5746be42d2be4e42ae35
 .nav-item[data-roles]{display:flex}
 .tbl tbody tr.tbl-row-faded { opacity: 0.55; background: var(--bg-soft); }
 .tbl tbody tr.tbl-row-faded:hover { opacity: 1; background: var(--bg); }
