@@ -275,9 +275,11 @@ button{font-family:inherit;cursor:pointer}
 .pc-public-stage.proba{background:rgba(186,117,23,0.18);color:var(--warn)}
 .pc-public-stage.gata{background:rgba(29,158,117,0.20);color:#16805F}
 .pc-public-stage.trimis{background:rgba(39,80,10,0.20);color:#27500A}
-.pc-action{font-size:11px;padding:5px 12px;border-radius:5px;border:0.5px solid var(--border-strong);background:var(--bg);cursor:pointer;text-align:center;display:inline-block;white-space:nowrap}
-.pc-action.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
-.pc-action.note{color:var(--text-muted)}
+.pc-action{font-size:12px;padding:0;border:none;background:transparent;color:#3B82F6;cursor:pointer;white-space:nowrap;font-family:inherit;font-weight:500;text-align:right}
+.pc-action:hover{text-decoration:underline}
+.pc-action.primary{color:#3B82F6;font-weight:500}
+.pc-action.note{color:#3B82F6}
+.pc-row-grid > div:last-child{text-align:right}
 
 /* Calendar */
 .cal-shell{max-width:1200px;margin:0 auto;padding:20px}
