@@ -173,7 +173,7 @@ function renderClinic(){
     </div>
   </div>`;
 
-  document.getElementById('newCaseBtnClinic')?.addEventListener('click',()=>openNewCaseModal(clinicId));
+  document.getElementById('newCaseBtnClinici')?.addEventListener('click',()=>openNewCaseModal(clinicId));
   document.querySelectorAll('.pc-row-grid[data-case-id]').forEach(r=>{
     r.addEventListener('click',e=>{
       if(e.target.tagName==='BUTTON')return;
@@ -183,7 +183,7 @@ function renderClinic(){
   document.querySelectorAll('.pc-action[data-action]').forEach(b=>{
     b.addEventListener('click',e=>{
       e.stopPropagation();
-      handleClinicAction(b.dataset.action,Number(b.dataset.caseId));
+      handleCliniciAction(b.dataset.action,Number(b.dataset.caseId));
     });
   });
   document.querySelectorAll('.pc-clinic-tab[data-clinic-id]').forEach(t=>{
