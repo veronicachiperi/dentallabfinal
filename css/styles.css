@@ -425,8 +425,8 @@ button{font-family:inherit;cursor:pointer}
 .login-role-sub{font-size:11px;color:var(--text-dim)}
 .login-divider{display:flex;align-items:center;gap:10px;margin:18px 0 14px;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
 .login-divider::before,.login-divider::after{content:'';flex:1;height:0.5px;background:var(--border)}
-.login-clinic-select{display:none;flex-direction:column;gap:8px;margin-top:12px}
-.login-clinic-select.show{display:flex}
+.login-clinici-select{display:none;flex-direction:column;gap:8px;margin-top:12px}
+.login-clinici-select.show{display:flex}
 .login-foot{font-size:11px;color:var(--text-dim);text-align:center;margin-top:16px}
 
 /* All nav items always visible regardless of role */
@@ -476,13 +476,13 @@ button{font-family:inherit;cursor:pointer}
 }
 
 /* Tab-uri clinici sus */
-.pc-clinic-tabs-row {
+.pc-clinici-tabs-row {
   padding: 0 24px 16px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
-.pc-clinic-tab {
+.pc-clinici-tab {
   font-size: 12px;
   padding: 6px 14px;
   border: 0.5px solid var(--border);
@@ -492,11 +492,11 @@ button{font-family:inherit;cursor:pointer}
   cursor: pointer;
   font-family: inherit;
 }
-.pc-clinic-tab:hover {
+.pc-clinici-tab:hover {
   background: var(--bg-soft);
   color: var(--text);
 }
-.pc-clinic-tab.on {
+.pc-clinici-tab.on {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);
