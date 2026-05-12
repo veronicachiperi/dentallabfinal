@@ -93,7 +93,13 @@ function getStage(id)    { return STAGES.find(s => s.id === id); }
 function getCase(id)     { return CASES.find(c => c.id === Number(id)); }
 function casesForClinic(id) { return CASES.filter(c => c.clinic === id); }
 function casesInStage(id)   { return CASES.filter(c => c.stage === id); }
-function nextStage(current) { const i = STAGES.findIndex(s => s.id === current); return STAGES[Math.min(i + 1, STAGES.length - 1)].id; }
+function nextStage(current, type) {
+  const flow = type && TYPES_SKIP_CERAMICA.some(t => (type || '').includes(t))
+    ? PIPELINE_STAGES_NO_CERAMIC.concat('trimis')
+    : PIPELINE_STAGES.concat('trimis');
+  const i = flow.indexOf(current);
+  return flow[Math.min(i + 1, flow.length - 1)] || current;
+}
 function nextCaseId() { return Math.max(...CASES.map(c => c.id)) + 1; }
 
 function parseShortDate(str) {

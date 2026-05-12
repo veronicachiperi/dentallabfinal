@@ -37,7 +37,7 @@ function applySidebarRoles(){
 function renderPipeline(){
   const root=document.getElementById('pipeline');
   if(!root)return;
-  const cols=['design','cam','prelucrare','ceramica','proba','terminat'];
+  const cols=PIPELINE_STAGES;
   root.innerHTML='';
   cols.forEach(stageId=>{
     const stage=getStage(stageId);
@@ -178,7 +178,7 @@ function renderClinic(){
     </div>
   </div>`;
 
-  document.getElementById('newCaseBtnClinici')?.addEventListener('click',()=>openNewCaseModal(clinicId));
+  document.getElementById('newCaseBtnClinic')?.addEventListener('click',()=>openNewCaseModal(clinicId));
   document.querySelectorAll('.pc-row-grid[data-case-id]').forEach(r=>{
     r.addEventListener('click',e=>{
       if(e.target.tagName==='BUTTON')return;
@@ -188,7 +188,7 @@ function renderClinic(){
   document.querySelectorAll('.pc-action[data-action]').forEach(b=>{
     b.addEventListener('click',e=>{
       e.stopPropagation();
-      handleCliniciAction(b.dataset.action,Number(b.dataset.caseId));
+      handleClinicAction(b.dataset.action,Number(b.dataset.caseId));
     });
   });
   document.querySelectorAll('.pc-clinic-tab[data-clinic-id]').forEach(t=>{
@@ -231,7 +231,7 @@ function renderCaseDetail(){
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
   document.getElementById('editCaseBtn')?.addEventListener('click',()=>openQuickEdit(c.id));
   document.getElementById('advanceStageBtn')?.addEventListener('click',()=>{
-    const next=nextStage(c.stage);if(next===c.stage){alert('Etapă finală deja');return}
+    const next=nextStage(c.stage,c.type);if(next===c.stage){alert('Etapă finală deja');return}
     c.stage=next;overrides.stages=overrides.stages||{};overrides.stages[c.id]=next;saveOverrides(overrides);renderCaseDetail();
   });
   document.getElementById('addNoteBtn')?.addEventListener('click',()=>{
