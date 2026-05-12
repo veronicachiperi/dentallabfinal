@@ -51,6 +51,14 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def do_HEAD(self):
+        if urlparse(self.path).path == "/api/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            return
+        super().do_HEAD()
+
     def do_POST(self):
         if urlparse(self.path).path != "/api/upload":
             self.send_error(404, "Not found")
