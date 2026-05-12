@@ -129,7 +129,12 @@ function renderClinic(){
     return{cls:'note',label:'Adaugă notă',action:'note'};
   }
 
-  const clinicTabs=CLINICS.map(cl=>`<button class="pc-clinic-tab ${cl.id===clinicId?'on':''}" data-clinic-id="${cl.id}">${cl.name}</button>`).join('');
+  // Clinics see only their own portal — admins/techs see tabs to navigate between all
+  const currentUser=getCurrentUser();
+  const isAdminOrTech=!currentUser||currentUser.role==='admin'||currentUser.role==='tech';
+  const clinicTabs=isAdminOrTech
+    ? CLINICS.map(cl=>`<button class="pc-clinic-tab ${cl.id===clinicId?'on':''}" data-clinic-id="${cl.id}">${cl.name}</button>`).join('')
+    : '';
 
   root.innerHTML=`<div class="pc-shell">
     <div class="pc-topbar">
@@ -750,6 +755,93 @@ function attachInlineEditors(root) {
       saveOverrides(overrides);
       if (typeof renderTable === 'function') renderTable();
       if (typeof renderPipeline === 'function') renderPipeline();
+    });
+  });
+
+  // NUME PACIENT — click on .tbl-name to edit name
+  root.querySelectorAll('.tbl-name').forEach(el => {
+    if (el.closest('thead')) return;
+    if (el.dataset.editorAttached) return;
+    el.dataset.editorAttached = '1';
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const tr = el.closest('tr,.kb-card');
+      if (!tr) return;
+      const c = getCase(Number(tr.dataset.caseId));
+      if (!c) return;
+      const newName = prompt('Schimbă nume pacient:', c.name);
+      if (newName === null || !newName.trim()) return;
+      c.name = newName.trim();
+      overrides.edits = overrides.edits || {};
+      overrides.edits[c.id] = overrides.edits[c.id] || {};
+      overrides.edits[c.id].name = c.name;
+      saveOverrides(overrides);
+      if (typeof renderTable === 'function') renderTable();
+      if (typeof renderPipeline === 'function') renderPipeline();
+    });
+  });
+
+  // CLINICĂ — click on .tbl-clinic to change clinic
+  root.querySelectorAll('.tbl-clinic').forEach(el => {
+    if (el.closest('thead')) return;
+    if (el.dataset.editorAttached) return;
+    el.dataset.editorAttached = '1';
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const tr = el.closest('tr,.kb-card');
+      if (!tr) return;
+      const c = getCase(Number(tr.dataset.caseId));
+      if (!c) return;
+      const items = CLINICS.map(cl => ({ value: cl.id, label: cl.name }));
+      openInlinePopover(el, items, sel => {
+        c.clinic = sel.value;
+        overrides.edits = overrides.edits || {};
+        overrides.edits[c.id] = overrides.edits[c.id] || {};
+        overrides.edits[c.id].clinic = sel.value;
+        saveOverrides(overrides);
+        if (typeof renderTable === 'function') renderTable();
+        if (typeof renderPipeline === 'function') renderPipeline();
+      }, 'Schimbă clinică');
+    });
+  });
+
+  // NOTE — click on .tbl-notes to edit notes
+  root.querySelectorAll('.tbl-notes').forEach(el => {
+    if (el.closest('thead')) return;
+    if (el.dataset.editorAttached) return;
+    el.dataset.editorAttached = '1';
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const tr = el.closest('tr,.kb-card');
+      if (!tr) return;
+      const c = getCase(Number(tr.dataset.caseId));
+      if (!c) return;
+      const newNotes = prompt('Notițe pentru caz:', c.notes || '');
+      if (newNotes === null) return;
+      c.notes = newNotes.trim();
+      overrides.edits = overrides.edits || {};
+      overrides.edits[c.id] = overrides.edits[c.id] || {};
+      overrides.edits[c.id].notes = c.notes;
+      saveOverrides(overrides);
+      if (typeof renderTable === 'function') renderTable();
+      if (typeof renderPipeline === 'function') renderPipeline();
+    });
+  });
+
+  // CAZ # — click on .tbl-num to open case detail
+  root.querySelectorAll('.tbl-num').forEach(el => {
+    if (el.closest('thead')) return;
+    if (el.dataset.editorAttached) return;
+    el.dataset.editorAttached = '1';
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const tr = el.closest('tr,.kb-card');
+      if (!tr) return;
+      location.href = `case.html?id=${tr.dataset.caseId}`;
     });
   });
 }

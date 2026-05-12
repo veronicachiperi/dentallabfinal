@@ -112,6 +112,10 @@ const STAGE_ASSIGNEE_DEFAULTS = { design:'pc', cam:'ik', la_print:'ik', prelucra
 CASES.forEach(c => {
   c.assignees = c.assignees || {};
   c.stageStatuses = c.stageStatuses || {};
+  // If marked as notStarted — leave ALL stages empty (no assignee, no status)
+  if (c.notStarted) {
+    return;
+  }
   const stages = getEtapeLabStages(c.type);
   const currentIdx = stages.indexOf(c.stage);
   stages.forEach((s, i) => {
