@@ -20,8 +20,12 @@ function applyFilter(cases){
     if(activeFilter.clinic!=='all'&&c.clinic!==activeFilter.clinic)return false;
     if(activeFilter.tab==='mine'){const u=getCurrentUser();if(!u||c.assignee!==u.id)return false}
     if(activeFilter.tab==='late'&&!c.late)return false;
+    if(activeFilter.tab==='today'){const f=parseShortDate(c.finala);if(!f||f.toDateString()!==today.toDateString())return false}
     if(activeFilter.tab==='week'){const f=parseShortDate(c.finala);if(!f||f<today||f>weekEnd)return false}
     if(activeFilter.tab==='notstarted'&&!c.notStarted)return false;
+    if(activeFilter.tab==='proba'&&c.stage!=='proba')return false;
+    if(activeFilter.tab==='ready'&&c.stage!=='terminat')return false;
+    if(activeFilter.tab==='unassigned'&&!c.notStarted&&c.assignee)return false;
     return true;
   });
 }
@@ -31,6 +35,127 @@ function applySidebarRoles(){
   const user=getCurrentUser()||{role:'admin',name:'Admin',initials:'AD',id:'admin'};
   const av=document.getElementById('userAvatar');
   if(av)av.textContent=user.initials;
+}
+
+function updateMainSummary(){
+  const active=CASES.filter(c=>c.stage!=='trimis').length;
+  const late=CASES.filter(c=>c.stage!=='trimis'&&c.late).length;
+  const count=document.getElementById('navCountLucrari');
+  if(count)count.textContent=active;
+  const banner=document.getElementById('lateBanner');
+  if(banner){
+    const label=banner.querySelector('b');
+    if(label)label.textContent=`${late} ${late===1?'lucrare':'lucrări'} în întârziere`;
+    banner.style.display=late?'flex':'none';
+  }
+  const dot=document.querySelector('#bellBtn .bell-dot');
+  if(dot)dot.style.display=NOTIFICATIONS.some(n=>n.unread)?'block':'none';
+  renderActionDashboard();
+}
+
+function caseDueInfo(c){
+  const today=new Date(2026,4,4);
+  const due=parseShortDate(c.finala);
+  if(!due)return{label:c.finala||'—',days:999};
+  const days=Math.ceil((due-today)/86400000);
+  if(c.late||days<0)return{label:'restant',days};
+  if(days===0)return{label:'azi',days};
+  if(days===1)return{label:'mâine',days};
+  return{label:c.finala,days};
+}
+
+function setDashboardFilter(tab){
+  activeFilter.tab=tab;
+  document.querySelectorAll('.subbar .tab').forEach(t=>t.classList.remove('on'));
+  const tabIndex={all:0,mine:1,late:2,week:3,notstarted:4,trimise:5}[tab];
+  if(tabIndex!==undefined)document.querySelectorAll('.subbar .tab')[tabIndex]?.classList.add('on');
+  renderPipeline();
+  if(typeof renderTable==='function')renderTable();
+}
+
+function renderActionDashboard(){
+  const root=document.getElementById('actionDashboard');
+  if(!root)return;
+  const today=new Date(2026,4,4);
+  const activeAll=CASES.filter(c=>c.stage!=='trimis');
+  const active=activeAll.filter(c=>activeFilter.clinic==='all'||c.clinic===activeFilter.clinic);
+  const dueToday=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===today.toDateString()});
+  const late=active.filter(c=>c.late);
+  const proba=active.filter(c=>c.stage==='proba');
+  const ready=active.filter(c=>c.stage==='terminat');
+  const unassigned=active.filter(c=>c.notStarted||!c.assignee);
+  const stats=[
+    {tab:'late',label:'Restante',value:late.length,tone:'late',hint:'necesită decizie'},
+    {tab:'today',label:'Azi',value:dueToday.length,tone:'warn',hint:'date finale azi'},
+    {tab:'proba',label:'La probă',value:proba.length,tone:'info',hint:'așteaptă clinică'},
+    {tab:'ready',label:'Gata de ridicat',value:ready.length,tone:'good',hint:'de trimis'},
+    {tab:'unassigned',label:'Neasignate',value:unassigned.length,tone:'muted',hint:'pornește lucrarea'}
+  ];
+  const worklist=active.slice().sort((a,b)=>{
+    const ad=caseDueInfo(a),bd=caseDueInfo(b);
+    if(Boolean(b.late)!==Boolean(a.late))return a.late?-1:1;
+    if(a.notStarted!==b.notStarted)return a.notStarted?-1:1;
+    return ad.days-bd.days;
+  }).slice(0,8);
+  root.innerHTML=`<div class="dash-head">
+    <div><div class="dash-eyebrow">Azi · 4 Mai 2026</div><h1 class="dash-title">Dashboard lucrări</h1></div>
+    <button class="btn" type="button" data-dash-filter="all">Vezi toate</button>
+  </div>
+  <div class="dash-kpis">${stats.map(s=>`<button class="dash-kpi ${s.tone} ${activeFilter.tab===s.tab?'on':''}" type="button" data-dash-filter="${s.tab}">
+    <span class="dash-kpi-label">${s.label}</span><span class="dash-kpi-value">${s.value}</span><span class="dash-kpi-hint">${s.hint}</span>
+  </button>`).join('')}</div>
+  <div class="dash-grid">
+    <section class="dash-panel">
+      <div class="dash-panel-head"><span>De rezolvat prima dată</span><small>${worklist.length} priorități</small></div>
+      <div class="dash-worklist">${worklist.map(c=>{const cl=getClinic(c.clinic);const st=getStage(c.stage);const due=caseDueInfo(c);return `<a class="dash-work-row ${c.late?'late':c.notStarted?'muted':''}" href="case.html?id=${c.id}">
+        <div class="dash-work-main"><b>${c.name}</b><span>${cl.name} · ${c.type}</span></div>
+        <div class="dash-work-meta"><span class="dash-chip" style="--chip:${st?.color||'#6b7280'}">${st?.name||c.stage}</span><strong>${due.label}</strong></div>
+      </a>`}).join('')}</div>
+    </section>
+  </div>`;
+  root.querySelectorAll('[data-dash-filter]').forEach(b=>b.addEventListener('click',()=>setDashboardFilter(b.dataset.dashFilter)));
+}
+
+function closeNotificationDrawer(){
+  document.querySelector('.notif-scrim')?.remove();
+  document.querySelector('.notif-drawer')?.remove();
+}
+
+function openNotificationDrawer(){
+  closeNotificationDrawer();
+  const scrim=document.createElement('div');
+  scrim.className='notif-scrim';
+  const drawer=document.createElement('aside');
+  drawer.className='notif-drawer';
+  const unread=NOTIFICATIONS.filter(n=>n.unread).length;
+  drawer.innerHTML=`<div class="notif-head"><div><div class="notif-eyebrow">${unread} necitite</div><h2>Notificări</h2></div><button class="notif-close" type="button">×</button></div>
+    <div class="notif-list">${NOTIFICATIONS.map(n=>{const c=getCase(n.caseId);const cl=c?getClinic(c.clinic):null;return `<button class="notif-item ${n.unread?'unread':''}" type="button" data-notif-id="${n.id}" data-case-id="${n.caseId}">
+      <span class="notif-dot"></span><span class="notif-body"><b>${n.kind}</b><span>${n.text}</span><small>${n.time}${cl?' · '+cl.name:''}</small></span>
+    </button>`}).join('')}</div>
+    <div class="notif-foot"><button class="btn" type="button" id="markNotificationsRead">Marchează citite</button></div>`;
+  document.body.appendChild(scrim);
+  document.body.appendChild(drawer);
+  scrim.addEventListener('click',closeNotificationDrawer);
+  drawer.querySelector('.notif-close')?.addEventListener('click',closeNotificationDrawer);
+  drawer.querySelectorAll('.notif-item').forEach(item=>item.addEventListener('click',()=>{
+    const id=Number(item.dataset.notifId);
+    const n=NOTIFICATIONS.find(x=>x.id===id);
+    if(n)n.unread=false;
+    overrides.read=[...new Set([...(overrides.read||[]),id])];
+    saveOverrides(overrides);
+    location.href=`case.html?id=${item.dataset.caseId}`;
+  }));
+  drawer.querySelector('#markNotificationsRead')?.addEventListener('click',()=>{
+    NOTIFICATIONS.forEach(n=>n.unread=false);
+    overrides.read=NOTIFICATIONS.map(n=>n.id);
+    saveOverrides(overrides);
+    updateMainSummary();
+    openNotificationDrawer();
+  });
+}
+
+function attachNotifications(){
+  document.getElementById('bellBtn')?.addEventListener('click',openNotificationDrawer);
 }
 
 // === PIPELINE KANBAN ===
@@ -69,6 +194,7 @@ function renderPipeline(){
     }));
     setTimeout(()=>{const cl=ev=>{if(!m.contains(ev.target)&&ev.target!==b){m.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
   }));
+  updateMainSummary();
 }
 
 function renderKanbanCard(c){
@@ -96,6 +222,7 @@ function attachDropZone(col,stageId){
       c.stage=stageId;
       overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;saveOverrides(overrides);
       renderPipeline();
+      updateMainSummary();
       if(typeof renderTable==='function')renderTable();
     }
   });
@@ -407,9 +534,9 @@ function renderClinici(){
 }
 
 // === MODAL + NEW CASE ===
-function openModal(content){
+function openModal(content, modalClass=''){
   const o=document.createElement('div');o.className='modal-overlay';
-  o.innerHTML=`<div class="modal">${content}</div>`;
+  o.innerHTML=`<div class="modal ${modalClass}">${content}</div>`;
   o.addEventListener('click',e=>{if(e.target===o)closeModal()});
   document.body.appendChild(o);
   document.querySelectorAll('.modal-close').forEach(b=>b.addEventListener('click',closeModal));
@@ -427,7 +554,39 @@ function openNewCaseModal(defClinic){
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
   const tooth=n=>`<button type="button" class="tooth-cell" data-tooth="${n}">${n}</button>`;
   const renderRow=arr=>arr.slice(0,8).map(tooth).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tooth).join('');
-  openModal(`<div class="modal-head"><div class="modal-title">Caz nou</div><button class="modal-close" type="button">×</button></div><div class="modal-body"><div class="field-row"><div class="field"><label>Nume</label><input id="ncLast" placeholder="Bengoi" autofocus></div><div class="field"><label>Prenume</label><input id="ncFirst" placeholder="Elvis"></div></div><div class="field-row"><div class="field"><label>Clinică</label><select id="ncClinic">${cOpts}</select></div><div class="field"><label>Medic</label><input id="ncDoctor"></div></div><div class="field-row"><div class="field"><label>Tip</label><select id="ncType">${tOpts}</select></div><div class="field"><label>Culoare</label><select id="ncColor">${colOpts}</select></div></div><div class="field-row three"><div class="field"><label>Intrată</label><input id="ncIntrata" value="${fmtShortDate(today)}"></div><div class="field"><label>Probă</label><input id="ncProba" value="${fmtShortDate(pD)}"></div><div class="field"><label>Finală</label><input id="ncFinala" value="${fmtShortDate(fD)}"></div></div><div class="field"><label>Schema dentară (FDI)</label><div class="tc-form-wrap" id="toothChartWrap"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div><div class="tc-summary" id="toothSummary"><div style="color:var(--text-dim)">Niciun dinte selectat</div></div></div><div class="field-row"><div class="field"><label>Tip implant</label><input id="ncImplant"></div><div class="field"><label>Tip amprentă</label><select id="ncAmprenta"><option>Silicon</option><option>Polieter</option><option>Alginat</option><option>Digital</option><option>STL</option></select></div></div><div class="field"><label>Note</label><textarea id="ncNotes"></textarea></div></div><div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="ncSave" type="button">Salvează</button></div>`);
+  openModal(`<div class="modal-head"><div><div class="modal-kicker">Flux organizat</div><div class="modal-title">Caz nou</div></div><button class="modal-close" type="button">×</button></div>
+    <div class="modal-body modal-body-compact">
+      <div class="case-wizard">
+        <aside class="wizard-steps">
+          <div class="wizard-step on"><span>1</span><div><b>Pacient</b><small>clinică și medic</small></div></div>
+          <div class="wizard-step"><span>2</span><div><b>Lucrare</b><small>tip, culoare, dinți</small></div></div>
+          <div class="wizard-step"><span>3</span><div><b>Date</b><small>intrare, probă, finală</small></div></div>
+          <div class="wizard-step"><span>4</span><div><b>Fișiere</b><small>atașări și note</small></div></div>
+        </aside>
+        <div class="wizard-content">
+          <section class="wizard-panel">
+            <div class="wizard-panel-title">Pacient & clinică</div>
+            <div class="field-row"><div class="field"><label>Nume</label><input id="ncLast" placeholder="Bengoi" autofocus></div><div class="field"><label>Prenume</label><input id="ncFirst" placeholder="Elvis"></div></div>
+            <div class="field-row"><div class="field"><label>Clinică</label><select id="ncClinic">${cOpts}</select></div><div class="field"><label>Medic</label><input id="ncDoctor"></div></div>
+          </section>
+          <section class="wizard-panel">
+            <div class="wizard-panel-title">Lucrare</div>
+            <div class="field-row"><div class="field"><label>Tip</label><select id="ncType">${tOpts}</select></div><div class="field"><label>Culoare</label><select id="ncColor">${colOpts}</select></div></div>
+            <div class="field"><label>Schema dentară (FDI)</label><div class="tc-form-wrap" id="toothChartWrap"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div><div class="tc-summary" id="toothSummary"><div style="color:var(--text-dim)">Niciun dinte selectat</div></div></div>
+            <div class="field-row"><div class="field"><label>Tip implant</label><input id="ncImplant"></div><div class="field"><label>Tip amprentă</label><select id="ncAmprenta"><option>Silicon</option><option>Polieter</option><option>Alginat</option><option>Digital</option><option>STL</option></select></div></div>
+          </section>
+          <section class="wizard-panel">
+            <div class="wizard-panel-title">Planificare</div>
+            <div class="field-row three"><div class="field"><label>Intrată</label><input id="ncIntrata" value="${fmtShortDate(today)}"></div><div class="field"><label>Probă</label><input id="ncProba" value="${fmtShortDate(pD)}"></div><div class="field"><label>Finală</label><input id="ncFinala" value="${fmtShortDate(fD)}"></div></div>
+          </section>
+          <section class="wizard-panel">
+            <div class="wizard-panel-title">Fișiere & note</div>
+            <button class="upload-well" type="button"><span>PDF / STL</span><b>Adaugă fișiere</b></button>
+            <div class="field"><label>Note</label><textarea id="ncNotes"></textarea></div>
+          </section>
+        </div>
+      </div>
+    </div><div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="ncSave" type="button">Salvează</button></div>`, 'modal-wide');
   const tMap=new Map();
   document.querySelectorAll('#toothChartWrap .tooth-cell').forEach(b=>{
     b.addEventListener('click',e=>{e.stopPropagation();openToothPop(b)});
@@ -461,6 +620,7 @@ function openNewCaseModal(defClinic){
     const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
     const nc={id:nextCaseId(),name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:document.getElementById('ncClinic').value,doctor:document.getElementById('ncDoctor').value,type:document.getElementById('ncType').value,color:document.getElementById('ncColor').value,stage:'design',intrata:document.getElementById('ncIntrata').value,probaDate:document.getElementById('ncProba').value,finala:document.getElementById('ncFinala').value,teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
     nc.priority=computePriority(nc);CASES.push(nc);persistNewCase(nc);closeModal();
+    updateMainSummary();
     if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
   });
 }
@@ -863,6 +1023,7 @@ if (typeof window !== 'undefined') {
 
 document.addEventListener('DOMContentLoaded',()=>{
   applySidebarRoles();
+  updateMainSummary();
   renderClinic();
   renderCaseDetail();
   renderCalendar();
@@ -874,6 +1035,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderLogin();
   attachSearch();
   attachFilters();
+  attachNotifications();
   attachMobileMenu();
   document.getElementById('newCaseBtnGlobal')?.addEventListener('click',()=>openNewCaseModal());
 });
