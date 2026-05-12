@@ -37,7 +37,7 @@ function renderTable() {
               <th>Nume</th>
               <th>Clinică</th>
               <th>Tip</th>
-              <th style="width:60px">Fișă</th>
+              <th style="width:94px">Acțiuni</th>
               <th>Intrată</th>
               <th>Probă</th>
               <th>Finală</th>
@@ -67,7 +67,7 @@ function renderTableRow(c) {
     <td><span class="tbl-name">${c.name}</span></td>
     <td><span class="tbl-clinic">${clinic.name}</span></td>
     <td><span class="tag">${c.type}</span></td>
-    <td><button class="fisa-btn" data-fisa="${c.id}" type="button">PDF</button></td>
+    <td class="tbl-actions-cell"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare rapidă</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button></div></div></td>
     <td><span class="tbl-due">${c.intrata}</span></td>
     <td><span class="tbl-due-bold">${c.probaDate || '—'}</span></td>
     <td><span class="tbl-due-bold ${dueClass}">${finalText}</span></td>
@@ -106,16 +106,36 @@ function renderFlowIndicator(c) {
 function attachTableHandlers(root) {
   root.querySelectorAll('tbody tr').forEach(tr => {
     tr.addEventListener('click', e => {
-      if (e.target.closest('.node, .node-em, .fisa-btn, button')) return;
+      if (e.target.closest('.node, .node-em, .fisa-btn, button, .row-actions-menu')) return;
       location.href = `case.html?id=${tr.dataset.caseId}`;
     });
   });
   root.querySelectorAll('.node, .node-em').forEach(node => {
     node.addEventListener('click', e => { e.stopPropagation(); handleStageClick(Number(node.dataset.caseId), node.dataset.stage); });
   });
-  root.querySelectorAll('.fisa-btn').forEach(btn => {
-    btn.addEventListener('click', e => { e.stopPropagation(); const c = getCase(Number(btn.dataset.fisa)); if (c) generateFisaPDF(c); });
+  root.querySelectorAll('[data-row-actions]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const menu = root.querySelector(`[data-row-menu="${btn.dataset.rowActions}"]`);
+      root.querySelectorAll('.row-actions-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
+      menu?.classList.toggle('open');
+    });
   });
+  root.querySelectorAll('[data-row-action]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      root.querySelectorAll('.row-actions-menu.open').forEach(m => m.classList.remove('open'));
+      const id=Number(btn.dataset.caseId), c=getCase(id);
+      if(!c)return;
+      if(btn.dataset.rowAction==='edit')openQuickEdit(id);
+      if(btn.dataset.rowAction==='pdf')generateFisaPDF(c);
+      if(btn.dataset.rowAction==='attach')chooseFilesForCase(id,()=>renderTable());
+      if(btn.dataset.rowAction==='view')location.href=`case.html?id=${id}`;
+    });
+  });
+  if(window.tableActionsCloseHandler)document.removeEventListener('click',window.tableActionsCloseHandler);
+  window.tableActionsCloseHandler=e=>{if(!e.target.closest('.row-actions'))root.querySelectorAll('.row-actions-menu.open').forEach(m=>m.classList.remove('open'))};
+  document.addEventListener('click',window.tableActionsCloseHandler);
 }
 
 function handleStageClick(caseId, stageId) {

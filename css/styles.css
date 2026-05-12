@@ -109,6 +109,14 @@ button{font-family:inherit;cursor:pointer}
 
 .fisa-btn{font-size:9px;font-weight:500;padding:3px 8px;border:0.5px solid #B4B2A9;border-radius:var(--radius-sm);background:var(--bg);color:var(--late);font-family:var(--font-mono);cursor:pointer}
 .fisa-btn:hover{background:var(--late-bg);border-color:var(--late)}
+.tbl-actions-cell{position:relative;overflow:visible}
+.row-actions{position:relative;display:inline-block}
+.row-actions-btn{color:var(--text-muted);font-family:inherit;min-width:72px}
+.row-actions-btn:hover{background:var(--bg-soft);border-color:var(--border-strong);color:var(--text)}
+.row-actions-menu{position:absolute;left:0;top:calc(100% + 5px);background:var(--bg);border:0.5px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:0 10px 28px rgba(0,0,0,0.16);padding:4px;min-width:170px;z-index:30;display:none}
+.row-actions-menu.open{display:flex;flex-direction:column;gap:1px}
+.row-actions-menu button{border:none;background:transparent;text-align:left;padding:8px 10px;border-radius:var(--radius-sm);font-size:12px;color:var(--text)}
+.row-actions-menu button:hover{background:var(--bg-soft)}
 
 /* Etape lab — 4-stage flow with avatar nodes */
 .flow{display:inline-flex;align-items:center;gap:0;padding:2px 0}
@@ -251,6 +259,11 @@ button{font-family:inherit;cursor:pointer}
 .cd-topbar{padding:14px 24px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg)}
 .cd-back{font-size:12px;color:var(--text-muted)}
 .cd-back:hover{color:var(--text)}
+.case-actions{position:relative}
+.case-actions-menu{position:absolute;right:0;top:calc(100% + 6px);background:var(--bg);border:0.5px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:0 10px 28px rgba(0,0,0,0.16);padding:4px;min-width:220px;z-index:20;display:none}
+.case-actions-menu.open{display:flex;flex-direction:column;gap:1px}
+.case-actions-menu button{border:none;background:transparent;color:var(--text);text-align:left;padding:8px 10px;border-radius:var(--radius-sm);font-size:12px}
+.case-actions-menu button:hover{background:var(--bg-soft)}
 .cd-head{padding:24px 24px 18px;border-bottom:0.5px solid var(--border);background:var(--bg)}
 .cd-clinic-line{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;font-weight:500;margin-bottom:6px}
 .cd-title{font-size:22px;font-weight:500;margin:0}
@@ -313,6 +326,12 @@ button{font-family:inherit;cursor:pointer}
 .file-icon-mini{width:22px;height:26px;background:var(--bg-soft);border:0.5px solid var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:600;color:var(--text-dim);font-family:var(--font-mono)}
 .file-name{flex:1;font-weight:500;font-size:12px}
 .file-size{font-size:10px;color:var(--text-dim)}
+.file-storage-note{font-size:10px;color:var(--text-dim);line-height:1.4;margin-top:8px}
+.upload-file-list{display:flex;flex-direction:column;gap:6px;margin:8px 0 12px}
+.upload-file-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--bg-soft);font-size:11px}
+.upload-file-item span{width:28px;height:22px;border-radius:3px;background:var(--bg);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text-muted);font-weight:600}
+.upload-file-item b{flex:1;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upload-file-item em{font-style:normal;color:var(--text-dim);font-size:10px}
 
 /* Clinic portal */
 .pc-shell{max-width:1100px;margin:0 auto}
@@ -393,6 +412,21 @@ button{font-family:inherit;cursor:pointer}
   .app{grid-template-columns:1fr}
   .sidebar{position:fixed;left:-100%;top:0;width:80%;max-width:280px;height:100vh;z-index:50;transition:left 0.2s}
   .sidebar.open{left:0}
+  .topbar{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .crumb{display:none}
+  .search{order:10;flex-basis:100%;max-width:none}
+  .deadline-strip{align-items:flex-start;line-height:1.35;padding:10px 12px}
+  .action-dashboard{padding:12px}
+  .view-tabs,.subbar{overflow-x:auto;white-space:nowrap;padding-left:12px;padding-right:12px}
+  .subbar{gap:14px}
+  .month-header{padding-left:12px;padding-right:12px}
+  .tbl{min-width:1040px}
+  .cd-topbar{padding:10px 12px;position:sticky;top:0;z-index:8}
+  .cd-head{padding:18px 12px 14px}
+  .cd-title{font-size:20px}
+  .cd-grid{gap:12px}
+  .cd-section{border-left:none;border-right:none;border-radius:0}
+  .case-actions-menu{right:0;min-width:210px}
   .mobile-menu-btn{display:flex}
   .dash-kpis{grid-template-columns:1fr 1fr}
   .dash-grid{grid-template-columns:1fr}

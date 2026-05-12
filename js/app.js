@@ -9,6 +9,56 @@ function applyOverrides(){
 }
 applyOverrides();
 
+const ATTACHMENTS_KEY='dental-lab-attachments-v1';
+function loadAttachments(){try{return JSON.parse(localStorage.getItem(ATTACHMENTS_KEY)||'{}')}catch{return{}}}
+function saveAttachments(o){localStorage.setItem(ATTACHMENTS_KEY,JSON.stringify(o))}
+const attachments=loadAttachments();
+function formatBytes(bytes){
+  if(!bytes)return'0 KB';
+  const units=['B','KB','MB','GB'];
+  let n=bytes,i=0;
+  while(n>=1024&&i<units.length-1){n/=1024;i++}
+  return `${Math.round(n*10)/10} ${units[i]}`;
+}
+function fileExt(name){const p=String(name||'').split('.').pop();return p&&p!==name?p.toUpperCase().slice(0,4):'FILE'}
+function filesForCase(caseId){return attachments[caseId]||[]}
+function persistCaseFiles(caseId,files){
+  const saved=filesForCase(caseId).slice();
+  Array.from(files||[]).forEach(f=>saved.push({name:f.name,size:f.size,type:f.type||'',added:fmtShortDate(new Date())}));
+  attachments[caseId]=saved;
+  saveAttachments(attachments);
+}
+async function storeCaseFiles(caseId,files){
+  const arr=Array.from(files||[]);
+  if(!arr.length)return 0;
+  const c=getCase(caseId),cl=c?getClinic(c.clinic):null;
+  const fd=new FormData();
+  fd.append('caseId',caseId);
+  fd.append('clinicId',c?.clinic||'unknown');
+  fd.append('clinicName',cl?.name||'Unknown clinic');
+  fd.append('patientName',c?.name||`case-${caseId}`);
+  arr.forEach(f=>fd.append('files',f,f.name));
+  try{
+    const res=await fetch('/api/upload',{method:'POST',body:fd});
+    if(!res.ok)throw new Error('upload failed');
+    const json=await res.json();
+    const saved=filesForCase(caseId).slice();
+    (json.files||[]).forEach(f=>saved.push({name:f.name,size:f.size,type:f.type||'',path:f.path,added:fmtShortDate(new Date())}));
+    attachments[caseId]=saved;
+    saveAttachments(attachments);
+  }catch{
+    persistCaseFiles(caseId,arr);
+  }
+  return arr.length;
+}
+function chooseFilesForCase(caseId,onDone){
+  const input=document.createElement('input');
+  input.type='file';input.multiple=true;input.hidden=true;
+  input.addEventListener('change',async()=>{const count=await storeCaseFiles(caseId,input.files);input.remove();if(onDone)onDone(count)});
+  document.body.appendChild(input);
+  input.click();
+}
+
 const activeFilter={tab:'all',clinic:'all'};
 function applyFilter(cases){
   const today=new Date(2026,4,4);
@@ -62,6 +112,19 @@ function caseDueInfo(c){
   if(days===0)return{label:'azi',days};
   if(days===1)return{label:'mâine',days};
   return{label:c.finala,days};
+}
+
+function renderAttachedFiles(c){
+  const demo=[
+    {name:'amprenta.stl',size:12*1024*1024,type:'model/stl',demo:true},
+    {name:'fisa.pdf',size:84*1024,type:'application/pdf',demo:true}
+  ];
+  const files=[...demo,...filesForCase(c.id)];
+  return files.map(f=>`<div class="file-item ${f.demo?'demo':''}">
+    <div class="file-icon-mini">${fileExt(f.name)}</div>
+    <span class="file-name">${f.name}</span>
+    <span class="file-size">${formatBytes(f.size)}</span>
+  </div>`).join('');
 }
 
 function setDashboardFilter(tab){
@@ -354,13 +417,27 @@ function renderCaseDetail(){
   const trow=arr=>arr.slice(0,8).map(tcell).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tcell).join('');
   const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
-  root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="index.html" class="cd-back">← Pipeline</a><div class="spacer"></div><button class="btn" id="editCaseBtn">Editează</button><button class="btn primary" id="advanceStageBtn">Marchează etapă completă →</button></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||clinic.doctor}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stage.name}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date">${c.probaDate||'—'}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date ${c.late?'late':''}">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model B</div></div><button class="btn">Înlocuiește</button><button class="btn primary" id="dlFisaBtn">Descarcă</button></div></div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn">Vizibil doar lab</button><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"><div class="note-item"><div class="note-author">${clinic.name.slice(0,2)}</div><div style="flex:1"><div class="note-meta"><b>${c.doctor||clinic.doctor}</b> · acum 2 ore</div><div class="note-text">${c.notes||'Lucrare standard.'}</div></div></div></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=c.stageStatuses?.[sId]||'neincepute';const cls=st==='finalizat'?'done':(st==='in_lucru'||st==='la_proba')?'now':'';const t=getEmployee(c.assignees?.[sId]);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':'în așteptare';return `<div class="tl-item ${cls}"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${t?`<span class="tl-tech ${t.id}">${t.initials}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list"><div class="file-item"><div class="file-icon-mini">STL</div><span class="file-name">amprenta.stl</span><span class="file-size">12 MB</span></div><div class="file-item"><div class="file-icon-mini">PDF</div><span class="file-name">fisa.pdf</span><span class="file-size">84 KB</span></div></div><button class="btn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
+  root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="index.html" class="cd-back">← Pipeline</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu"><button type="button" data-case-action="edit">Editare rapidă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="pdf">Descarcă fișa PDF</button><button type="button" data-case-action="attach">Atașează fișiere</button></div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||clinic.doctor}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stage.name}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date">${c.probaDate||'—'}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date ${c.late?'late':''}">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div></div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn">Vizibil doar lab</button><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"><div class="note-item"><div class="note-author">${clinic.name.slice(0,2)}</div><div style="flex:1"><div class="note-meta"><b>${c.doctor||clinic.doctor}</b> · acum 2 ore</div><div class="note-text">${c.notes||'Lucrare standard.'}</div></div></div></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=c.stageStatuses?.[sId]||'neincepute';const cls=st==='finalizat'?'done':(st==='in_lucru'||st==='la_proba')?'now':'';const t=getEmployee(c.assignees?.[sId]);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':'în așteptare';return `<div class="tl-item ${cls}"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${t?`<span class="tl-tech ${t.id}">${t.initials}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button><div class="file-storage-note">Temporar salvat local. După integrarea Zoho, fișierele vor merge în folderul clinicii.</div></div></aside></div></div>`;
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
-  document.getElementById('editCaseBtn')?.addEventListener('click',()=>openQuickEdit(c.id));
-  document.getElementById('advanceStageBtn')?.addEventListener('click',()=>{
+  const advance=()=>{
     const next=nextStage(c.stage,c.type);if(next===c.stage){alert('Etapă finală deja');return}
     c.stage=next;overrides.stages=overrides.stages||{};overrides.stages[c.id]=next;saveOverrides(overrides);renderCaseDetail();
-  });
+  };
+  const input=document.getElementById('caseFileInput');
+  const attach=()=>input?.click();
+  input?.addEventListener('change',async()=>{await storeCaseFiles(c.id,input.files);renderCaseDetail()});
+  document.getElementById('attachCaseFileBtn')?.addEventListener('click',attach);
+  document.getElementById('caseActionsBtn')?.addEventListener('click',e=>{e.stopPropagation();document.getElementById('caseActionsMenu')?.classList.toggle('open')});
+  document.querySelectorAll('[data-case-action]').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();document.getElementById('caseActionsMenu')?.classList.remove('open');
+    if(b.dataset.caseAction==='edit')openQuickEdit(c.id);
+    if(b.dataset.caseAction==='advance')advance();
+    if(b.dataset.caseAction==='pdf')generateFisaPDF(c);
+    if(b.dataset.caseAction==='attach')attach();
+  }));
+  if(window.caseActionsCloseHandler)document.removeEventListener('click',window.caseActionsCloseHandler);
+  window.caseActionsCloseHandler=e=>{if(!e.target.closest('.case-actions'))document.getElementById('caseActionsMenu')?.classList.remove('open')};
+  document.addEventListener('click',window.caseActionsCloseHandler);
   document.getElementById('addNoteBtn')?.addEventListener('click',()=>{
     const ta=document.getElementById('noteInput');if(!ta.value.trim())return;
     document.getElementById('noteList').insertAdjacentHTML('afterbegin',`<div class="note-item"><div class="note-author">EU</div><div style="flex:1"><div class="note-meta"><b>Tu</b> · acum</div><div class="note-text">${ta.value}</div></div></div>`);
@@ -581,12 +658,24 @@ function openNewCaseModal(defClinic){
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Fișiere & note</div>
-            <button class="upload-well" type="button"><span>PDF / STL</span><b>Adaugă fișiere</b></button>
+            <button class="upload-well" id="ncUploadBtn" type="button"><span>PDF / STL</span><b>Adaugă fișiere</b></button>
+            <input id="ncFileInput" type="file" multiple hidden>
+            <div class="upload-file-list" id="ncFileList"></div>
             <div class="field"><label>Note</label><textarea id="ncNotes"></textarea></div>
           </section>
         </div>
       </div>
     </div><div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="ncSave" type="button">Salvează</button></div>`, 'modal-wide');
+  const newCaseFiles=[];
+  const updateNewCaseFiles=()=>{
+    const list=document.getElementById('ncFileList');
+    if(!list)return;
+    list.innerHTML=newCaseFiles.length
+      ? newCaseFiles.map(f=>`<div class="upload-file-item"><span>${fileExt(f.name)}</span><b>${f.name}</b><em>${formatBytes(f.size)}</em></div>`).join('')
+      : '';
+  };
+  document.getElementById('ncUploadBtn')?.addEventListener('click',()=>document.getElementById('ncFileInput')?.click());
+  document.getElementById('ncFileInput')?.addEventListener('change',e=>{Array.from(e.target.files||[]).forEach(f=>newCaseFiles.push(f));updateNewCaseFiles();e.target.value=''});
   const tMap=new Map();
   document.querySelectorAll('#toothChartWrap .tooth-cell').forEach(b=>{
     b.addEventListener('click',e=>{e.stopPropagation();openToothPop(b)});
@@ -614,12 +703,12 @@ function openNewCaseModal(defClinic){
     const lb={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
     s.innerHTML=Object.entries(bt).map(([t,ns])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${lb[t]}:</span><b>${ns.sort((a,b)=>a-b).join(', ')}</b></div>`).join('');
   }
-  document.getElementById('ncSave').addEventListener('click',()=>{
+  document.getElementById('ncSave').addEventListener('click',async()=>{
     const last=document.getElementById('ncLast').value.trim();const first=document.getElementById('ncFirst').value.trim();
     if(!last&&!first){document.getElementById('ncLast').style.borderColor='#A32D2D';return}
     const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
     const nc={id:nextCaseId(),name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:document.getElementById('ncClinic').value,doctor:document.getElementById('ncDoctor').value,type:document.getElementById('ncType').value,color:document.getElementById('ncColor').value,stage:'design',intrata:document.getElementById('ncIntrata').value,probaDate:document.getElementById('ncProba').value,finala:document.getElementById('ncFinala').value,teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
-    nc.priority=computePriority(nc);CASES.push(nc);persistNewCase(nc);closeModal();
+    nc.priority=computePriority(nc);CASES.push(nc);persistNewCase(nc);if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
     updateMainSummary();
     if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
   });
@@ -628,11 +717,14 @@ function openNewCaseModal(defClinic){
 function openQuickEdit(id){
   const c=getCase(id);if(!c)return;
   const stOpts=STAGES.map(s=>`<option value="${s.id}" ${s.id===c.stage?'selected':''}>${s.name}</option>`).join('');
-  openModal(`<div class="modal-head"><div class="modal-title">Editare rapidă · ${c.name}</div><button class="modal-close" type="button">×</button></div><div class="modal-body"><div class="field-row"><div class="field"><label>Etapă</label><select id="qeStage">${stOpts}</select></div><div class="field"><label>Tip</label><input id="qeType" value="${c.type}"></div></div><div class="field-row three"><div class="field"><label>Intrată</label><input id="qeI" value="${c.intrata}"></div><div class="field"><label>Probă</label><input id="qeP" value="${c.probaDate||''}"></div><div class="field"><label>Finală</label><input id="qeF" value="${c.finala}"></div></div><div class="field"><label>Note</label><textarea id="qeN">${c.notes||''}</textarea></div></div><div class="modal-foot"><button class="btn modal-close">Anulează</button><button class="btn primary" id="qeSave">Salvează</button></div>`);
+  const colOpts=COLORS_VITA.map(x=>`<option ${x===c.color?'selected':''}>${x}</option>`).join('');
+  const safeVal=v=>String(v||'').replace(/"/g,'&quot;');
+  openModal(`<div class="modal-head"><div class="modal-title">Editare rapidă · ${c.name}</div><button class="modal-close" type="button">×</button></div><div class="modal-body"><div class="field-row"><div class="field"><label>Pacient</label><input id="qeName" value="${safeVal(c.name)}"></div><div class="field"><label>Etapă</label><select id="qeStage">${stOpts}</select></div></div><div class="field-row three"><div class="field"><label>Tip</label><input id="qeType" value="${safeVal(c.type)}"></div><div class="field"><label>Culoare</label><select id="qeColor">${colOpts}</select></div><div class="field"><label>Tip implant</label><input id="qeImplant" value="${safeVal(c.implantType)}"></div></div><div class="field-row three"><div class="field"><label>Intrată</label><input id="qeI" value="${safeVal(c.intrata)}"></div><div class="field"><label>Probă</label><input id="qeP" value="${safeVal(c.probaDate)}"></div><div class="field"><label>Finală</label><input id="qeF" value="${safeVal(c.finala)}"></div></div><div class="field-row"><div class="field"><label>Amprentă</label><input id="qeAmprenta" value="${safeVal(c.amprentaType)}"></div><div class="field"><label>Note</label><textarea id="qeN">${c.notes||''}</textarea></div></div></div><div class="modal-foot"><button class="btn modal-close">Anulează</button><button class="btn primary" id="qeSave">Salvează</button></div>`);
   document.getElementById('qeSave').addEventListener('click',()=>{
-    c.stage=document.getElementById('qeStage').value;c.type=document.getElementById('qeType').value;
+    c.name=document.getElementById('qeName').value.trim()||c.name;c.stage=document.getElementById('qeStage').value;c.type=document.getElementById('qeType').value;
+    c.color=document.getElementById('qeColor').value;c.implantType=document.getElementById('qeImplant').value;c.amprentaType=document.getElementById('qeAmprenta').value;
     c.intrata=document.getElementById('qeI').value;c.probaDate=document.getElementById('qeP').value;c.finala=document.getElementById('qeF').value;c.notes=document.getElementById('qeN').value;
-    overrides.edits=overrides.edits||{};overrides.edits[c.id]={stage:c.stage,type:c.type,intrata:c.intrata,probaDate:c.probaDate,finala:c.finala,notes:c.notes};
+    overrides.edits=overrides.edits||{};overrides.edits[c.id]={name:c.name,stage:c.stage,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,finala:c.finala,notes:c.notes};
     saveOverrides(overrides);closeModal();renderCaseDetail();if(typeof renderTable==='function')renderTable();renderPipeline();
   });
 }
@@ -643,28 +735,29 @@ function buildFisaHTML(c){
   const safe=s=>{const v=String(s==null?'':s).trim();return v?v.replace(/</g,'&lt;'):'—'};
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
-  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);const cls=t?t.type:'';const stl=cls==='crown'?'background:#1a1a1a;color:white;border-color:#1a1a1a;font-weight:bold':cls==='implant'?'background:white;color:#1a1a1a;border:1.5px solid #1a1a1a;font-weight:bold':cls==='emax'?'background:#E6F1FB;color:#185FA5;border:1.5px solid #185FA5;font-weight:bold':cls==='veneer'?'background:transparent;color:#1a1a1a;border:1.5px dashed #1a1a1a;font-weight:bold':'';return `<td style="text-align:center;padding:5px 2px;font-size:9px;font-family:monospace;border:0.5px solid #ddd;${stl}">${n}</td>`};
+  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);const cls=t?t.type:'';const stl=cls==='crown'?'background:#F1F5F9;color:#334155;border:1px solid #94A3B8;font-weight:bold':cls==='implant'?'background:#FFF7ED;color:#9A3412;border:1.5px solid #EA580C;font-weight:bold':cls==='emax'?'background:#E6F1FB;color:#185FA5;border:1.5px solid #185FA5;font-weight:bold':cls==='veneer'?'background:#F8FAFC;color:#475569;border:1.5px dashed #64748B;font-weight:bold':'';return `<td style="text-align:center;padding:5px 2px;font-size:9px;font-family:monospace;border:0.5px solid #E5E7EB;${stl}">${n}</td>`};
   const trow=arr=>'<tr>'+arr.slice(0,8).map(tcell).join('')+'<td style="border:0;width:6px"></td>'+arr.slice(8).map(tcell).join('')+'</tr>';
   const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
-  const swatches={crown:'background:#1a1a1a',implant:'background:white;border:1px solid #1a1a1a',emax:'background:#E6F1FB;border:1px solid #185FA5',veneer:'background:transparent;border:1px dashed #1a1a1a'};
+  const swatches={crown:'background:#F1F5F9;border:1px solid #94A3B8',implant:'background:#FFF7ED;border:1px solid #EA580C',emax:'background:#E6F1FB;border:1px solid #185FA5',veneer:'background:#F8FAFC;border:1px dashed #64748B'};
   const stageName=getStage(c.stage)?.name||'—';
   const tehnician=getEmployee(c.assignee)?.name||'—';
   const summaryHTML=Object.keys(byType).length
-    ? `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:9px;margin-top:10px;padding-top:10px;border-top:0.5px solid #ddd">${Object.entries(byType).map(([t,ns])=>`<span><span style="display:inline-block;width:9px;height:9px;${swatches[t]};vertical-align:middle;margin-right:4px"></span><b>${labels[t]}</b> (${ns.length}): ${ns.sort((a,b)=>a-b).join(', ')}</span>`).join('')}</div>`
-    : `<div style="font-size:9px;color:#888;margin-top:10px;padding-top:10px;border-top:0.5px solid #ddd;font-style:italic">Niciun dinte selectat</div>`;
-  const sec=t=>`<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:#888;font-weight:bold;padding-bottom:4px;border-bottom:1.5px solid #1a1a1a;margin-bottom:8px">${t}</div>`;
-  return `<div style="font-family:Arial,sans-serif;color:#1a1a1a;font-size:11px;line-height:1.5;width:750px;background:white">
-<div style="background:#1a1a1a;color:white;padding:14px 24px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:bold;font-size:14px">LAB CAD · Laborator Dentar</div><div style="font-size:9px;opacity:0.7;margin-top:2px">Chișinău · contact@labdentar.md · +373 22 000 000</div></div><div style="font-family:monospace;font-size:18px;font-weight:bold">#${c.id}</div></div>
+    ? `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:9px;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB">${Object.entries(byType).map(([t,ns])=>`<span><span style="display:inline-block;width:9px;height:9px;${swatches[t]};vertical-align:middle;margin-right:4px"></span><b>${labels[t]}</b> (${ns.length}): ${ns.sort((a,b)=>a-b).join(', ')}</span>`).join('')}</div>`
+    : `<div style="font-size:9px;color:#94A3B8;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB;font-style:italic">Niciun dinte selectat</div>`;
+  const sec=t=>`<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:#64748B;font-weight:bold;padding-bottom:4px;border-bottom:1px solid #D8E2EE;margin-bottom:8px">${t}</div>`;
+  const hi=(label,value,tone='blue')=>{const colors={blue:['#E6F1FB','#185FA5'],red:['#FCEBEB','#A32D2D'],amber:['#FAEEDA','#BA7517'],green:['#EAF3DE','#1D9E75']};const [bg,fg]=colors[tone]||colors.blue;return `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:5px;background:${bg};color:${fg};font-size:10px"><span style="opacity:.75">${label}:</span><b>${safe(value)}</b></span>`};
+  return `<div style="font-family:Arial,sans-serif;color:#1F2937;font-size:11px;line-height:1.5;width:750px;background:white">
+<div style="background:#F8FAFC;color:#1F2937;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #D8E2EE"><div><div style="font-weight:bold;font-size:14px;color:#185FA5">LAB CAD · Laborator Dentar</div><div style="font-size:9px;color:#64748B;margin-top:2px">Chișinău · contact@labdentar.md · +373 22 000 000</div></div><div style="font-family:monospace;font-size:18px;font-weight:bold;color:#185FA5">#${c.id}</div></div>
 <div style="padding:24px 28px">
-<div style="margin-bottom:14px">${sec('Pacient & Clinică')}<div style="display:flex;gap:24px;font-size:10px;flex-wrap:wrap"><span>Pacient: <b>${safe(c.name)}</b></span><span>Clinică: <b>${safe(cl.name)}</b></span><span>Medic: <b>${safe(c.doctor||cl.doctor)}</b></span></div></div>
-<div style="margin-bottom:14px">${sec('Date')}<div style="display:flex;gap:24px;font-size:10px;flex-wrap:wrap"><span>Intrată: <b>${safe(c.intrata)}</b></span><span>Probă: <b>${safe(c.probaDate)}</b></span><span>Finală: <b>${safe(c.finala)}</b></span></div></div>
-<div style="margin-bottom:14px">${sec('Lucrare')}<div style="display:flex;gap:24px;font-size:10px;flex-wrap:wrap"><span>Tip: <b>${safe(c.type)}</b></span><span>Culoare: <b>${safe(c.color)}</b></span><span>Etapă: <b>${safe(stageName)}</b></span><span>Tehnician: <b>${safe(tehnician)}</b></span><span>Prioritate: <b>${safe(c.priority)}</b></span></div></div>
-<div style="margin-bottom:14px">${sec('Implant & Amprentă')}<div style="display:flex;gap:24px;font-size:10px;flex-wrap:wrap"><span>Tip implant: <b>${safe(c.implantType)}</b></span><span>Tip amprentă: <b>${safe(c.amprentaType)}</b></span></div></div>
-<div style="margin-bottom:14px">${sec('Schema dentară (FDI)')}<div style="background:#f8f8f8;padding:12px;border-radius:4px;border:0.5px solid #eee"><table style="border-collapse:collapse;width:100%;table-layout:fixed">${trow(upper)}${trow(lower)}</table>${summaryHTML}</div></div>
-<div style="margin-bottom:18px">${sec('Indicații speciale')}<div style="font-size:10px;min-height:50px;padding:10px;background:#fafafa;border-left:3px solid #1a1a1a">${c.notes?safe(c.notes):'<span style="color:#888;font-style:italic">Fără indicații suplimentare</span>'}</div></div>
-<div style="display:flex;justify-content:space-between;margin-top:36px"><div style="width:220px"><div style="border-bottom:0.5px solid #1a1a1a;height:30px"></div><div style="font-size:8px;color:#888;margin-top:4px">Semnătura medic clinică</div></div><div style="width:220px"><div style="border-bottom:0.5px solid #1a1a1a;height:30px"></div><div style="font-size:8px;color:#888;margin-top:4px">Semnătura tehnician</div></div></div>
-<div style="text-align:right;font-size:8px;color:#888;margin-top:14px">Emis ${new Date().toLocaleDateString('ro-RO')} · Fișa caz #${c.id}</div>
+<div style="margin-bottom:14px">${sec('Pacient & Clinică')}<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap">${hi('Pacient',c.name,'blue')}<span>Clinică: <b>${safe(cl.name)}</b></span><span>Medic: <b>${safe(c.doctor||cl.doctor)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Date')}<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap"><span>Intrată: <b>${safe(c.intrata)}</b></span><span>Probă: <b>${safe(c.probaDate)}</b></span>${hi('Finală',c.finala,c.late?'red':'amber')}</div></div>
+<div style="margin-bottom:14px">${sec('Lucrare')}<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap"><span>Tip: <b>${safe(c.type)}</b></span>${hi('Culoare',c.color||'—','green')}<span>Etapă: <b>${safe(stageName)}</b></span><span>Tehnician: <b>${safe(tehnician)}</b></span><span>Prioritate: <b>${safe(c.priority)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Implant & Amprentă')}<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap">${hi('Tip implant',c.implantType||'—','amber')}<span>Tip amprentă: <b>${safe(c.amprentaType)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Schema dentară (FDI)')}<div style="background:#F8FAFC;padding:12px;border-radius:4px;border:0.5px solid #E5E7EB"><table style="border-collapse:collapse;width:100%;table-layout:fixed">${trow(upper)}${trow(lower)}</table>${summaryHTML}</div></div>
+<div style="margin-bottom:18px">${sec('Indicații speciale')}<div style="font-size:10px;min-height:50px;padding:10px;background:#F8FAFC;border-left:3px solid #185FA5">${c.notes?safe(c.notes):'<span style="color:#94A3B8;font-style:italic">Fără indicații suplimentare</span>'}</div></div>
+<div style="display:flex;justify-content:space-between;margin-top:36px"><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:8px;color:#64748B;margin-top:4px">Semnătura medic clinică</div></div><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:8px;color:#64748B;margin-top:4px">Semnătura tehnician</div></div></div>
+<div style="text-align:right;font-size:8px;color:#94A3B8;margin-top:14px">Emis ${new Date().toLocaleDateString('ro-RO')} · Fișa caz #${c.id}</div>
 </div></div>`;
 }
 function generateFisaPDF(c){
