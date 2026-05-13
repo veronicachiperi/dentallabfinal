@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parent
 UPLOAD_ROOT = Path(os.environ.get("ZOHO_WORKDRIVE_ROOT", ROOT / "uploads")).expanduser()
+WORKDRIVE_MAP_PATH = Path(os.environ.get("ZOHO_WORKDRIVE_MAP", ROOT / "workdrive-folders.json")).expanduser()
 
 
 def safe_name(value, fallback="untitled"):
@@ -32,6 +33,33 @@ def unique_path(path):
         i += 1
 
 
+def load_workdrive_map():
+    try:
+        with WORKDRIVE_MAP_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+
+def clinic_folder_config(clinic_id, clinic_name):
+    mapping = load_workdrive_map()
+    value = mapping.get(clinic_id) or mapping.get(clinic_name) or {}
+    if isinstance(value, str):
+        value = {"path": value}
+    folder_name = safe_name(value.get("path") or clinic_name or clinic_id, "Unknown clinic")
+    folder_path = Path(folder_name).expanduser()
+    if not folder_path.is_absolute():
+        folder_path = UPLOAD_ROOT / folder_path
+    return {
+        "path": folder_path,
+        "url": value.get("url", ""),
+        "label": value.get("label") or clinic_name or clinic_id,
+    }
+
+
 class DentalLabHandler(SimpleHTTPRequestHandler):
     def translate_path(self, path):
         rel = urlparse(path).path.lstrip("/")
@@ -47,7 +75,11 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if urlparse(self.path).path == "/api/health":
-            self.send_json(200, {"ok": True, "uploadRoot": str(UPLOAD_ROOT)})
+            self.send_json(200, {
+                "ok": True,
+                "uploadRoot": str(UPLOAD_ROOT),
+                "workdriveMap": str(WORKDRIVE_MAP_PATH),
+            })
             return
         super().do_GET()
 
@@ -73,9 +105,11 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
             },
         )
         case_id = safe_name(form.getfirst("caseId"), "case")
-        clinic = safe_name(form.getfirst("clinicName") or form.getfirst("clinicId"), "Unknown clinic")
+        clinic_id = safe_name(form.getfirst("clinicId"), "unknown")
+        clinic = safe_name(form.getfirst("clinicName") or clinic_id, "Unknown clinic")
         patient = safe_name(form.getfirst("patientName"), f"case-{case_id}")
-        target_dir = UPLOAD_ROOT / clinic / f"{case_id} - {patient}"
+        clinic_folder = clinic_folder_config(clinic_id, clinic)
+        target_dir = clinic_folder["path"] / f"{case_id} - {patient}"
         target_dir.mkdir(parents=True, exist_ok=True)
 
         fields = form["files"] if "files" in form else []
@@ -94,11 +128,21 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
                 "name": dest.name,
                 "size": dest.stat().st_size,
                 "path": str(dest),
+                "folder": str(target_dir),
+                "clinicFolder": str(clinic_folder["path"]),
+                "folderUrl": clinic_folder["url"],
                 "clinic": clinic,
+                "clinicId": clinic_id,
                 "caseId": case_id,
             })
 
-        self.send_json(200, {"ok": True, "files": saved, "folder": str(target_dir)})
+        self.send_json(200, {
+            "ok": True,
+            "files": saved,
+            "folder": str(target_dir),
+            "clinicFolder": str(clinic_folder["path"]),
+            "folderUrl": clinic_folder["url"],
+        })
 
 
 def main():

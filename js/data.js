@@ -16,7 +16,8 @@ const ETAPE_LAB_NO_CERAMIC = ['design', 'cam', 'prelucrare'];
 const TYPES_SKIP_CERAMICA = ['PROVIZORIE', 'STANDART', 'PMMA DINTI', 'PMMA IMPL', 'PMMA DINTI/IMPL'];
 
 function getEtapeLabStages(type) {
-  return TYPES_SKIP_CERAMICA.some(t => (type || '').includes(t)) ? ETAPE_LAB_NO_CERAMIC : ETAPE_LAB_FULL;
+  const workType = normTerm(type);
+  return TYPES_SKIP_CERAMICA.some(t => workType.includes(normTerm(t))) ? ETAPE_LAB_NO_CERAMIC : ETAPE_LAB_FULL;
 }
 
 const PIPELINE_STAGES = ['design', 'cam', 'prelucrare', 'ceramica', 'proba', 'terminat']; // No Trimis
@@ -62,41 +63,81 @@ const CASES = [];
 
 const NOTIFICATIONS = [];
 
-const LAB_TERMS = [
+const LAB_TERMS_KEY = 'dental-lab-terms-v1';
+const DEFAULT_LAB_TERMS = [
   { category:'DESIGN', service:'Mockup motivational sau functional', time:'3 - 4 zile', min:3, max:4, match:['MOCKUP','DESIGN'] },
-  { category:'PROVIZORII', service:'PMMA pe dinti sau implanti', time:'min. 3 zile lucratoare', min:3, max:5, match:['PMMA'] },
-  { category:'PROVIZORII', service:'Provizorie all on x cu bara', time:'5 - 7 zile', min:5, max:7, match:['PROVIZOR','ALL ON','ALLON','ALL X','BARA'] },
-  { category:'PROVIZORII', service:'Provizorie all on x pe tuburi', time:'4 - 5 zile', min:4, max:5, match:['PROVIZOR','TUB'] },
-  { category:'ZIRCONIU', service:'Full anatomic pe dinti sau implanti', time:'5 - 7 zile', min:5, max:7, match:['ZR','ZIRCON','ZIRCONIU'] },
-  { category:'ZIRCONIU', service:'Abutment individual', time:'5 - 7 zile', min:5, max:7, match:['ABUTMENT'] },
-  { category:'ZIRCONIU', service:'Zr stratificat pe dinti sau implanti', time:'6 - 8 zile', min:6, max:8, match:['ZR STR','ZIRCON STR','STRATIFICAT'] },
+  { category:'PROVIZORII', service:'PMMA pe dinti sau implanti', time:'min. 3 zile lucratoare', min:3, max:5, urgentMin:3, match:['PMMA'] },
+  { category:'PROVIZORII', service:'Provizorie all on x cu bara', time:'5 - 7 zile', min:5, max:7, urgentMin:5, match:['PROVIZOR','ALL ON','ALLON','ALL X','BARA'] },
+  { category:'PROVIZORII', service:'Provizorie all on x pe tuburi', time:'4 - 5 zile', min:4, max:5, urgentMin:5, match:['PROVIZOR','TUB'] },
+  { category:'ZIRCONIU', service:'Full anatomic pe dinti sau implanti', time:'5 - 7 zile', min:5, max:7, urgentMin:5, match:['ZR','ZIRCON','ZIRCONIU'] },
+  { category:'ZIRCONIU', service:'Abutment individual', time:'5 - 7 zile', min:5, max:7, urgentMin:5, match:['ABUTMENT'] },
+  { category:'ZIRCONIU', service:'Zr stratificat pe dinti sau implanti', time:'6 - 8 zile', min:6, max:8, urgentMin:5, match:['ZR STR','ZIRCON STR','STRATIFICAT'] },
   { category:'EMAX', service:'Full anatomic', time:'9 - 12 zile', min:9, max:12, match:['EMAX FULL','EMAX'] },
   { category:'EMAX', service:'Stratificat', time:'10 - 12 zile', min:10, max:12, match:['EMAX STR','EMAX STRATIFICAT'] },
   { category:'EMAX', service:'Inlay / Onlay', time:'5 - 7 zile', min:5, max:7, match:['INLAY','ONLAY'] },
-  { category:'DEFINITIVE', service:'Proteza totala Standard CR-CO/TITAN (PMMA)', time:'7 - 9 zile', min:7, max:9, match:['STANDARD','STANDART','DEFINITIV'] },
-  { category:'DEFINITIVE', service:'Proteza totala Superior CR-CO/TITAN (ZIRCONIU)', time:'10 - 14 zile', min:10, max:14, match:['SUPERIOR'] },
-  { category:'DEFINITIVE', service:'Proteza totala Superior Digital TITAN/CR-CO', time:'10 - 14 zile', min:10, max:14, match:['SUPERIOR DIGITAL'] },
-  { category:'DEFINITIVE', service:'Proteza totala Zirconiu pe Ti-base', time:'10 - 14 zile', min:10, max:14, match:['TI-BASE','TIBASE'] },
+  { category:'DEFINITIVE', service:'Proteza totala Standard CR-CO/TITAN (PMMA)', time:'7 - 9 zile', min:7, max:9, urgentMin:7, match:['STANDARD','STANDART','DEFINITIV'] },
+  { category:'DEFINITIVE', service:'Proteza totala Superior CR-CO/TITAN (ZIRCONIU)', time:'10 - 14 zile', min:10, max:14, urgentMin:7, match:['SUPERIOR'] },
+  { category:'DEFINITIVE', service:'Proteza totala Superior Digital TITAN/CR-CO', time:'10 - 14 zile', min:10, max:14, urgentMin:7, match:['SUPERIOR DIGITAL'] },
+  { category:'DEFINITIVE', service:'Proteza totala Zirconiu pe Ti-base', time:'10 - 14 zile', min:10, max:14, urgentMin:7, match:['TI-BASE','TIBASE'] },
   { category:'ALTE TIPURI', service:'Gutiera bruxism', time:'2 - 4 zile', min:2, max:4, match:['GUTIERA','BRUXISM'] },
   { category:'ALTE TIPURI', service:'Ghid chirurgical gingivectomie', time:'3 - 4 zile', min:3, max:4, match:['GHID','GINGIVECTOMIE'] },
   { category:'ALTE TIPURI', service:'Ghid reconstructie bonturi', time:'4 - 5 zile', min:4, max:5, match:['GHID','BONT'] }
 ];
+let LAB_TERMS = loadLabTerms();
 
 function normTerm(str) {
   return String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+}
+function inferTermMatch(term) {
+  const words = normTerm(`${term.category || ''} ${term.service || ''}`)
+    .split(/[^A-Z0-9]+/)
+    .filter(w => w.length >= 4 && !['DINTI','SAU','IMPLANTI','TOTALA','TITAN','FULL','ANATOMIC','PROTEZA','LUCRATOARE','ZILE'].includes(w));
+  return [...new Set(words)].slice(0, 6);
+}
+function hydrateLabTerm(term) {
+  const min = Number(term.min || term.urgentMin || 0);
+  const urgentMin = Number(term.urgentMin || min || 0);
+  return {
+    category: String(term.category || '').trim() || 'ALTE TIPURI',
+    service: String(term.service || '').trim() || 'Serviciu nou',
+    time: String(term.time || '').trim() || `${min || 1} zile`,
+    min: min || urgentMin || 1,
+    max: Number(term.max || term.min || urgentMin || 1),
+    urgentMin: urgentMin || min || 1,
+    match: Array.isArray(term.match) && term.match.length ? term.match : inferTermMatch(term)
+  };
+}
+function loadLabTerms() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LAB_TERMS_KEY) || 'null');
+    if (Array.isArray(stored) && stored.length) return stored.map(hydrateLabTerm);
+  } catch {}
+  return DEFAULT_LAB_TERMS.map(hydrateLabTerm);
+}
+function saveLabTerms(terms) {
+  LAB_TERMS = terms.map(hydrateLabTerm);
+  try { localStorage.setItem(LAB_TERMS_KEY, JSON.stringify(LAB_TERMS)); } catch {}
+}
+function resetLabTerms() {
+  saveLabTerms(DEFAULT_LAB_TERMS);
 }
 function getLabTerm(type) {
   const t = normTerm(type);
   if (!t) return null;
   let best = null;
   LAB_TERMS.forEach(term => {
-    const matches = term.match
+    const matchList = Array.isArray(term.match) && term.match.length ? term.match : inferTermMatch(term);
+    const matches = matchList
       .map(m => normTerm(m))
       .filter(m => t.includes(m));
     if (!matches.length) return;
     const exactCategory = t.includes(normTerm(term.category)) ? 8 : 0;
     const fullPhrase = matches.some(m => m.length > 6) ? 5 : 0;
-    const score = matches.length * 10 + Math.max(...matches.map(m => m.length)) / 100 + exactCategory + fullPhrase;
+    const serviceWords = normTerm(term.service)
+      .split(/[^A-Z0-9]+/)
+      .filter(w => w.length >= 4 && !['DINTI','SAU','IMPLANTI','TOTALA','TITAN','FULL','ANATOMIC','PROTEZA'].includes(w));
+    const serviceOverlap = serviceWords.filter(w => t.includes(w)).length;
+    const score = matches.length * 10 + Math.max(...matches.map(m => m.length)) / 100 + exactCategory + fullPhrase + serviceOverlap * 3;
     if (!best || score > best.score) best = { term, score };
   });
   return best ? best.term : null;
@@ -120,8 +161,9 @@ function labDeadlineStatus(c) {
   const start = parseShortDate(c.intrata);
   const finala = parseShortDate(c.finala);
   const businessDays = start && finala ? businessDaysBetween(start, finala) : null;
-  const urgent = Boolean(term && businessDays !== null && businessDays < term.min);
-  return { term, businessDays, urgent };
+  const min = term ? (term.urgentMin || term.min) : null;
+  const urgent = Boolean(term && businessDays !== null && businessDays < min);
+  return { term, businessDays, min, urgent };
 }
 
 function getClinic(id)   { return CLINICS.find(c => c.id === id); }
@@ -131,7 +173,8 @@ function getCase(id)     { return CASES.find(c => c.id === Number(id)); }
 function casesForClinic(id) { return CASES.filter(c => c.clinic === id); }
 function casesInStage(id)   { return CASES.filter(c => c.stage === id); }
 function nextStage(current, type) {
-  const flow = type && TYPES_SKIP_CERAMICA.some(t => (type || '').includes(t))
+  const workType = normTerm(type);
+  const flow = workType && TYPES_SKIP_CERAMICA.some(t => workType.includes(normTerm(t)))
     ? PIPELINE_STAGES_NO_CERAMIC.concat('trimis')
     : PIPELINE_STAGES.concat('trimis');
   const i = flow.indexOf(current);
@@ -166,6 +209,11 @@ function parseShortDate(str) {
 function fmtShortDate(date) {
   return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()] + ' ' + date.getDate();
 }
+function todayLabDate() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 const STAGE_ASSIGNEE_DEFAULTS = { design:'pc', cam:'ik', la_print:'ik', prelucrare:'vc', ceramica:'mt', proba:'an', terminat:'an', trimis:'an' };
 
@@ -196,7 +244,7 @@ CASES.forEach(c => {
 });
 
 function computePriority(c) {
-  const today = new Date(2026, 4, 4);
+  const today = todayLabDate();
   const finala = parseShortDate(c.finala);
   const proba = c.probaDate ? parseShortDate(c.probaDate) : null;
   if (labDeadlineStatus(c).urgent) return 'urgent';

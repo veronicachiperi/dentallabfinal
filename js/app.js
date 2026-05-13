@@ -51,7 +51,7 @@ async function storeCaseFiles(caseId,files){
     if(!res.ok)throw new Error('upload failed');
     const json=await res.json();
     const saved=filesForCase(caseId).slice();
-    (json.files||[]).forEach(f=>saved.push({name:f.name,size:f.size,type:f.type||'',path:f.path,added:fmtShortDate(new Date())}));
+    (json.files||[]).forEach(f=>saved.push({name:f.name,size:f.size,type:f.type||'',path:f.path,folder:f.folder||json.folder,clinicFolder:f.clinicFolder||json.clinicFolder,folderUrl:f.folderUrl||json.folderUrl,added:fmtShortDate(new Date())}));
     attachments[caseId]=saved;
     saveAttachments(attachments);
   }catch{
@@ -69,7 +69,7 @@ function chooseFilesForCase(caseId,onDone){
 
 const activeFilter={tab:'all',clinic:'all'};
 function applyFilter(cases){
-  const today=new Date(2026,4,4);
+  const today=todayLabDate();
   const weekEnd=new Date(today);weekEnd.setDate(today.getDate()+7);
   return cases.filter(c=>{
     const isTrimis=c.stage==='trimis';
@@ -112,7 +112,7 @@ function updateMainSummary(){
 }
 
 function caseDueInfo(c){
-  const today=new Date(2026,4,4);
+  const today=todayLabDate();
   const due=parseShortDate(c.finala);
   if(!due)return{label:c.finala||'—',days:999};
   const days=Math.ceil((due-today)/86400000);
@@ -134,11 +134,19 @@ function labTermsTableHTML(compact=false){
   </div>`;
 }
 
+function termsPageUrl(clinicId){
+  return `termeni.html${clinicId?`?clinic=${encodeURIComponent(clinicId)}&view=clinic`:''}`;
+}
+
 function deadlineHintHTML(status){
   if(!status.term)return '<div class="deadline-hint neutral">Nu am găsit un termen automat pentru acest tip. Se poate salva, dar verifică manual termenul.</div>';
-  if(status.businessDays===null)return `<div class="deadline-hint neutral">${escHTML(status.term.service)} · minim ${status.term.min} zile lucrătoare.</div>`;
-  if(status.urgent)return `<div class="deadline-hint bad">Urgent: sunt ${status.businessDays} zile lucrătoare, minimul este ${status.term.min} pentru ${escHTML(status.term.service)}.</div>`;
+  if(status.businessDays===null)return `<div class="deadline-hint neutral">${escHTML(status.term.service)} · minim ${status.min} zile lucrătoare.</div>`;
+  if(status.urgent)return `<div class="deadline-hint bad">Urgent: sunt ${status.businessDays} zile lucrătoare, minimul este ${status.min} pentru ${escHTML(status.term.service)}.</div>`;
   return `<div class="deadline-hint good">${escHTML(status.term.service)} · ${status.businessDays} zile lucrătoare disponibile.</div>`;
+}
+function longDateRO(date){
+  const s=date.toLocaleDateString('ro-RO',{day:'numeric',month:'long',year:'numeric'});
+  return s.charAt(0).toUpperCase()+s.slice(1);
 }
 
 function renderAttachedFiles(c){
@@ -147,7 +155,7 @@ function renderAttachedFiles(c){
   return files.map(f=>`<div class="file-item">
     <div class="file-icon-mini">${fileExt(f.name)}</div>
     <span class="file-name">${f.name}</span>
-    <span class="file-size">${formatBytes(f.size)}</span>
+    ${f.folderUrl?`<a class="file-size" href="${escAttr(f.folderUrl)}" target="_blank" rel="noreferrer">WorkDrive</a>`:`<span class="file-size" title="${escAttr(f.folder||f.path||'')}">${formatBytes(f.size)}</span>`}
   </div>`).join('');
 }
 
@@ -163,7 +171,7 @@ function setDashboardFilter(tab){
 function renderActionDashboard(){
   const root=document.getElementById('actionDashboard');
   if(!root)return;
-  const today=new Date(2026,4,4);
+  const today=todayLabDate();
   const activeAll=CASES.filter(c=>c.stage!=='trimis');
   const active=activeAll.filter(c=>activeFilter.clinic==='all'||c.clinic===activeFilter.clinic);
   const dueToday=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===today.toDateString()});
@@ -181,11 +189,13 @@ function renderActionDashboard(){
   const worklist=active.slice().sort((a,b)=>{
     const ad=caseDueInfo(a),bd=caseDueInfo(b);
     if(Boolean(b.late)!==Boolean(a.late))return a.late?-1:1;
+    const au=labDeadlineStatus(a).urgent,bu=labDeadlineStatus(b).urgent;
+    if(bu!==au)return au?-1:1;
     if(a.notStarted!==b.notStarted)return a.notStarted?-1:1;
     return ad.days-bd.days;
   }).slice(0,8);
   root.innerHTML=`<div class="dash-head">
-    <div><div class="dash-eyebrow">Azi · 4 Mai 2026</div><h1 class="dash-title">Dashboard lucrări</h1></div>
+    <div><div class="dash-eyebrow">Azi · ${longDateRO(today)}</div><h1 class="dash-title">Dashboard lucrări</h1></div>
     <button class="btn" type="button" data-dash-filter="all">Vezi toate</button>
   </div>
   <div class="dash-kpis">${stats.map(s=>`<button class="dash-kpi ${s.tone} ${activeFilter.tab===s.tab?'on':''}" type="button" data-dash-filter="${s.tab}">
@@ -194,12 +204,15 @@ function renderActionDashboard(){
   <div class="dash-grid">
     <section class="dash-panel">
       <div class="dash-panel-head"><span>De rezolvat prima dată</span><small>${worklist.length} priorități</small></div>
-      <div class="dash-worklist">${worklist.length?worklist.map(c=>{const cl=getClinic(c.clinic);const st=getStage(c.stage);const due=caseDueInfo(c);return `<a class="dash-work-row ${c.late?'late':c.notStarted?'muted':''}" href="case.html?id=${c.id}">
+      <div class="dash-worklist">${worklist.length?worklist.map(c=>{const cl=getClinic(c.clinic);const st=getStage(c.stage);const due=caseDueInfo(c);const deadlineUrgent=labDeadlineStatus(c).urgent;return `<a class="dash-work-row ${c.late||deadlineUrgent?'late':c.notStarted?'muted':''}" href="case.html?id=${c.id}">
         <div class="dash-work-main"><b>${c.name}</b><span>${cl.name} · ${c.type}</span></div>
         <div class="dash-work-meta"><span class="dash-chip" style="--chip:${st?.color||'#6b7280'}">${st?.name||c.stage}</span><strong>${due.label}</strong></div>
       </a>`}).join(''):'<div class="dash-empty">Nicio lucrare încă. Adaugă primul caz real din butonul Caz nou.</div>'}</div>
     </section>
-    ${labTermsTableHTML(true)}
+    <section class="dash-panel terms-link-panel">
+      <div class="dash-panel-head"><span>Termenii laboratorului</span><small>pagină dedicată</small></div>
+      <div class="dash-empty"><a class="btn" href="termeni.html">Deschide / editează termenii</a></div>
+    </section>
   </div>`;
   root.querySelectorAll('[data-dash-filter]').forEach(b=>b.addEventListener('click',()=>setDashboardFilter(b.dataset.dashFilter)));
 }
@@ -362,8 +375,12 @@ function renderClinic(){
         <div class="pc-clinic-sub">Portalul clinicii · ${active.length} lucrări active</div>
       </div>
       <div class="spacer"></div>
+      <a href="${termsPageUrl(clinicId)}" class="btn">Termenii laboratorului</a>
       <a href="index.html" class="btn">Vezi panoul echipei</a>
       <button class="btn primary" id="newCaseBtnClinic">+ Caz nou</button>
+    </div>
+    <div class="pc-quick-row">
+      <a class="pc-quick-card" href="${termsPageUrl(clinicId)}"><b>Termenii laboratorului</b><span>Consultați timpii de execuție înainte de a seta data finală.</span></a>
     </div>
     <div class="pc-clinic-tabs-row">${clinicTabs}</div>
     <div class="pc-stats">
@@ -421,7 +438,7 @@ function handleClinicAction(action,caseId){
     overrides.stages=overrides.stages||{};overrides.stages[c.id]='terminat';saveOverrides(overrides);
     alert('Probă aprobată — lucrarea a trecut la finalizare');renderClinic();
   } else if(action==='pickup'){
-    c.stage='trimis';c.sentDate=fmtShortDate(new Date(2026,4,4));
+    c.stage='trimis';c.sentDate=fmtShortDate(todayLabDate());
     overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';saveOverrides(overrides);
     alert('Ridicare confirmată — lucrarea a fost arhivată');renderClinic();
   } else if(action==='note'){
@@ -476,10 +493,11 @@ function renderCaseDetail(){
 
 // === CALENDAR ===
 const MONTH_NAMES_RO=['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
-let calMonth=4,calYear=2026,calClinicFilter='all';
+const calToday=todayLabDate();
+let calMonth=calToday.getMonth(),calYear=calToday.getFullYear(),calClinicFilter='all';
 function renderCalendar(){
   const root=document.getElementById('calShell');if(!root)return;
-  const today=new Date(2026,4,4);
+  const today=todayLabDate();
   const firstDay=new Date(calYear,calMonth,1);
   const startWk=(firstDay.getDay()+6)%7;
   const days=new Date(calYear,calMonth+1,0).getDate();
@@ -508,7 +526,7 @@ function renderCalendar(){
 
   document.getElementById('calPrev')?.addEventListener('click',()=>{if(calMonth===0){calMonth=11;calYear--}else calMonth--;renderCalendar()});
   document.getElementById('calNext')?.addEventListener('click',()=>{if(calMonth===11){calMonth=0;calYear++}else calMonth++;renderCalendar()});
-  document.getElementById('calToday')?.addEventListener('click',()=>{calMonth=4;calYear=2026;renderCalendar()});
+  document.getElementById('calToday')?.addEventListener('click',()=>{const d=todayLabDate();calMonth=d.getMonth();calYear=d.getFullYear();renderCalendar()});
   document.querySelectorAll('.cal-clinic-tab').forEach(t=>t.addEventListener('click',()=>{calClinicFilter=t.dataset.clinic;renderCalendar()}));
 
   document.querySelectorAll('.cal-day-more[data-day]').forEach(el=>{
@@ -639,6 +657,51 @@ function renderClinici(){
   root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a><div class="nav-section">Date</div><a class="nav-item active" href="clinici.html"><span class="nav-icon round"></span>Clinici</a><a class="nav-item" href="echipa.html"><span class="nav-icon round"></span>Echipa</a></aside><main class="main"><div style="padding:24px;max-width:1100px"><h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Clinici</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${CLINICS.length} clinici · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${CLINICS.map(cl=>{const cases=casesForClinic(cl.id);const active=cases.filter(c=>c.stage!=='trimis').length;const late=cases.filter(c=>c.late).length;const ready=cases.filter(c=>c.stage==='terminat').length;const proba=cases.filter(c=>c.stage==='proba').length;return `<a href="clinic.html?id=${cl.id}" style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:18px;text-decoration:none;color:var(--text);display:block"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:42px;height:42px;border-radius:8px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--text-muted)">${cl.name.slice(0,2)}</div><div><div style="font-size:15px;font-weight:500">${cl.name}</div><div style="font-size:11px;color:var(--text-dim)">${cl.doctor}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:12px;border-top:0.5px solid var(--border)"><div><div style="font-size:18px;font-weight:500">${active}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Active</div></div><div><div style="font-size:18px;font-weight:500;color:#BA7517">${proba}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Probă</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${ready}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Gata</div></div><div><div style="font-size:18px;font-weight:500;color:${late?'#A32D2D':'var(--text-dim)'}">${late}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Restant</div></div></div></a>`}).join('')}</div></div></main></div>`;
 }
 
+function adminSidebarHTML(active){
+  const item=(href,label,key,round=false)=>`<a class="nav-item ${active===key?'active':''}" href="${href}"><span class="nav-icon ${round?'round':''}"></span>${label}</a>`;
+  return `<aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div>${item('index.html','Lucrări','lucrari')}${item('calendar.html','Calendar','calendar')}${item('arhiva.html','Arhivă','arhiva')}${item('stats.html','Statistici','stats')}<div class="nav-section">Date</div>${item('clinici.html','Clinici','clinici',true)}${item('echipa.html','Echipa','echipa',true)}${item('workdrive.html','WorkDrive','workdrive',true)}${item('termeni.html','Termeni','termeni',true)}</aside>`;
+}
+
+function termEditorHTML(){
+  return `<div class="terms-editor">
+    <div class="terms-editor-actions"><button class="btn" id="termAdd" type="button">+ Rând nou</button><button class="btn" id="termReset" type="button">Reset default</button><button class="btn primary" id="termSave" type="button">Salvează termeni</button></div>
+    <div class="terms-editor-table-wrap"><table class="terms-editor-table"><thead><tr><th>Categorie</th><th>Serviciu</th><th>Timp execuție</th><th>Min. urgent</th><th></th></tr></thead><tbody>${LAB_TERMS.map((t,i)=>`<tr data-term-index="${i}"><td><input data-field="category" value="${escAttr(t.category)}"></td><td><input data-field="service" value="${escAttr(t.service)}"></td><td><input data-field="time" value="${escAttr(t.time)}"></td><td><input data-field="urgentMin" type="number" min="1" value="${escAttr(t.urgentMin||t.min)}"></td><td><button class="btn term-remove" type="button">Șterge</button></td></tr>`).join('')}</tbody></table></div>
+    <div class="file-storage-note">Editările sunt folosite imediat de calculul de urgență și de pagina clinicilor.</div>
+  </div>`;
+}
+
+function gatherTermEditorRows(){
+  return Array.from(document.querySelectorAll('.terms-editor-table tbody tr')).map(tr=>{
+    const old=LAB_TERMS[Number(tr.dataset.termIndex)]||{};
+    const val=field=>tr.querySelector(`[data-field="${field}"]`)?.value.trim()||'';
+    const category=val('category')||'ALTE TIPURI';
+    const service=val('service')||'Serviciu nou';
+    const min=Number(val('urgentMin'))||old.urgentMin||old.min||1;
+    const inferred=inferTermMatch({category,service});
+    const match=old.match&&old.match.length?[...new Set([...old.match,...inferred])]:inferred;
+    return {category,service,time:val('time')||`${min} zile`,min:old.min||min,max:old.max||min,urgentMin:min,match};
+  });
+}
+
+function renderTermeniPage(){
+  const root=document.getElementById('termsShell');if(!root)return;
+  const params=new URLSearchParams(location.search);
+  const user=getCurrentUser()||{role:'admin'};
+  const clinicId=params.get('clinic')||user.clinic||'crisdent';
+  const clinic=getClinic(clinicId)||CLINICS[0];
+  const clinicView=params.get('view')==='clinic'||user.role==='clinic';
+  const canEdit=user.role==='admin'&&!clinicView;
+  if(clinicView){
+    root.innerHTML=`<div class="pc-shell terms-page"><div class="pc-topbar"><div class="pc-logo">${clinic.name.slice(0,2)}</div><div><div class="pc-clinic-name">Termenii laboratorului</div><div class="pc-clinic-sub">${clinic.name} · pagină informativă</div></div><div class="spacer"></div><a href="clinic.html?id=${clinic.id}" class="btn">Înapoi la clinică</a></div><div class="terms-page-body">${labTermsTableHTML(false)}</div></div>`;
+    return;
+  }
+  root.innerHTML=`<div class="app">${adminSidebarHTML('termeni')}<main class="main"><div class="topbar"><div class="crumb">Date / <b>Termeni</b></div><div class="spacer"></div><a href="${termsPageUrl('crisdent')}" class="btn">Previzualizare clinică</a></div><section class="terms-page-body"><div class="terms-page-head"><div><div class="dash-eyebrow">Admin</div><h1 class="dash-title">Termenii laboratorului</h1></div><div class="file-storage-note">Clinicele văd aceeași listă în mod read-only.</div></div>${canEdit?termEditorHTML():labTermsTableHTML(false)}</section></main></div>`;
+  document.getElementById('termAdd')?.addEventListener('click',()=>{const terms=gatherTermEditorRows();terms.push({category:'ALTE TIPURI',service:'Serviciu nou',time:'3 - 4 zile',min:3,max:4,urgentMin:3});saveLabTerms(terms);renderTermeniPage()});
+  document.querySelectorAll('.term-remove').forEach(btn=>btn.addEventListener('click',()=>btn.closest('tr')?.remove()));
+  document.getElementById('termReset')?.addEventListener('click',()=>{if(confirm('Resetăm termenii la lista inițială?')){resetLabTerms();renderTermeniPage()}});
+  document.getElementById('termSave')?.addEventListener('click',()=>{saveLabTerms(gatherTermEditorRows());renderTermeniPage()});
+}
+
 // === MODAL + NEW CASE ===
 function openModal(content, modalClass=''){
   const o=document.createElement('div');o.className='modal-overlay';
@@ -686,7 +749,7 @@ function openNewCaseModal(defClinic){
             <div class="field-row three"><div class="field"><label>Intrată</label><input id="ncIntrata" value="${fmtShortDate(today)}"></div><div class="field"><label>Probă</label><input id="ncProba" value="${fmtShortDate(pD)}"></div><div class="field"><label>Finală</label><input id="ncFinala" value="${fmtShortDate(fD)}"></div></div>
             <div id="deadlineAdvisor"></div>
           </section>
-          <section class="wizard-panel">${labTermsTableHTML(true)}</section>
+          <section class="wizard-panel"><div class="wizard-panel-title">Termeni laborator</div><a class="btn" href="termeni.html" target="_blank" rel="noreferrer">Deschide tabelul complet</a></section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Fișiere & note</div>
             <button class="upload-well" id="ncUploadBtn" type="button"><span>PDF / STL</span><b>Adaugă fișiere</b></button>
@@ -1206,6 +1269,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderArchive();
   renderEchipa();
   renderClinici();
+  renderTermeniPage();
   renderStats();
   renderLogin();
   attachSearch();

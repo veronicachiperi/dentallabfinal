@@ -395,6 +395,24 @@ button{font-family:inherit;cursor:pointer}
 .pc-action.primary{color:#3B82F6;font-weight:500}
 .pc-action.note{color:#3B82F6}
 .pc-row-grid > div:last-child{text-align:right}
+.pc-quick-row{padding:14px 24px 0}
+.pc-quick-card{display:flex;align-items:center;justify-content:space-between;gap:18px;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;color:var(--text);text-decoration:none}
+.pc-quick-card:hover{background:var(--bg-soft);border-color:var(--border-strong)}
+.pc-quick-card b{font-size:14px;font-weight:500}
+.pc-quick-card span{font-size:12px;color:var(--text-muted);text-align:right}
+
+/* Terms page */
+.terms-page-body{padding:20px 24px;max-width:1280px}
+.terms-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}
+.terms-editor{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-md);overflow:hidden}
+.terms-editor-actions{display:flex;justify-content:flex-end;gap:8px;padding:12px 14px;border-bottom:0.5px solid var(--border);background:var(--bg-soft)}
+.terms-editor-table-wrap{overflow-x:auto}
+.terms-editor-table{width:100%;border-collapse:separate;border-spacing:0;min-width:820px;font-size:12px}
+.terms-editor-table th{padding:9px 10px;background:#185FA5;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;text-align:left}
+.terms-editor-table td{padding:7px 8px;border-bottom:0.5px solid var(--border)}
+.terms-editor-table input{width:100%;border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:7px 8px;font:inherit;font-size:12px;background:var(--bg);outline:none}
+.terms-editor-table input:focus{border-color:var(--border-strong)}
+.terms-editor-table .term-remove{padding:6px 9px;font-size:11px}
 
 /* Calendar */
 .cal-shell{max-width:1200px;margin:0 auto;padding:20px}
@@ -470,6 +488,11 @@ button{font-family:inherit;cursor:pointer}
   .pipeline-board{grid-template-columns:1fr}
   .cd-grid{grid-template-columns:1fr}
   .pc-stats{grid-template-columns:repeat(2,1fr)}
+  .pc-quick-row{padding:10px 12px 0}
+  .pc-quick-card{align-items:flex-start;flex-direction:column;gap:4px}
+  .pc-quick-card span{text-align:left}
+  .terms-page-body{padding:12px}
+  .terms-page-head{align-items:flex-start;flex-direction:column}
   .modal{width:100%;max-width:none}
   .case-wizard{grid-template-columns:1fr}
   .wizard-steps{border-right:none;border-bottom:0.5px solid var(--border);display:grid;grid-template-columns:1fr 1fr}
