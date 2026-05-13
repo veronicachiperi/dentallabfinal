@@ -209,10 +209,6 @@ function renderActionDashboard(){
         <div class="dash-work-meta"><span class="dash-chip" style="--chip:${st?.color||'#6b7280'}">${st?.name||c.stage}</span><strong>${due.label}</strong></div>
       </a>`}).join(''):'<div class="dash-empty">Nicio lucrare încă. Adaugă primul caz real din butonul Caz nou.</div>'}</div>
     </section>
-    <section class="dash-panel terms-link-panel">
-      <div class="dash-panel-head"><span>Termenii laboratorului</span><small>pagină dedicată</small></div>
-      <div class="dash-empty"><a class="btn" href="termeni.html">Deschide / editează termenii</a></div>
-    </section>
   </div>`;
   root.querySelectorAll('[data-dash-filter]').forEach(b=>b.addEventListener('click',()=>setDashboardFilter(b.dataset.dashFilter)));
 }

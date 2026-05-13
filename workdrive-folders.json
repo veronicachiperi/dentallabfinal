@@ -1,7 +1,7 @@
 {
-  "crisdent": { "path": "CRISDENT" },
-  "pana": { "path": "PANA DENT" },
-  "elite": { "path": "ELITE MED" },
-  "fav": { "path": "FAV Dental" },
-  "esthetic": { "path": "Dental Esthetic" }
+  "crisdent": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/CRISDENT" },
+  "pana": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/PANA DENT" },
+  "elite": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/ELITE MED" },
+  "fav": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/FAV DENTAL" },
+  "esthetic": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/DENTAL ESTHETICS" }
 }

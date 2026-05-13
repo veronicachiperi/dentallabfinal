@@ -49,8 +49,8 @@ def clinic_folder_config(clinic_id, clinic_name):
     value = mapping.get(clinic_id) or mapping.get(clinic_name) or {}
     if isinstance(value, str):
         value = {"path": value}
-    folder_name = safe_name(value.get("path") or clinic_name or clinic_id, "Unknown clinic")
-    folder_path = Path(folder_name).expanduser()
+    configured_path = value.get("path")
+    folder_path = Path(configured_path).expanduser() if configured_path else Path(safe_name(clinic_name or clinic_id, "Unknown clinic"))
     if not folder_path.is_absolute():
         folder_path = UPLOAD_ROOT / folder_path
     return {
