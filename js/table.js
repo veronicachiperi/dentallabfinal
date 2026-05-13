@@ -171,7 +171,7 @@ function handleStageClick(caseId, stageId) {
 function exportCSV() {
   const cases = applyFilter(CASES);
   const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Intrată','Probă','Finală','Prioritate','Dinți','Implant','Amprentă','Note'];
-  const rows = cases.map(c => [c.id, c.name, getClinic(c.clinic).name, c.doctor || getClinic(c.clinic).doctor, c.type, c.color || '', getStage(c.stage)?.name || '', c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), c.implantType || '', c.amprentaType || '', (c.notes || '').replace(/[\r\n]+/g, ' ')]);
+  const rows = cases.map(c => [c.id, c.name, getClinic(c.clinic).name, c.doctor || getClinic(c.clinic).doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), c.implantType || '', c.amprentaType || '', (c.notes || '').replace(/[\r\n]+/g, ' ')]);
   const csv = [headers, ...rows].map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);

@@ -271,16 +271,20 @@ function attachNotifications(){
 function renderPipeline(){
   const root=document.getElementById('pipeline');
   if(!root)return;
-  const cols=PIPELINE_STAGES;
+  const cols=['notstarted',...PIPELINE_STAGES];
   root.innerHTML='';
   cols.forEach(stageId=>{
-    const stage=getStage(stageId);
-    const cases=applyFilter(casesInStage(stageId));
+    const isNotStartedCol=stageId==='notstarted';
+    const stage=isNotStartedCol?{name:'Neînceput',color:'#9CA3AF'}:getStage(stageId);
+    const stageCases=isNotStartedCol
+      ? CASES.filter(c=>c.notStarted&&c.stage!=='trimis')
+      : casesInStage(stageId).filter(c=>!c.notStarted);
+    const cases=applyFilter(stageCases);
     const col=document.createElement('div');
     col.className='kb-col';col.dataset.stage=stageId;
     col.innerHTML=`<div class="kb-col-head" data-stage="${stageId}"><span class="kb-stage-dot" style="background:${stage.color}"></span><span class="kb-col-name">${stageId==='terminat'?'Finalizat':stage.name}</span><span class="kb-col-count">${cases.length}</span><button class="kb-col-toggle" type="button" title="Restrânge/extinde">▾</button><button class="kb-col-menu" type="button" data-stage="${stageId}" title="Acțiuni">⋯</button></div>`;
     cases.forEach(c=>col.appendChild(renderKanbanCard(c)));
-    attachDropZone(col,stageId);
+    if(!isNotStartedCol)attachDropZone(col,stageId);
     root.appendChild(col);
   });
 
@@ -307,10 +311,10 @@ function renderPipeline(){
 }
 
 function renderKanbanCard(c){
-  const card=document.createElement('a');
+  const card=document.createElement('div');
   const deadlineUrgent=labDeadlineStatus(c).urgent;
   card.className='kb-card'+(c.late?' late':deadlineUrgent?' urgent':c.warn?' warn':c.stage==='terminat'?' ready':'');
-  card.href=`case.html?id=${c.id}`;card.draggable=true;card.dataset.caseId=c.id;
+  card.draggable=true;card.dataset.caseId=c.id;card.tabIndex=0;card.setAttribute('role','link');
   const clinic=getClinic(c.clinic);const tech=getEmployee(c.assignee);
   const ss=c.notStarted?'neincepute':(c.stageStatuses?.[c.stage]||'in_lucru');
   const badge=ss==='finalizat'?`<span class="substate-badge final">✓</span>`:ss==='la_proba'?`<span class="substate-badge proba">P</span>`:`<span class="substate-badge lucru">●</span>`;
@@ -318,10 +322,46 @@ function renderKanbanCard(c){
   const fc=(c.late||deadlineUrgent)?'late':c.stage==='terminat'?'ready':'';
   const note=(c.notes||'').trim();
   const notePreview=note?note.split('\n')[0]:'Adaugă notiță';
-  card.innerHTML=`<div class="kb-card-clinic">${clinic.name}</div><div class="kb-card-name">${c.name}</div><div class="kb-card-row"><span class="kb-tag">${c.type}</span><span class="kb-final ${fc}">${ft}</span></div><span class="kb-note-chip tbl-notes ${note?'has-note':''}" title="${escAttr(note||'Adaugă notiță')}">${note?escHTML(notePreview):'+ Notițe'}</span><div class="kb-card-foot">${c.notStarted?`<span class="kb-unassigned">— neînceput</span>`:tech?`<span class="kb-av ${tech.id}" style="position:relative">${tech.initials}${badge}</span><span class="kb-tehnician-name">${tech.name}</span>`:`<span class="kb-unassigned">— neasignat</span>`}</div>`;
+  card.innerHTML=`<div class="kb-card-top"><div class="kb-card-clinic">${clinic.name}</div><button class="kb-card-menu" type="button" title="Acțiuni">⋯</button></div><div class="kb-card-name">${c.name}</div><div class="kb-card-row"><span class="kb-tag">${c.type}</span><span class="kb-final ${fc}">${ft}</span></div><span class="kb-note-chip tbl-notes ${note?'has-note':''}" title="${escAttr(note||'Adaugă notiță')}">${note?escHTML(notePreview):'+ Notițe'}</span><div class="kb-card-foot">${c.notStarted?`<span class="kb-unassigned">— neînceput</span>`:tech?`<span class="kb-av ${tech.id}" style="position:relative">${tech.initials}${badge}</span><span class="kb-tehnician-name">${tech.name}</span>`:`<span class="kb-unassigned">— neasignat</span>`}</div>`;
   card.addEventListener('dragstart',e=>{card.style.opacity='0.4';e.dataTransfer.setData('text/plain',String(c.id))});
   card.addEventListener('dragend',()=>card.style.opacity='1');
+  card.addEventListener('click',e=>{if(e.target.closest('button,.kb-card-popover,.tbl-notes,.kb-tag'))return;location.href=`case.html?id=${c.id}`});
+  card.addEventListener('keydown',e=>{if(e.key==='Enter')location.href=`case.html?id=${c.id}`});
+  card.querySelector('.kb-card-menu')?.addEventListener('click',e=>{
+    e.preventDefault();e.stopPropagation();
+    document.querySelectorAll('.kb-card-popover,.kb-col-popover').forEach(p=>p.remove());
+    const m=document.createElement('div');m.className='kb-card-popover';
+    m.innerHTML=`<button class="kb-pop-item danger" type="button" data-act="reset">Clear all → Neînceput</button><button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button>`;
+    card.appendChild(m);
+    m.querySelectorAll('.kb-pop-item').forEach(it=>it.addEventListener('click',ev=>{
+      ev.stopPropagation();
+      if(it.dataset.act==='reset'&&confirm(`Ștergi progresul pentru ${c.name} și îl trimiți la Neînceput?`))resetCaseToNotStarted(c);
+      if(it.dataset.act==='open')location.href=`case.html?id=${c.id}`;
+      m.remove();
+    }));
+    setTimeout(()=>{const cl=ev=>{if(!m.contains(ev.target)&&ev.target!==e.target){m.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
+  });
   return card;
+}
+
+function resetCaseToNotStarted(c){
+  if(!c)return;
+  c.stage='design';
+  c.notStarted=true;
+  c.assignee=null;
+  c.assignees={};
+  c.stageStatuses={};
+  c.deadlineUrgent=labDeadlineStatus(c).urgent;
+  c.priority=computePriority(c);
+  overrides.stages=overrides.stages||{};
+  overrides.stages[c.id]='design';
+  overrides.edits=overrides.edits||{};
+  overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,assignee:c.assignee,assignees:c.assignees,stageStatuses:c.stageStatuses,deadlineUrgent:c.deadlineUrgent,priority:c.priority};
+  saveOverrides(overrides);
+  renderPipeline();
+  updateMainSummary();
+  if(typeof renderTable==='function')renderTable();
+  renderClinic();
 }
 
 function attachDropZone(col,stageId){
@@ -330,9 +370,12 @@ function attachDropZone(col,stageId){
     e.preventDefault();
     const id=Number(e.dataTransfer.getData('text/plain'));
     const c=getCase(id);
-    if(c&&c.stage!==stageId){
+    if(c&&(c.stage!==stageId||c.notStarted)){
       c.stage=stageId;
-      overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;saveOverrides(overrides);
+      c.notStarted=false;
+      overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;
+      overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted};
+      saveOverrides(overrides);
       renderPipeline();
       updateMainSummary();
       if(typeof renderTable==='function')renderTable();
@@ -852,7 +895,7 @@ function buildFisaHTML(c){
   const safe=s=>{const v=String(s==null?'':s).trim();return v?v.replace(/</g,'&lt;'):'—'};
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
-  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);const cls=t?t.type:'';const stl=cls==='crown'?'background:#F1F5F9;color:#334155;border:1px solid #94A3B8;font-weight:bold':cls==='implant'?'background:#FFF7ED;color:#9A3412;border:1.5px solid #EA580C;font-weight:bold':cls==='emax'?'background:#E6F1FB;color:#185FA5;border:1.5px solid #185FA5;font-weight:bold':cls==='veneer'?'background:#F8FAFC;color:#475569;border:1.5px dashed #64748B;font-weight:bold':'';return `<td style="text-align:center;padding:5px 2px;font-size:11px;font-family:monospace;border:0.5px solid #E5E7EB;${stl}">${n}</td>`};
+  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);const cls=t?t.type:'';const stl=cls==='crown'?'background:#F1F5F9;color:#334155;border:1px solid #94A3B8;font-weight:bold':cls==='implant'?'background:#FFF7ED;color:#9A3412;border:1.5px solid #EA580C;font-weight:bold':cls==='emax'?'background:#E6F1FB;color:#185FA5;border:1.5px solid #185FA5;font-weight:bold':cls==='veneer'?'background:#F8FAFC;color:#475569;border:1.5px dashed #64748B;font-weight:bold':'';return `<td style="text-align:center;padding:6px 2px;font-size:13px;font-family:monospace;border:0.5px solid #E5E7EB;${stl}">${n}</td>`};
   const trow=arr=>'<tr>'+arr.slice(0,8).map(tcell).join('')+'<td style="border:0;width:6px"></td>'+arr.slice(8).map(tcell).join('')+'</tr>';
   const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
@@ -861,21 +904,21 @@ function buildFisaHTML(c){
   const tehnician=getEmployee(c.assignee)?.name||'—';
   const pdfDeadlineUrgent=labDeadlineStatus(c).urgent;
   const summaryHTML=Object.keys(byType).length
-    ? `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB">${Object.entries(byType).map(([t,ns])=>`<span><span style="display:inline-block;width:9px;height:9px;${swatches[t]};vertical-align:middle;margin-right:4px"></span><b>${labels[t]}</b> (${ns.length}): ${ns.sort((a,b)=>a-b).join(', ')}</span>`).join('')}</div>`
-    : `<div style="font-size:11px;color:#94A3B8;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB;font-style:italic">Niciun dinte selectat</div>`;
-  const sec=t=>`<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#64748B;font-weight:bold;padding-bottom:4px;border-bottom:1px solid #D8E2EE;margin-bottom:8px">${t}</div>`;
-  const hi=(label,value,tone='blue')=>{const colors={blue:['#E6F1FB','#185FA5'],red:['#FCEBEB','#A32D2D'],amber:['#FAEEDA','#BA7517'],green:['#EAF3DE','#1D9E75']};const [bg,fg]=colors[tone]||colors.blue;return `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:5px;background:${bg};color:${fg};font-size:12px"><span style="opacity:.75">${label}:</span><b>${safe(value)}</b></span>`};
-  return `<div style="font-family:Arial,sans-serif;color:#1F2937;font-size:13px;line-height:1.5;width:750px;background:white">
-<div style="background:#F8FAFC;color:#1F2937;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #D8E2EE"><div><div style="font-weight:bold;font-size:16px;color:#185FA5">LAB CAD · Laborator Dentar</div><div style="font-size:11px;color:#64748B;margin-top:2px">Chișinău · contact@labdentar.md · +373 22 000 000</div></div><div style="font-family:monospace;font-size:20px;font-weight:bold;color:#185FA5">#${c.id}</div></div>
+    ? `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB">${Object.entries(byType).map(([t,ns])=>`<span><span style="display:inline-block;width:9px;height:9px;${swatches[t]};vertical-align:middle;margin-right:4px"></span><b>${labels[t]}</b> (${ns.length}): ${ns.sort((a,b)=>a-b).join(', ')}</span>`).join('')}</div>`
+    : `<div style="font-size:13px;color:#94A3B8;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB;font-style:italic">Niciun dinte selectat</div>`;
+  const sec=t=>`<div style="font-size:13px;text-transform:uppercase;letter-spacing:0.6px;color:#64748B;font-weight:bold;padding-bottom:4px;border-bottom:1px solid #D8E2EE;margin-bottom:8px">${t}</div>`;
+  const hi=(label,value,tone='blue')=>{const colors={blue:['#E6F1FB','#185FA5'],red:['#FCEBEB','#A32D2D'],amber:['#FAEEDA','#BA7517'],green:['#EAF3DE','#1D9E75']};const [bg,fg]=colors[tone]||colors.blue;return `<span style="display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:5px;background:${bg};color:${fg};font-size:14px"><span style="opacity:.75">${label}:</span><b>${safe(value)}</b></span>`};
+  return `<div style="font-family:Arial,sans-serif;color:#1F2937;font-size:15px;line-height:1.5;width:750px;background:white">
+<div style="background:#F8FAFC;color:#1F2937;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #D8E2EE"><div><div style="font-weight:bold;font-size:18px;color:#185FA5">LAB CAD · Laborator Dentar</div><div style="font-size:13px;color:#64748B;margin-top:2px">Chișinău · contact@labdentar.md · +373 22 000 000</div></div><div style="font-family:monospace;font-size:22px;font-weight:bold;color:#185FA5">#${c.id}</div></div>
 <div style="padding:24px 28px">
-<div style="margin-bottom:14px">${sec('Pacient & Clinică')}<div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap">${hi('Pacient',c.name,'blue')}<span>Clinică: <b>${safe(cl.name)}</b></span><span>Medic: <b>${safe(c.doctor||cl.doctor)}</b></span></div></div>
-<div style="margin-bottom:14px">${sec('Date')}<div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap"><span>Intrată: <b>${safe(c.intrata)}</b></span><span>Probă: <b>${safe(c.probaDate)}</b></span>${hi('Finală',c.finala,c.late||pdfDeadlineUrgent?'red':'amber')}</div></div>
-<div style="margin-bottom:14px">${sec('Lucrare')}<div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap"><span>Tip: <b>${safe(c.type)}</b></span>${hi('Culoare',c.color||'—','green')}<span>Etapă: <b>${safe(stageName)}</b></span><span>Tehnician: <b>${safe(tehnician)}</b></span><span>Prioritate: <b>${safe(c.priority)}</b></span></div></div>
-<div style="margin-bottom:14px">${sec('Implant & Amprentă')}<div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap">${hi('Tip implant',c.implantType||'—','amber')}<span>Tip amprentă: <b>${safe(c.amprentaType)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Pacient & Clinică')}<div style="display:flex;gap:8px;font-size:14px;flex-wrap:wrap">${hi('Pacient',c.name,'blue')}<span>Clinică: <b>${safe(cl.name)}</b></span><span>Medic: <b>${safe(c.doctor||cl.doctor)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Date')}<div style="display:flex;gap:8px;font-size:14px;flex-wrap:wrap"><span>Intrată: <b>${safe(c.intrata)}</b></span><span>Probă: <b>${safe(c.probaDate)}</b></span>${hi('Finală',c.finala,c.late||pdfDeadlineUrgent?'red':'amber')}</div></div>
+<div style="margin-bottom:14px">${sec('Lucrare')}<div style="display:flex;gap:8px;font-size:14px;flex-wrap:wrap"><span>Tip: <b>${safe(c.type)}</b></span>${hi('Culoare',c.color||'—','green')}<span>Etapă: <b>${safe(stageName)}</b></span><span>Tehnician: <b>${safe(tehnician)}</b></span><span>Prioritate: <b>${safe(c.priority)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Implant & Amprentă')}<div style="display:flex;gap:8px;font-size:14px;flex-wrap:wrap">${hi('Tip implant',c.implantType||'—','amber')}<span>Tip amprentă: <b>${safe(c.amprentaType)}</b></span></div></div>
 <div style="margin-bottom:14px">${sec('Schema dentară (FDI)')}<div style="background:#F8FAFC;padding:12px;border-radius:4px;border:0.5px solid #E5E7EB"><table style="border-collapse:collapse;width:100%;table-layout:fixed">${trow(upper)}${trow(lower)}</table>${summaryHTML}</div></div>
-<div style="margin-bottom:18px">${sec('Indicații speciale')}<div style="font-size:12px;min-height:50px;padding:10px;background:#F8FAFC;border-left:3px solid #185FA5">${c.notes?safe(c.notes):'<span style="color:#94A3B8;font-style:italic">Fără indicații suplimentare</span>'}</div></div>
-<div style="display:flex;justify-content:space-between;margin-top:36px"><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:10px;color:#64748B;margin-top:4px">Semnătura medic clinică</div></div><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:10px;color:#64748B;margin-top:4px">Semnătura tehnician</div></div></div>
-<div style="text-align:right;font-size:10px;color:#94A3B8;margin-top:14px">Emis ${new Date().toLocaleDateString('ro-RO')} · Fișa caz #${c.id}</div>
+<div style="margin-bottom:18px">${sec('Indicații speciale')}<div style="font-size:14px;min-height:50px;padding:10px;background:#F8FAFC;border-left:3px solid #185FA5">${c.notes?safe(c.notes):'<span style="color:#94A3B8;font-style:italic">Fără indicații suplimentare</span>'}</div></div>
+<div style="display:flex;justify-content:space-between;margin-top:36px"><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:12px;color:#64748B;margin-top:4px">Semnătura medic clinică</div></div><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:12px;color:#64748B;margin-top:4px">Semnătura tehnician</div></div></div>
+<div style="text-align:right;font-size:12px;color:#94A3B8;margin-top:14px">Emis ${new Date().toLocaleDateString('ro-RO')} · Fișa caz #${c.id}</div>
 </div></div>`;
 }
 function generateFisaPDF(c){
