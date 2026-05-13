@@ -59,6 +59,9 @@ function renderTable() {
 function renderTableRow(c) {
   const clinic = getClinic(c.clinic);
   const stage = getStage(c.stage) || STAGES[0];
+  const stageColor = publicStageColor(c);
+  const stageLabel = publicStageName(c);
+  const stageIcon = c.notStarted ? '' : stageIconSVG(stage.id);
   const deadlineUrgent = labDeadlineStatus(c).urgent;
   const dueClass = c.late || deadlineUrgent ? 'late' : c.warn ? 'warn' : '';
   const finalText = c.late ? 'restant' : c.finala;
@@ -74,7 +77,7 @@ function renderTableRow(c) {
     <td><span class="tbl-due-bold ${dueClass}">${finalText}</span></td>
     <td><span class="tbl-prio ${c.priority}">${c.priority}</span></td>
     <td>${renderFlowIndicator(c)}</td>
-    <td><span class="tbl-pill" style="background:${withAlpha(stage.color,0.15)};color:${stage.color}">${stageIconSVG(stage.id)}<span style="margin-left:4px">${stage.name}</span></span></td>
+    <td><span class="tbl-pill" style="background:${withAlpha(stageColor,0.15)};color:${stageColor}">${stageIcon}<span style="margin-left:${stageIcon?'4px':'0'}">${stageLabel}</span></span></td>
     <td><span class="tbl-notes" title="${noteText}">${noteText}</span></td>
   </tr>`;
 }
