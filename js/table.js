@@ -59,7 +59,8 @@ function renderTable() {
 function renderTableRow(c) {
   const clinic = getClinic(c.clinic);
   const stage = getStage(c.stage) || STAGES[0];
-  const dueClass = c.late ? 'late' : c.warn ? 'warn' : '';
+  const deadlineUrgent = labDeadlineStatus(c).urgent;
+  const dueClass = c.late || deadlineUrgent ? 'late' : c.warn ? 'warn' : '';
   const finalText = c.late ? 'restant' : c.finala;
   const noteText = (c.notes || '—').replace(/</g, '&lt;');
  return `<tr data-case-id="${c.id}" class="${c.notStarted?'tbl-row-faded':''}">
@@ -111,7 +112,7 @@ function attachTableHandlers(root) {
     });
   });
   root.querySelectorAll('.node, .node-em').forEach(node => {
-    node.addEventListener('click', e => { e.stopPropagation(); handleStageClick(Number(node.dataset.caseId), node.dataset.stage); });
+    node.addEventListener('click', e => { if(node.dataset.menuAttached)return; e.stopPropagation(); handleStageClick(Number(node.dataset.caseId), node.dataset.stage); });
   });
   root.querySelectorAll('[data-row-actions]').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -152,18 +153,13 @@ function handleStageClick(caseId, stageId) {
   } else if (status === 'in_lucru') {
     c.stageStatuses[stageId] = 'la_proba';
   } else if (status === 'la_proba') {
-    c.stageStatuses[stageId] = 'finalizat';
-    // Auto-advance overall stage to next non-finalized stage in pipeline
-    const stages = getEtapeLabStages(c.type);
-    const nextIdx = stages.indexOf(stageId) + 1;
-    if (nextIdx < stages.length) c.stage = stages[nextIdx];
-    else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) c.stage = 'proba';
+    completeLabStage(c, stageId);
   } else if (status === 'finalizat') {
     if (confirm('Reîncepe această etapă?')) c.stageStatuses[stageId] = 'in_lucru';
     else return;
   }
   overrides.edits = overrides.edits || {}; overrides.edits[c.id] = overrides.edits[c.id] || {};
-  Object.assign(overrides.edits[c.id], { stageStatuses: c.stageStatuses, assignees: c.assignees, stage: c.stage, notStarted: c.notStarted });
+  Object.assign(overrides.edits[c.id], { stageStatuses: c.stageStatuses, assignees: c.assignees, stage: c.stage, notStarted: c.notStarted, assignee: c.assignee });
   saveOverrides(overrides);
   renderTable();
   if (typeof renderPipeline === 'function') renderPipeline();

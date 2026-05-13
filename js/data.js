@@ -58,34 +58,71 @@ const EMPLOYEES = [
   { id: 'mt', name: 'Maria T.',    initials: 'MT' }
 ];
 
-const CASES = [
-  { id: 160, name: 'Farcasanu Anca',         clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'ZR FULL IMPL', color: 'A2', stage: 'design',     intrata: 'Apr 30', probaDate: 'May 3', finala: 'May 5', notes: 'Lucrare pe implant maxilar', teeth: [{n:14,type:'implant'},{n:13,type:'crown'}] },
-  { id: 125, name: 'Radu Ana Maria',         clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'ZR FULL IMPL', color: 'A2', stage: 'design',     intrata: 'Apr 27', probaDate: 'May 3', finala: 'May 5', warn: true, teeth: [{n:11,type:'crown'},{n:21,type:'crown'}] },
-  { id: 162, name: 'Columbanu Ecaterina',    clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'PROVIZORIE',   color: 'A3', stage: 'design',     intrata: 'Apr 30', finala: 'May 4', notes: 'DOAR DESIGN', notStarted: true, teeth: [] },
-  { id: 161, name: 'Vintu Irina',            clinic: 'elite',    doctor: 'Dr. Ionescu R.', type: 'ZR FULL',       color: 'A2', stage: 'cam',        intrata: 'Apr 30', probaDate: 'May 1', finala: 'May 1', late: true, teeth: [{n:14,type:'crown'},{n:13,type:'crown'},{n:12,type:'crown'}] },
-  { id: 156, name: 'Cojocaru Victoria',      clinic: 'elite',    doctor: 'Dr. Ionescu R.', type: 'ZR FULL',       color: 'A3', stage: 'cam',        intrata: 'Apr 29', probaDate: 'May 5', finala: 'May 7', teeth: [{n:24,type:'crown'},{n:25,type:'crown'}] },
-  { id: 141, name: 'Bengoi Elvis Marius',    clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'ZR FULL',       color: 'A2', stage: 'cam',        intrata: 'Apr 28', probaDate: 'May 3', finala: 'May 5', notes: 'proba FREZATA la clinica', teeth: [{n:14,type:'crown'},{n:13,type:'crown'},{n:12,type:'implant'},{n:11,type:'crown'},{n:21,type:'crown'},{n:22,type:'implant'},{n:23,type:'crown'},{n:24,type:'crown'}], amprentaType: 'Silicon' },
-  { id: 144, name: 'Nastase Andreea Otilia', clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'PMMA DINTI',     color: 'A3', stage: 'cam',        intrata: 'Apr 28', finala: 'May 4', teeth: [{n:13,type:'crown'}] },
-  { id: 132, name: 'Cecan Mina',             clinic: 'fav',      doctor: 'Dr. Favorov S.', type: 'PROVIZORIE',     color: 'A2', stage: 'prelucrare', intrata: 'Apr 27', probaDate: 'May 2', finala: 'May 4', notes: 'Bara Cara Ivan', teeth: [{n:11,type:'crown'},{n:21,type:'crown'}] },
-  { id: 118, name: 'Tibuleac Ion',           clinic: 'fav',      doctor: 'Dr. Favorov S.', type: 'STANDART',       color: 'A2', stage: 'prelucrare', intrata: 'Apr 24', probaDate: 'May 2', finala: 'May 4', warn: true, notes: 'A2', teeth: [{n:14,type:'crown'},{n:13,type:'crown'}] },
-  { id: 134, name: 'Ioxa Victoria',          clinic: 'elite',    doctor: 'Dr. Ionescu R.', type: 'ZR FULL IMPL',   color: 'A2', stage: 'ceramica',   intrata: 'Apr 28', probaDate: 'May 3', finala: 'May 5', teeth: [{n:36,type:'implant'},{n:37,type:'implant'}] },
-  { id: 108, name: 'Olaru Ioana',            clinic: 'esthetic', doctor: 'Dr. Stoica L.',  type: 'EMAX',           color: 'A1', stage: 'ceramica',   intrata: 'Apr 24', probaDate: 'May 3', finala: 'May 5', notes: 'facem PROBA pmma pana se intareste', teeth: [{n:11,type:'emax'},{n:21,type:'emax'}] },
-  { id: 145, name: 'Botan Mariana',          clinic: 'fav',      doctor: 'Dr. Favorov S.', type: 'ZR FULL',        color: 'A2', stage: 'proba',      intrata: 'Apr 29', probaDate: 'May 5', finala: 'May 6', teeth: [{n:14,type:'crown'},{n:13,type:'crown'},{n:12,type:'crown'}] },
-  { id: 154, name: 'Papanaga Valentina',     clinic: 'fav',      doctor: 'Dr. Favorov S.', type: 'PROVIZORIE',     color: 'A3', stage: 'terminat',   intrata: 'Apr 29', probaDate: 'May 4', finala: 'May 6', notes: 'Bara Cara Ivan', teeth: [{n:11,type:'crown'}] },
-  { id: 79,  name: 'Cristea Monica',         clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'STANDART',       color: 'A2', stage: 'proba',      intrata: 'Apr 16', probaDate: 'May 5', finala: 'May 6', late: true, teeth: [{n:14,type:'crown'}] },
-  { id: 137, name: 'Litcanu Ileana',         clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'STANDART',       color: 'A3', stage: 'terminat',   intrata: 'Apr 28', probaDate: 'May 4', finala: 'May 6', notes: 'pmma standard plus bara', teeth: [{n:13,type:'crown'},{n:23,type:'crown'}] },
-  { id: 155, name: 'Iapara Aurel',           clinic: 'fav',      doctor: 'Dr. Favorov S.', type: 'PROVIZORIE',     color: 'A2', stage: 'proba',      intrata: 'Apr 30', probaDate: 'May 5', finala: 'May 6', teeth: [{n:24,type:'crown'}] },
-  { id: 110, name: 'Iabanji Mihail',         clinic: 'elite',    doctor: 'Dr. Ionescu R.', type: 'ZR FULL IMPL',   color: 'A2', stage: 'trimis',     intrata: 'Apr 24', finala: 'May 1', teeth: [{n:36,type:'implant'}] },
-  { id: 126, name: 'Svetlana Captari',       clinic: 'pana',     doctor: 'Dr. Pană M.',    type: 'ZR FULL IMPL',   color: 'A2', stage: 'trimis',     intrata: 'Apr 27', finala: 'May 1', teeth: [{n:11,type:'implant'}] }
+const CASES = [];
+
+const NOTIFICATIONS = [];
+
+const LAB_TERMS = [
+  { category:'DESIGN', service:'Mockup motivational sau functional', time:'3 - 4 zile', min:3, max:4, match:['MOCKUP','DESIGN'] },
+  { category:'PROVIZORII', service:'PMMA pe dinti sau implanti', time:'min. 3 zile lucratoare', min:3, max:5, match:['PMMA'] },
+  { category:'PROVIZORII', service:'Provizorie all on x cu bara', time:'5 - 7 zile', min:5, max:7, match:['PROVIZOR','ALL ON','ALLON','ALL X','BARA'] },
+  { category:'PROVIZORII', service:'Provizorie all on x pe tuburi', time:'4 - 5 zile', min:4, max:5, match:['PROVIZOR','TUB'] },
+  { category:'ZIRCONIU', service:'Full anatomic pe dinti sau implanti', time:'5 - 7 zile', min:5, max:7, match:['ZR','ZIRCON','ZIRCONIU'] },
+  { category:'ZIRCONIU', service:'Abutment individual', time:'5 - 7 zile', min:5, max:7, match:['ABUTMENT'] },
+  { category:'ZIRCONIU', service:'Zr stratificat pe dinti sau implanti', time:'6 - 8 zile', min:6, max:8, match:['ZR STR','ZIRCON STR','STRATIFICAT'] },
+  { category:'EMAX', service:'Full anatomic', time:'9 - 12 zile', min:9, max:12, match:['EMAX FULL','EMAX'] },
+  { category:'EMAX', service:'Stratificat', time:'10 - 12 zile', min:10, max:12, match:['EMAX STR','EMAX STRATIFICAT'] },
+  { category:'EMAX', service:'Inlay / Onlay', time:'5 - 7 zile', min:5, max:7, match:['INLAY','ONLAY'] },
+  { category:'DEFINITIVE', service:'Proteza totala Standard CR-CO/TITAN (PMMA)', time:'7 - 9 zile', min:7, max:9, match:['STANDARD','STANDART','DEFINITIV'] },
+  { category:'DEFINITIVE', service:'Proteza totala Superior CR-CO/TITAN (ZIRCONIU)', time:'10 - 14 zile', min:10, max:14, match:['SUPERIOR'] },
+  { category:'DEFINITIVE', service:'Proteza totala Superior Digital TITAN/CR-CO', time:'10 - 14 zile', min:10, max:14, match:['SUPERIOR DIGITAL'] },
+  { category:'DEFINITIVE', service:'Proteza totala Zirconiu pe Ti-base', time:'10 - 14 zile', min:10, max:14, match:['TI-BASE','TIBASE'] },
+  { category:'ALTE TIPURI', service:'Gutiera bruxism', time:'2 - 4 zile', min:2, max:4, match:['GUTIERA','BRUXISM'] },
+  { category:'ALTE TIPURI', service:'Ghid chirurgical gingivectomie', time:'3 - 4 zile', min:3, max:4, match:['GHID','GINGIVECTOMIE'] },
+  { category:'ALTE TIPURI', service:'Ghid reconstructie bonturi', time:'4 - 5 zile', min:4, max:5, match:['GHID','BONT'] }
 ];
 
-const NOTIFICATIONS = [
-  { id: 1, kind: 'Deadline',     time: 'acum 5 min',  text: '<b>Cecan Mina</b> · #132 trebuia finalizat astăzi.', unread: true,  caseId: 132 },
-  { id: 2, kind: 'Notă clinică', time: 'acum 14 min', text: 'CRISDENT pe <b>#141</b>: schimbați culoarea la A2.', unread: true,  caseId: 141 },
-  { id: 3, kind: 'Etapă',        time: 'acum 1 oră',  text: '<b>#156</b> mutat din Design în CAM.',                unread: false, caseId: 156 },
-  { id: 4, kind: 'Fișier',       time: 'acum 2 ore',  text: 'FAV Dental a încărcat amprentă pe <b>#132</b>.',     unread: false, caseId: 132 },
-  { id: 5, kind: 'Probă',        time: 'acum 3 ore',  text: '<b>#79</b> Cristea Monica este la clinică de 28h.', unread: false, caseId: 79 }
-];
+function normTerm(str) {
+  return String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+}
+function getLabTerm(type) {
+  const t = normTerm(type);
+  if (!t) return null;
+  let best = null;
+  LAB_TERMS.forEach(term => {
+    const matches = term.match
+      .map(m => normTerm(m))
+      .filter(m => t.includes(m));
+    if (!matches.length) return;
+    const exactCategory = t.includes(normTerm(term.category)) ? 8 : 0;
+    const fullPhrase = matches.some(m => m.length > 6) ? 5 : 0;
+    const score = matches.length * 10 + Math.max(...matches.map(m => m.length)) / 100 + exactCategory + fullPhrase;
+    if (!best || score > best.score) best = { term, score };
+  });
+  return best ? best.term : null;
+}
+function isBusinessDay(date) {
+  const day = date.getDay();
+  return day !== 0 && day !== 6;
+}
+function businessDaysBetween(start, end) {
+  if (!start || !end || end < start) return 0;
+  const d = new Date(start);
+  let days = 0;
+  while (d < end) {
+    d.setDate(d.getDate() + 1);
+    if (isBusinessDay(d)) days++;
+  }
+  return days;
+}
+function labDeadlineStatus(c) {
+  const term = getLabTerm(c.type);
+  const start = parseShortDate(c.intrata);
+  const finala = parseShortDate(c.finala);
+  const businessDays = start && finala ? businessDaysBetween(start, finala) : null;
+  const urgent = Boolean(term && businessDays !== null && businessDays < term.min);
+  return { term, businessDays, urgent };
+}
 
 function getClinic(id)   { return CLINICS.find(c => c.id === id); }
 function getEmployee(id) { return id ? EMPLOYEES.find(e => e.id === id) : null; }
@@ -100,7 +137,24 @@ function nextStage(current, type) {
   const i = flow.indexOf(current);
   return flow[Math.min(i + 1, flow.length - 1)] || current;
 }
-function nextCaseId() { return Math.max(...CASES.map(c => c.id)) + 1; }
+function completeLabStage(c, stageId) {
+  c.stageStatuses = c.stageStatuses || {};
+  c.assignees = c.assignees || {};
+  c.stageStatuses[stageId] = 'finalizat';
+  c.notStarted = false;
+  const stages = getEtapeLabStages(c.type);
+  const nextIdx = stages.indexOf(stageId) + 1;
+  if (nextIdx > 0 && nextIdx < stages.length) {
+    const next = stages[nextIdx];
+    c.stage = next;
+    if (!c.stageStatuses[next] || c.stageStatuses[next] === 'neincepute') c.stageStatuses[next] = 'in_lucru';
+    if (!c.assignees[next]) c.assignees[next] = STAGE_ASSIGNEE_DEFAULTS[next];
+    c.assignee = c.assignees[next];
+  } else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) {
+    c.stage = 'proba';
+  }
+}
+function nextCaseId() { return CASES.length ? Math.max(...CASES.map(c => c.id)) + 1 : 1; }
 
 function parseShortDate(str) {
   if (!str) return null;
@@ -145,6 +199,7 @@ function computePriority(c) {
   const today = new Date(2026, 4, 4);
   const finala = parseShortDate(c.finala);
   const proba = c.probaDate ? parseShortDate(c.probaDate) : null;
+  if (labDeadlineStatus(c).urgent) return 'urgent';
   if (!finala) return 'mediu';
   const dF = Math.ceil((finala - today) / 86400000);
   const dP = proba ? Math.ceil((proba - today) / 86400000) : null;
@@ -170,7 +225,7 @@ function statsCountsByStage() { return STAGES.map(s => ({ name: s.name, count: c
 function statsCountsByClinic() { return CLINICS.map(c => ({ name: c.name, count: casesForClinic(c.id).length })); }
 function statsOnTimeRate() { const total = CASES.length, late = CASES.filter(c => c.late).length; return { total, late, onTime: total - late, rate: total ? Math.round(((total - late) / total) * 100) : 100 }; }
 
-const NEW_CASES_KEY = 'dental-lab-new-cases-v2';
+const NEW_CASES_KEY = 'dental-lab-new-cases-v3-clean';
 function loadNewCases() {
   try {
     const stored = JSON.parse(localStorage.getItem(NEW_CASES_KEY) || '[]');
@@ -201,11 +256,5 @@ const TECH_STAGE_MAP = {
 };
 function techStage(techId) { return TECH_STAGE_MAP[techId] || 'design'; }
 
-// Cazuri arhivate (trimise) — adaugă pentru demo în arhivă
-const ARCHIVED_CASES = [
-  { id: 11, name: 'Iordan Mihai', clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'ZR FULL', color: 'A2', stage: 'trimis', intrata: 'Apr 10', finala: 'Apr 16', sentDate: 'Apr 16', durationDays: 6, finalTech: 'mt', teeth: [{n:14,type:'crown'}] },
-  { id: 15, name: 'Murariu Tatiana', clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'STANDART', color: 'A2', stage: 'trimis', intrata: 'Apr 14', finala: 'Apr 19', sentDate: 'Apr 19', durationDays: 5, finalTech: 'an', teeth: [] },
-  { id: 19, name: 'Bostan Vlad', clinic: 'fav', doctor: 'Dr. Favorov S.', type: 'PROVIZORIE', color: 'A3', stage: 'trimis', intrata: 'Apr 17', finala: 'Apr 22', sentDate: 'Apr 22', durationDays: 5, finalTech: 'vc', teeth: [] },
-  { id: 22, name: 'Constanta R.', clinic: 'crisdent', doctor: 'Dr. Popescu A.', type: 'EMAX', color: 'A1', stage: 'trimis', intrata: 'Apr 22', finala: 'Apr 28', sentDate: 'Apr 28', durationDays: 6, finalTech: 'mt', teeth: [{n:11,type:'emax'}] }
-];
+const ARCHIVED_CASES = [];
 ARCHIVED_CASES.forEach(c => { if (!CASES.find(x => x.id === c.id)) { c.priority = computePriority(c); CASES.push(c); } });

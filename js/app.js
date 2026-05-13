@@ -1,4 +1,4 @@
-const STORAGE_KEY='dental-lab-overrides-v3';
+const STORAGE_KEY='dental-lab-overrides-v4-clean';
 function loadOverrides(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}')}catch{return{}}}
 function saveOverrides(o){localStorage.setItem(STORAGE_KEY,JSON.stringify(o))}
 const overrides=loadOverrides();
@@ -9,10 +9,18 @@ function applyOverrides(){
 }
 applyOverrides();
 
-const ATTACHMENTS_KEY='dental-lab-attachments-v1';
+const ATTACHMENTS_KEY='dental-lab-attachments-v2-clean';
 function loadAttachments(){try{return JSON.parse(localStorage.getItem(ATTACHMENTS_KEY)||'{}')}catch{return{}}}
 function saveAttachments(o){localStorage.setItem(ATTACHMENTS_KEY,JSON.stringify(o))}
 const attachments=loadAttachments();
+const CUSTOM_TYPES_KEY='dental-lab-custom-types-v1';
+let customWorkTypes=loadCustomWorkTypes();
+function loadCustomWorkTypes(){try{return JSON.parse(localStorage.getItem(CUSTOM_TYPES_KEY)||'[]')}catch{return[]}}
+function saveCustomWorkTypes(){localStorage.setItem(CUSTOM_TYPES_KEY,JSON.stringify(customWorkTypes))}
+function allWorkTypes(){return [...new Set([...COMMON_TYPES,...customWorkTypes].map(t=>String(t||'').trim()).filter(Boolean))]}
+function rememberWorkType(type){const t=String(type||'').trim();if(!t||allWorkTypes().includes(t))return;if(!COMMON_TYPES.includes(t)&&!customWorkTypes.includes(t)){customWorkTypes.push(t);saveCustomWorkTypes()}}
+function escHTML(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function escAttr(v){return escHTML(v).replace(/"/g,'&quot;')}
 function formatBytes(bytes){
   if(!bytes)return'0 KB';
   const units=['B','KB','MB','GB'];
@@ -114,13 +122,29 @@ function caseDueInfo(c){
   return{label:c.finala,days};
 }
 
+function labTermsTableHTML(compact=false){
+  return `<div class="lab-terms ${compact?'compact':''}">
+    <div class="lab-terms-title">Termenii laboratorului</div>
+    <div class="lab-terms-grid">
+      <div class="lab-terms-head">Categorie</div><div class="lab-terms-head">Serviciu</div><div class="lab-terms-head">Timp executare (Luni-Vineri)</div>
+      ${LAB_TERMS.map(t=>`<div class="lab-term-cat">${escHTML(t.category)}</div><div>${escHTML(t.service)}</div><div>${escHTML(t.time)}</div>`).join('')}
+    </div>
+    <div class="lab-terms-note good">Pentru probe printate lucrări All on X: minim 24 ore de la primirea scanurilor.</div>
+    <div class="lab-terms-note warn">* În lipsa informațiilor sau a răspunsurilor primite în timp util, termenele pot fi ajustate.</div>
+  </div>`;
+}
+
+function deadlineHintHTML(status){
+  if(!status.term)return '<div class="deadline-hint neutral">Nu am găsit un termen automat pentru acest tip. Se poate salva, dar verifică manual termenul.</div>';
+  if(status.businessDays===null)return `<div class="deadline-hint neutral">${escHTML(status.term.service)} · minim ${status.term.min} zile lucrătoare.</div>`;
+  if(status.urgent)return `<div class="deadline-hint bad">Urgent: sunt ${status.businessDays} zile lucrătoare, minimul este ${status.term.min} pentru ${escHTML(status.term.service)}.</div>`;
+  return `<div class="deadline-hint good">${escHTML(status.term.service)} · ${status.businessDays} zile lucrătoare disponibile.</div>`;
+}
+
 function renderAttachedFiles(c){
-  const demo=[
-    {name:'amprenta.stl',size:12*1024*1024,type:'model/stl',demo:true},
-    {name:'fisa.pdf',size:84*1024,type:'application/pdf',demo:true}
-  ];
-  const files=[...demo,...filesForCase(c.id)];
-  return files.map(f=>`<div class="file-item ${f.demo?'demo':''}">
+  const files=filesForCase(c.id);
+  if(!files.length)return '<div class="file-empty">Niciun fișier atașat încă.</div>';
+  return files.map(f=>`<div class="file-item">
     <div class="file-icon-mini">${fileExt(f.name)}</div>
     <span class="file-name">${f.name}</span>
     <span class="file-size">${formatBytes(f.size)}</span>
@@ -170,11 +194,12 @@ function renderActionDashboard(){
   <div class="dash-grid">
     <section class="dash-panel">
       <div class="dash-panel-head"><span>De rezolvat prima dată</span><small>${worklist.length} priorități</small></div>
-      <div class="dash-worklist">${worklist.map(c=>{const cl=getClinic(c.clinic);const st=getStage(c.stage);const due=caseDueInfo(c);return `<a class="dash-work-row ${c.late?'late':c.notStarted?'muted':''}" href="case.html?id=${c.id}">
+      <div class="dash-worklist">${worklist.length?worklist.map(c=>{const cl=getClinic(c.clinic);const st=getStage(c.stage);const due=caseDueInfo(c);return `<a class="dash-work-row ${c.late?'late':c.notStarted?'muted':''}" href="case.html?id=${c.id}">
         <div class="dash-work-main"><b>${c.name}</b><span>${cl.name} · ${c.type}</span></div>
         <div class="dash-work-meta"><span class="dash-chip" style="--chip:${st?.color||'#6b7280'}">${st?.name||c.stage}</span><strong>${due.label}</strong></div>
-      </a>`}).join('')}</div>
+      </a>`}).join(''):'<div class="dash-empty">Nicio lucrare încă. Adaugă primul caz real din butonul Caz nou.</div>'}</div>
     </section>
+    ${labTermsTableHTML(true)}
   </div>`;
   root.querySelectorAll('[data-dash-filter]').forEach(b=>b.addEventListener('click',()=>setDashboardFilter(b.dataset.dashFilter)));
 }
@@ -262,14 +287,17 @@ function renderPipeline(){
 
 function renderKanbanCard(c){
   const card=document.createElement('a');
-  card.className='kb-card'+(c.late?' late':c.warn?' warn':c.stage==='terminat'?' ready':'');
+  const deadlineUrgent=labDeadlineStatus(c).urgent;
+  card.className='kb-card'+(c.late?' late':deadlineUrgent?' urgent':c.warn?' warn':c.stage==='terminat'?' ready':'');
   card.href=`case.html?id=${c.id}`;card.draggable=true;card.dataset.caseId=c.id;
   const clinic=getClinic(c.clinic);const tech=getEmployee(c.assignee);
   const ss=c.stageStatuses?.[c.stage]||'in_lucru';
   const badge=ss==='finalizat'?`<span class="substate-badge final">✓</span>`:ss==='la_proba'?`<span class="substate-badge proba">P</span>`:`<span class="substate-badge lucru">●</span>`;
   const ft=c.late?'restant':c.stage==='terminat'?'gata':c.finala;
-  const fc=c.late?'late':c.stage==='terminat'?'ready':'';
-  card.innerHTML=`<div class="kb-card-clinic">${clinic.name}</div><div class="kb-card-name">${c.name}</div><div class="kb-card-row"><span class="kb-tag">${c.type}</span><span class="kb-final ${fc}">${ft}</span></div><div class="kb-card-foot">${tech?`<span class="kb-av ${tech.id}" style="position:relative">${tech.initials}${badge}</span><span class="kb-tehnician-name">${tech.name}</span>`:`<span class="kb-unassigned">— neasignat</span>`}</div>`;
+  const fc=(c.late||deadlineUrgent)?'late':c.stage==='terminat'?'ready':'';
+  const note=(c.notes||'').trim();
+  const notePreview=note?note.split('\n')[0]:'Adaugă notiță';
+  card.innerHTML=`<div class="kb-card-clinic">${clinic.name}</div><div class="kb-card-name">${c.name}</div><div class="kb-card-row"><span class="kb-tag">${c.type}</span><span class="kb-final ${fc}">${ft}</span></div><span class="kb-note-chip tbl-notes ${note?'has-note':''}" title="${escAttr(note||'Adaugă notiță')}">${note?escHTML(notePreview):'+ Notițe'}</span><div class="kb-card-foot">${tech?`<span class="kb-av ${tech.id}" style="position:relative">${tech.initials}${badge}</span><span class="kb-tehnician-name">${tech.name}</span>`:`<span class="kb-unassigned">— neasignat</span>`}</div>`;
   card.addEventListener('dragstart',e=>{card.style.opacity='0.4';e.dataTransfer.setData('text/plain',String(c.id))});
   card.addEventListener('dragend',()=>card.style.opacity='1');
   return card;
@@ -361,7 +389,7 @@ function renderClinic(){
             <div class="pc-progress-bar"><div class="pc-progress-fill" style="width:${pct}%"></div></div>
             <span class="pc-progress-label">${stageName}</span>
           </div>
-          <div class="tbl-due-bold ${c.late?'late':''}">${c.late?'restant':c.finala}</div>
+          <div class="tbl-due-bold ${c.late||labDeadlineStatus(c).urgent?'late':''}">${c.late?'restant':c.finala}</div>
           <div><button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button></div>
         </div>`;
       }).join('')}
@@ -417,7 +445,8 @@ function renderCaseDetail(){
   const trow=arr=>arr.slice(0,8).map(tcell).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tcell).join('');
   const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
-  root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="index.html" class="cd-back">← Pipeline</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu"><button type="button" data-case-action="edit">Editare rapidă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="pdf">Descarcă fișa PDF</button><button type="button" data-case-action="attach">Atașează fișiere</button></div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||clinic.doctor}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stage.name}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date">${c.probaDate||'—'}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date ${c.late?'late':''}">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div></div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn">Vizibil doar lab</button><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"><div class="note-item"><div class="note-author">${clinic.name.slice(0,2)}</div><div style="flex:1"><div class="note-meta"><b>${c.doctor||clinic.doctor}</b> · acum 2 ore</div><div class="note-text">${c.notes||'Lucrare standard.'}</div></div></div></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=c.stageStatuses?.[sId]||'neincepute';const cls=st==='finalizat'?'done':(st==='in_lucru'||st==='la_proba')?'now':'';const t=getEmployee(c.assignees?.[sId]);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':'în așteptare';return `<div class="tl-item ${cls}"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${t?`<span class="tl-tech ${t.id}">${t.initials}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button><div class="file-storage-note">Temporar salvat local. După integrarea Zoho, fișierele vor merge în folderul clinicii.</div></div></aside></div></div>`;
+  const deadlineUrgent=labDeadlineStatus(c).urgent;
+  root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="index.html" class="cd-back">← Pipeline</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu"><button type="button" data-case-action="edit">Editare rapidă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="pdf">Descarcă fișa PDF</button><button type="button" data-case-action="attach">Atașează fișiere</button></div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||clinic.doctor}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stage.name}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date">${c.probaDate||'—'}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date ${c.late||deadlineUrgent?'late':''}">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div></div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn">Vizibil doar lab</button><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"><div class="note-item"><div class="note-author">${clinic.name.slice(0,2)}</div><div style="flex:1"><div class="note-meta"><b>${c.doctor||clinic.doctor}</b> · acum 2 ore</div><div class="note-text">${c.notes||'Lucrare standard.'}</div></div></div></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=c.stageStatuses?.[sId]||'neincepute';const cls=st==='finalizat'?'done':(st==='in_lucru'||st==='la_proba')?'now':'';const t=getEmployee(c.assignees?.[sId]);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':'în așteptare';return `<div class="tl-item ${cls}"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${t?`<span class="tl-tech ${t.id}">${t.initials}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button><div class="file-storage-note">Temporar salvat local. După integrarea Zoho, fișierele vor merge în folderul clinicii.</div></div></aside></div></div>`;
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
   const advance=()=>{
     const next=nextStage(c.stage,c.type);if(next===c.stage){alert('Etapă finală deja');return}
@@ -515,7 +544,7 @@ function renderTechnicianPortal(){
   const completed=CASES.filter(c=>c.stageStatuses?.[myStage]==='finalizat'&&c.assignees?.[myStage]===user.id);
   const lateCount=myActive.filter(c=>c.late).length;
   const stageColors={design:'#85B7EB',cam:'#444441',prelucrare:'#854F0B',ceramica:'#EF9F27'};
-  root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item active" href="tehnician.html"><span class="nav-icon round"></span>Acasă</a><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><div class="nav-section">Setări</div><a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a></aside><main class="main"><div class="tp-shell"><div class="tp-topbar"><div class="tp-tech-av" style="background:${stageColors[myStage]||'#1D9E75'}">${user.initials}</div><div><div class="tp-tech-name">${user.name}</div><div class="tp-tech-role">Tehnician ${stageName.toLowerCase()}</div></div><div class="spacer"></div><a href="login.html" class="btn">Schimbă rol</a></div><div class="tp-greet"><h1 class="tp-greet-title">Bună, ${user.name.split(' ')[0]}</h1><div class="tp-greet-sub">${myActive.length} lucrări în curs · ${claimable.length} de revendicat</div></div><div class="tp-stats"><div class="tp-stat"><div class="tp-stat-num warn">${myActive.length}</div><div class="tp-stat-lbl">În lucru</div></div><div class="tp-stat"><div class="tp-stat-num">${claimable.length}</div><div class="tp-stat-lbl">De revendicat</div></div><div class="tp-stat"><div class="tp-stat-num good">${completed.length}</div><div class="tp-stat-lbl">Finalizate</div></div><div class="tp-stat"><div class="tp-stat-num late">${lateCount}</div><div class="tp-stat-lbl">În întârziere</div></div></div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În lucru la tine</span><span class="tp-section-count">${myActive.length} lucrări</span></div>${myActive.length?myActive.map(c=>{const cl=getClinic(c.clinic);const st=c.stageStatuses?.[myStage];return `<div class="tp-task-card ${c.late?'late':c.warn?'warn':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late?'late':''}">${c.late?'restant':c.finala}</div><div>finală</div></div><span class="tp-task-status ${st==='la_proba'?'la-proba':'in-lucru'}">${st==='la_proba'?'La probă':'În lucru'}</span><div class="tp-task-actions">${st==='in_lucru'?`<button class="tp-task-btn" data-action="proba" data-case-id="${c.id}" data-stage="${myStage}">La probă</button>`:''}<button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare activă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Așteaptă să fie revendicate</span><span class="tp-section-count">${claimable.length} lucrări</span></div>${claimable.length?claimable.map(c=>{const cl=getClinic(c.clinic);return `<div class="tp-task-card tp-claimable ${c.late?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late?'late':''}">${c.late?'restant':c.finala}</div><div>finală</div></div><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="claim" data-case-id="${c.id}" data-stage="${myStage}">Pun în proces</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare de revendicat</div>'}</div></div></main></div>`;
+  root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item active" href="tehnician.html"><span class="nav-icon round"></span>Acasă</a><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><div class="nav-section">Setări</div><a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a></aside><main class="main"><div class="tp-shell"><div class="tp-topbar"><div class="tp-tech-av" style="background:${stageColors[myStage]||'#1D9E75'}">${user.initials}</div><div><div class="tp-tech-name">${user.name}</div><div class="tp-tech-role">Tehnician ${stageName.toLowerCase()}</div></div><div class="spacer"></div><a href="login.html" class="btn">Schimbă rol</a></div><div class="tp-greet"><h1 class="tp-greet-title">Bună, ${user.name.split(' ')[0]}</h1><div class="tp-greet-sub">${myActive.length} lucrări în curs · ${claimable.length} de revendicat</div></div><div class="tp-stats"><div class="tp-stat"><div class="tp-stat-num warn">${myActive.length}</div><div class="tp-stat-lbl">În lucru</div></div><div class="tp-stat"><div class="tp-stat-num">${claimable.length}</div><div class="tp-stat-lbl">De revendicat</div></div><div class="tp-stat"><div class="tp-stat-num good">${completed.length}</div><div class="tp-stat-lbl">Finalizate</div></div><div class="tp-stat"><div class="tp-stat-num late">${lateCount}</div><div class="tp-stat-lbl">În întârziere</div></div></div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În lucru la tine</span><span class="tp-section-count">${myActive.length} lucrări</span></div>${myActive.length?myActive.map(c=>{const cl=getClinic(c.clinic);const st=c.stageStatuses?.[myStage];const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card ${c.late||deadlineUrgent?'late':c.warn?'warn':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':c.finala}</div><div>finală</div></div><span class="tp-task-status ${st==='la_proba'?'la-proba':'in-lucru'}">${st==='la_proba'?'La probă':'În lucru'}</span><div class="tp-task-actions">${st==='in_lucru'?`<button class="tp-task-btn" data-action="proba" data-case-id="${c.id}" data-stage="${myStage}">La probă</button>`:''}<button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare activă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Așteaptă să fie revendicate</span><span class="tp-section-count">${claimable.length} lucrări</span></div>${claimable.length?claimable.map(c=>{const cl=getClinic(c.clinic);const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card tp-claimable ${c.late||deadlineUrgent?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':c.finala}</div><div>finală</div></div><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="claim" data-case-id="${c.id}" data-stage="${myStage}">Pun în proces</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare de revendicat</div>'}</div></div></main></div>`;
   document.querySelectorAll('.tp-task-card[data-case-id]').forEach(card=>{
     card.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${card.dataset.caseId}`});
   });
@@ -527,7 +556,7 @@ function renderTechnicianPortal(){
       c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
       if(act==='claim'){c.stageStatuses[sid]='in_lucru';c.assignees[sid]=user.id;c.notStarted=false;if(!c.assignee)c.assignee=user.id}
       else if(act==='proba'){c.stageStatuses[sid]='la_proba'}
-      else if(act==='finalize'){c.stageStatuses[sid]='finalizat';const ms=getEtapeLabStages(c.type);const nx=ms.indexOf(sid)+1;if(nx<ms.length)c.stage=ms[nx];else if(ms.every(s=>c.stageStatuses[s]==='finalizat'))c.stage='proba'}
+      else if(act==='finalize')completeLabStage(c,sid)
       overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
       Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,notStarted:c.notStarted,assignee:c.assignee});
       saveOverrides(overrides);renderTechnicianPortal();
@@ -552,7 +581,7 @@ function renderArchive(){
   const topCl=Object.entries(clCounts).sort((a,b)=>b[1]-a[1])[0];
   const groups={};trimise.forEach(c=>{const d=parseShortDate(c.sentDate||c.finala);const k=d?`${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`:'unknown';(groups[k]=groups[k]||[]).push(c)});
   const sortedKeys=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
-  let h=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item active" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a><div class="nav-section">Date</div><a class="nav-item" href="clinici.html"><span class="nav-icon round"></span>Clinici</a><a class="nav-item" href="echipa.html"><span class="nav-icon round"></span>Echipa</a></aside><main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">Arhivă lucrări</div><div class="ar-subtitle">${total} lucrări trimise · istoric filtrabil</div></div><div class="spacer"></div><button class="ar-btn" id="arExport">Export CSV</button></div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Lucrări trimise</div></div><div class="ar-kpi"><div class="ar-kpi-num">${avgDays} zile</div><div class="ar-kpi-lbl">Timp mediu</div></div><div class="ar-kpi"><div class="ar-kpi-num">${onTime}%</div><div class="ar-kpi-lbl">La timp</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?getClinic(topCl[0]).name:'—'}</div><div class="ar-kpi-lbl">Clinică top</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="ex: Bengoi"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY"><option value="2026" ${archiveFilter.year==='2026'?'selected':''}>2026</option><option value="2025">2025</option></select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${CLINICS.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div></div>`;
+  let h=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item active" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a><div class="nav-section">Date</div><a class="nav-item" href="clinici.html"><span class="nav-icon round"></span>Clinici</a><a class="nav-item" href="echipa.html"><span class="nav-icon round"></span>Echipa</a></aside><main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">Arhivă lucrări</div><div class="ar-subtitle">${total} lucrări trimise · istoric filtrabil</div></div><div class="spacer"></div><button class="ar-btn" id="arExport">Export CSV</button></div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Lucrări trimise</div></div><div class="ar-kpi"><div class="ar-kpi-num">${avgDays} zile</div><div class="ar-kpi-lbl">Timp mediu</div></div><div class="ar-kpi"><div class="ar-kpi-num">${onTime}%</div><div class="ar-kpi-lbl">La timp</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?getClinic(topCl[0]).name:'—'}</div><div class="ar-kpi-lbl">Clinică top</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY"><option value="2026" ${archiveFilter.year==='2026'?'selected':''}>2026</option><option value="2025">2025</option></select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${CLINICS.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div></div>`;
   if(!sortedKeys.length){h+='<div style="padding:60px;text-align:center;color:var(--text-dim)">Nicio lucrare trimisă în filtrul curent.</div>'}
   sortedKeys.forEach(k=>{
     const cs=groups[k];
@@ -624,9 +653,9 @@ function escClose(e){if(e.key==='Escape')closeModal()}
 
 function openNewCaseModal(defClinic){
   const cOpts=CLINICS.map(c=>`<option value="${c.id}" ${c.id===defClinic?'selected':''}>${c.name}</option>`).join('');
-  const tOpts=COMMON_TYPES.map(t=>`<option>${t}</option>`).join('');
+  const tOpts=allWorkTypes().map(t=>`<option value="${escAttr(t)}"></option>`).join('');
   const colOpts=COLORS_VITA.map(c=>`<option>${c}</option>`).join('');
-  const today=new Date(2026,4,4);const pD=new Date(today);pD.setDate(today.getDate()+5);const fD=new Date(today);fD.setDate(today.getDate()+7);
+  const today=new Date();const pD=new Date(today);pD.setDate(today.getDate()+5);const fD=new Date(today);fD.setDate(today.getDate()+7);
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
   const tooth=n=>`<button type="button" class="tooth-cell" data-tooth="${n}">${n}</button>`;
@@ -643,19 +672,21 @@ function openNewCaseModal(defClinic){
         <div class="wizard-content">
           <section class="wizard-panel">
             <div class="wizard-panel-title">Pacient & clinică</div>
-            <div class="field-row"><div class="field"><label>Nume</label><input id="ncLast" placeholder="Bengoi" autofocus></div><div class="field"><label>Prenume</label><input id="ncFirst" placeholder="Elvis"></div></div>
+            <div class="field-row"><div class="field"><label>Nume</label><input id="ncLast" placeholder="Nume pacient" autofocus></div><div class="field"><label>Prenume</label><input id="ncFirst" placeholder="Prenume"></div></div>
             <div class="field-row"><div class="field"><label>Clinică</label><select id="ncClinic">${cOpts}</select></div><div class="field"><label>Medic</label><input id="ncDoctor"></div></div>
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Lucrare</div>
-            <div class="field-row"><div class="field"><label>Tip</label><select id="ncType">${tOpts}</select></div><div class="field"><label>Culoare</label><select id="ncColor">${colOpts}</select></div></div>
+            <div class="field-row"><div class="field"><label>Tip</label><input id="ncType" list="ncTypeList" value="${escAttr(allWorkTypes()[0]||'')}"><datalist id="ncTypeList">${tOpts}</datalist></div><div class="field"><label>Culoare</label><select id="ncColor">${colOpts}</select></div></div>
             <div class="field"><label>Schema dentară (FDI)</label><div class="tc-form-wrap" id="toothChartWrap"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div><div class="tc-summary" id="toothSummary"><div style="color:var(--text-dim)">Niciun dinte selectat</div></div></div>
             <div class="field-row"><div class="field"><label>Tip implant</label><input id="ncImplant"></div><div class="field"><label>Tip amprentă</label><select id="ncAmprenta"><option>Silicon</option><option>Polieter</option><option>Alginat</option><option>Digital</option><option>STL</option></select></div></div>
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Planificare</div>
             <div class="field-row three"><div class="field"><label>Intrată</label><input id="ncIntrata" value="${fmtShortDate(today)}"></div><div class="field"><label>Probă</label><input id="ncProba" value="${fmtShortDate(pD)}"></div><div class="field"><label>Finală</label><input id="ncFinala" value="${fmtShortDate(fD)}"></div></div>
+            <div id="deadlineAdvisor"></div>
           </section>
+          <section class="wizard-panel">${labTermsTableHTML(true)}</section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Fișiere & note</div>
             <button class="upload-well" id="ncUploadBtn" type="button"><span>PDF / STL</span><b>Adaugă fișiere</b></button>
@@ -676,6 +707,16 @@ function openNewCaseModal(defClinic){
   };
   document.getElementById('ncUploadBtn')?.addEventListener('click',()=>document.getElementById('ncFileInput')?.click());
   document.getElementById('ncFileInput')?.addEventListener('change',e=>{Array.from(e.target.files||[]).forEach(f=>newCaseFiles.push(f));updateNewCaseFiles();e.target.value=''});
+  const updateDeadlineAdvisor=()=>{
+    const probe={type:document.getElementById('ncType')?.value||'',intrata:document.getElementById('ncIntrata')?.value||'',finala:document.getElementById('ncFinala')?.value||''};
+    const status=labDeadlineStatus(probe);
+    const box=document.getElementById('deadlineAdvisor');
+    const finalInput=document.getElementById('ncFinala');
+    if(box)box.innerHTML=deadlineHintHTML(status);
+    finalInput?.classList.toggle('deadline-bad',status.urgent);
+  };
+  ['ncType','ncIntrata','ncFinala'].forEach(id=>document.getElementById(id)?.addEventListener('input',updateDeadlineAdvisor));
+  updateDeadlineAdvisor();
   const tMap=new Map();
   document.querySelectorAll('#toothChartWrap .tooth-cell').forEach(b=>{
     b.addEventListener('click',e=>{e.stopPropagation();openToothPop(b)});
@@ -707,7 +748,10 @@ function openNewCaseModal(defClinic){
     const last=document.getElementById('ncLast').value.trim();const first=document.getElementById('ncFirst').value.trim();
     if(!last&&!first){document.getElementById('ncLast').style.borderColor='#A32D2D';return}
     const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
-    const nc={id:nextCaseId(),name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:document.getElementById('ncClinic').value,doctor:document.getElementById('ncDoctor').value,type:document.getElementById('ncType').value,color:document.getElementById('ncColor').value,stage:'design',intrata:document.getElementById('ncIntrata').value,probaDate:document.getElementById('ncProba').value,finala:document.getElementById('ncFinala').value,teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
+    const type=document.getElementById('ncType').value.trim()||allWorkTypes()[0]||'Lucrare';
+    rememberWorkType(type);
+    const nc={id:nextCaseId(),name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:document.getElementById('ncClinic').value,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:document.getElementById('ncIntrata').value,probaDate:document.getElementById('ncProba').value,finala:document.getElementById('ncFinala').value,teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
+    nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
     nc.priority=computePriority(nc);CASES.push(nc);persistNewCase(nc);if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
     updateMainSummary();
     if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
@@ -721,10 +765,12 @@ function openQuickEdit(id){
   const safeVal=v=>String(v||'').replace(/"/g,'&quot;');
   openModal(`<div class="modal-head"><div class="modal-title">Editare rapidă · ${c.name}</div><button class="modal-close" type="button">×</button></div><div class="modal-body"><div class="field-row"><div class="field"><label>Pacient</label><input id="qeName" value="${safeVal(c.name)}"></div><div class="field"><label>Etapă</label><select id="qeStage">${stOpts}</select></div></div><div class="field-row three"><div class="field"><label>Tip</label><input id="qeType" value="${safeVal(c.type)}"></div><div class="field"><label>Culoare</label><select id="qeColor">${colOpts}</select></div><div class="field"><label>Tip implant</label><input id="qeImplant" value="${safeVal(c.implantType)}"></div></div><div class="field-row three"><div class="field"><label>Intrată</label><input id="qeI" value="${safeVal(c.intrata)}"></div><div class="field"><label>Probă</label><input id="qeP" value="${safeVal(c.probaDate)}"></div><div class="field"><label>Finală</label><input id="qeF" value="${safeVal(c.finala)}"></div></div><div class="field-row"><div class="field"><label>Amprentă</label><input id="qeAmprenta" value="${safeVal(c.amprentaType)}"></div><div class="field"><label>Note</label><textarea id="qeN">${c.notes||''}</textarea></div></div></div><div class="modal-foot"><button class="btn modal-close">Anulează</button><button class="btn primary" id="qeSave">Salvează</button></div>`);
   document.getElementById('qeSave').addEventListener('click',()=>{
-    c.name=document.getElementById('qeName').value.trim()||c.name;c.stage=document.getElementById('qeStage').value;c.type=document.getElementById('qeType').value;
+    c.name=document.getElementById('qeName').value.trim()||c.name;c.stage=document.getElementById('qeStage').value;c.type=document.getElementById('qeType').value.trim()||c.type;rememberWorkType(c.type);
     c.color=document.getElementById('qeColor').value;c.implantType=document.getElementById('qeImplant').value;c.amprentaType=document.getElementById('qeAmprenta').value;
     c.intrata=document.getElementById('qeI').value;c.probaDate=document.getElementById('qeP').value;c.finala=document.getElementById('qeF').value;c.notes=document.getElementById('qeN').value;
-    overrides.edits=overrides.edits||{};overrides.edits[c.id]={name:c.name,stage:c.stage,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,finala:c.finala,notes:c.notes};
+    c.deadlineUrgent=labDeadlineStatus(c).urgent;
+    c.priority=computePriority(c);
+    overrides.edits=overrides.edits||{};overrides.edits[c.id]={name:c.name,stage:c.stage,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,finala:c.finala,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority};
     saveOverrides(overrides);closeModal();renderCaseDetail();if(typeof renderTable==='function')renderTable();renderPipeline();
   });
 }
@@ -735,29 +781,30 @@ function buildFisaHTML(c){
   const safe=s=>{const v=String(s==null?'':s).trim();return v?v.replace(/</g,'&lt;'):'—'};
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
-  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);const cls=t?t.type:'';const stl=cls==='crown'?'background:#F1F5F9;color:#334155;border:1px solid #94A3B8;font-weight:bold':cls==='implant'?'background:#FFF7ED;color:#9A3412;border:1.5px solid #EA580C;font-weight:bold':cls==='emax'?'background:#E6F1FB;color:#185FA5;border:1.5px solid #185FA5;font-weight:bold':cls==='veneer'?'background:#F8FAFC;color:#475569;border:1.5px dashed #64748B;font-weight:bold':'';return `<td style="text-align:center;padding:5px 2px;font-size:9px;font-family:monospace;border:0.5px solid #E5E7EB;${stl}">${n}</td>`};
+  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);const cls=t?t.type:'';const stl=cls==='crown'?'background:#F1F5F9;color:#334155;border:1px solid #94A3B8;font-weight:bold':cls==='implant'?'background:#FFF7ED;color:#9A3412;border:1.5px solid #EA580C;font-weight:bold':cls==='emax'?'background:#E6F1FB;color:#185FA5;border:1.5px solid #185FA5;font-weight:bold':cls==='veneer'?'background:#F8FAFC;color:#475569;border:1.5px dashed #64748B;font-weight:bold':'';return `<td style="text-align:center;padding:5px 2px;font-size:11px;font-family:monospace;border:0.5px solid #E5E7EB;${stl}">${n}</td>`};
   const trow=arr=>'<tr>'+arr.slice(0,8).map(tcell).join('')+'<td style="border:0;width:6px"></td>'+arr.slice(8).map(tcell).join('')+'</tr>';
   const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
   const swatches={crown:'background:#F1F5F9;border:1px solid #94A3B8',implant:'background:#FFF7ED;border:1px solid #EA580C',emax:'background:#E6F1FB;border:1px solid #185FA5',veneer:'background:#F8FAFC;border:1px dashed #64748B'};
   const stageName=getStage(c.stage)?.name||'—';
   const tehnician=getEmployee(c.assignee)?.name||'—';
+  const pdfDeadlineUrgent=labDeadlineStatus(c).urgent;
   const summaryHTML=Object.keys(byType).length
-    ? `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:9px;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB">${Object.entries(byType).map(([t,ns])=>`<span><span style="display:inline-block;width:9px;height:9px;${swatches[t]};vertical-align:middle;margin-right:4px"></span><b>${labels[t]}</b> (${ns.length}): ${ns.sort((a,b)=>a-b).join(', ')}</span>`).join('')}</div>`
-    : `<div style="font-size:9px;color:#94A3B8;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB;font-style:italic">Niciun dinte selectat</div>`;
-  const sec=t=>`<div style="font-size:9px;text-transform:uppercase;letter-spacing:0.6px;color:#64748B;font-weight:bold;padding-bottom:4px;border-bottom:1px solid #D8E2EE;margin-bottom:8px">${t}</div>`;
-  const hi=(label,value,tone='blue')=>{const colors={blue:['#E6F1FB','#185FA5'],red:['#FCEBEB','#A32D2D'],amber:['#FAEEDA','#BA7517'],green:['#EAF3DE','#1D9E75']};const [bg,fg]=colors[tone]||colors.blue;return `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:5px;background:${bg};color:${fg};font-size:10px"><span style="opacity:.75">${label}:</span><b>${safe(value)}</b></span>`};
-  return `<div style="font-family:Arial,sans-serif;color:#1F2937;font-size:11px;line-height:1.5;width:750px;background:white">
-<div style="background:#F8FAFC;color:#1F2937;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #D8E2EE"><div><div style="font-weight:bold;font-size:14px;color:#185FA5">LAB CAD · Laborator Dentar</div><div style="font-size:9px;color:#64748B;margin-top:2px">Chișinău · contact@labdentar.md · +373 22 000 000</div></div><div style="font-family:monospace;font-size:18px;font-weight:bold;color:#185FA5">#${c.id}</div></div>
+    ? `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB">${Object.entries(byType).map(([t,ns])=>`<span><span style="display:inline-block;width:9px;height:9px;${swatches[t]};vertical-align:middle;margin-right:4px"></span><b>${labels[t]}</b> (${ns.length}): ${ns.sort((a,b)=>a-b).join(', ')}</span>`).join('')}</div>`
+    : `<div style="font-size:11px;color:#94A3B8;margin-top:10px;padding-top:10px;border-top:0.5px solid #E5E7EB;font-style:italic">Niciun dinte selectat</div>`;
+  const sec=t=>`<div style="font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#64748B;font-weight:bold;padding-bottom:4px;border-bottom:1px solid #D8E2EE;margin-bottom:8px">${t}</div>`;
+  const hi=(label,value,tone='blue')=>{const colors={blue:['#E6F1FB','#185FA5'],red:['#FCEBEB','#A32D2D'],amber:['#FAEEDA','#BA7517'],green:['#EAF3DE','#1D9E75']};const [bg,fg]=colors[tone]||colors.blue;return `<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:5px;background:${bg};color:${fg};font-size:12px"><span style="opacity:.75">${label}:</span><b>${safe(value)}</b></span>`};
+  return `<div style="font-family:Arial,sans-serif;color:#1F2937;font-size:13px;line-height:1.5;width:750px;background:white">
+<div style="background:#F8FAFC;color:#1F2937;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #D8E2EE"><div><div style="font-weight:bold;font-size:16px;color:#185FA5">LAB CAD · Laborator Dentar</div><div style="font-size:11px;color:#64748B;margin-top:2px">Chișinău · contact@labdentar.md · +373 22 000 000</div></div><div style="font-family:monospace;font-size:20px;font-weight:bold;color:#185FA5">#${c.id}</div></div>
 <div style="padding:24px 28px">
-<div style="margin-bottom:14px">${sec('Pacient & Clinică')}<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap">${hi('Pacient',c.name,'blue')}<span>Clinică: <b>${safe(cl.name)}</b></span><span>Medic: <b>${safe(c.doctor||cl.doctor)}</b></span></div></div>
-<div style="margin-bottom:14px">${sec('Date')}<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap"><span>Intrată: <b>${safe(c.intrata)}</b></span><span>Probă: <b>${safe(c.probaDate)}</b></span>${hi('Finală',c.finala,c.late?'red':'amber')}</div></div>
-<div style="margin-bottom:14px">${sec('Lucrare')}<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap"><span>Tip: <b>${safe(c.type)}</b></span>${hi('Culoare',c.color||'—','green')}<span>Etapă: <b>${safe(stageName)}</b></span><span>Tehnician: <b>${safe(tehnician)}</b></span><span>Prioritate: <b>${safe(c.priority)}</b></span></div></div>
-<div style="margin-bottom:14px">${sec('Implant & Amprentă')}<div style="display:flex;gap:8px;font-size:10px;flex-wrap:wrap">${hi('Tip implant',c.implantType||'—','amber')}<span>Tip amprentă: <b>${safe(c.amprentaType)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Pacient & Clinică')}<div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap">${hi('Pacient',c.name,'blue')}<span>Clinică: <b>${safe(cl.name)}</b></span><span>Medic: <b>${safe(c.doctor||cl.doctor)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Date')}<div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap"><span>Intrată: <b>${safe(c.intrata)}</b></span><span>Probă: <b>${safe(c.probaDate)}</b></span>${hi('Finală',c.finala,c.late||pdfDeadlineUrgent?'red':'amber')}</div></div>
+<div style="margin-bottom:14px">${sec('Lucrare')}<div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap"><span>Tip: <b>${safe(c.type)}</b></span>${hi('Culoare',c.color||'—','green')}<span>Etapă: <b>${safe(stageName)}</b></span><span>Tehnician: <b>${safe(tehnician)}</b></span><span>Prioritate: <b>${safe(c.priority)}</b></span></div></div>
+<div style="margin-bottom:14px">${sec('Implant & Amprentă')}<div style="display:flex;gap:8px;font-size:12px;flex-wrap:wrap">${hi('Tip implant',c.implantType||'—','amber')}<span>Tip amprentă: <b>${safe(c.amprentaType)}</b></span></div></div>
 <div style="margin-bottom:14px">${sec('Schema dentară (FDI)')}<div style="background:#F8FAFC;padding:12px;border-radius:4px;border:0.5px solid #E5E7EB"><table style="border-collapse:collapse;width:100%;table-layout:fixed">${trow(upper)}${trow(lower)}</table>${summaryHTML}</div></div>
-<div style="margin-bottom:18px">${sec('Indicații speciale')}<div style="font-size:10px;min-height:50px;padding:10px;background:#F8FAFC;border-left:3px solid #185FA5">${c.notes?safe(c.notes):'<span style="color:#94A3B8;font-style:italic">Fără indicații suplimentare</span>'}</div></div>
-<div style="display:flex;justify-content:space-between;margin-top:36px"><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:8px;color:#64748B;margin-top:4px">Semnătura medic clinică</div></div><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:8px;color:#64748B;margin-top:4px">Semnătura tehnician</div></div></div>
-<div style="text-align:right;font-size:8px;color:#94A3B8;margin-top:14px">Emis ${new Date().toLocaleDateString('ro-RO')} · Fișa caz #${c.id}</div>
+<div style="margin-bottom:18px">${sec('Indicații speciale')}<div style="font-size:12px;min-height:50px;padding:10px;background:#F8FAFC;border-left:3px solid #185FA5">${c.notes?safe(c.notes):'<span style="color:#94A3B8;font-style:italic">Fără indicații suplimentare</span>'}</div></div>
+<div style="display:flex;justify-content:space-between;margin-top:36px"><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:10px;color:#64748B;margin-top:4px">Semnătura medic clinică</div></div><div style="width:220px"><div style="border-bottom:0.5px solid #64748B;height:30px"></div><div style="font-size:10px;color:#64748B;margin-top:4px">Semnătura tehnician</div></div></div>
+<div style="text-align:right;font-size:10px;color:#94A3B8;margin-top:14px">Emis ${new Date().toLocaleDateString('ro-RO')} · Fișa caz #${c.id}</div>
 </div></div>`;
 }
 function generateFisaPDF(c){
@@ -795,7 +842,16 @@ function attachFilters(){
 function attachMobileMenu(){const b=document.querySelector('.mobile-menu-btn'),s=document.querySelector('.sidebar');if(!b||!s)return;b.addEventListener('click',()=>s.classList.toggle('open'))}
 
 // === INLINE POPOVER SYSTEM ===
-function openInlinePopover(anchor, items, onSelect, header) {
+function positionFloatingUnder(pop, anchor) {
+  const rect = anchor.getBoundingClientRect();
+  const minLeft = window.scrollX + 8;
+  const maxLeft = window.scrollX + window.innerWidth - pop.offsetWidth - 8;
+  const left = Math.max(minLeft, Math.min(rect.left + window.scrollX, maxLeft));
+  pop.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+  pop.style.left = left + 'px';
+}
+
+function openInlinePopover(anchor, items, onSelect, header, options={}) {
   document.querySelectorAll('.inline-popover').forEach(p => p.remove());
   const pop = document.createElement('div');
   pop.className = 'inline-popover';
@@ -804,9 +860,7 @@ function openInlinePopover(anchor, items, onSelect, header) {
     `<button class="inline-pop-item" data-idx="${i}">${it.label}</button>`
   ).join('');
   document.body.appendChild(pop);
-  const rect = anchor.getBoundingClientRect();
-  pop.style.top = (rect.bottom + window.scrollY + 4) + 'px';
-  pop.style.left = (rect.left + window.scrollX) + 'px';
+  positionFloatingUnder(pop, options.positionAnchor || anchor);
   pop.querySelectorAll('.inline-pop-item').forEach(b => {
     b.addEventListener('click', e => {
       e.stopPropagation();
@@ -825,13 +879,44 @@ function openInlinePopover(anchor, items, onSelect, header) {
   }, 0);
 }
 
+function openInlineNoteEditor(anchor, c) {
+  document.querySelectorAll('.inline-note-editor').forEach(p => p.remove());
+  const pop = document.createElement('div');
+  pop.className = 'inline-note-editor';
+  pop.innerHTML = `<div class="inline-pop-header">Notițe caz</div>
+    <textarea class="inline-note-input" rows="5" placeholder="Adaugă notițe...">${escHTML(c.notes||'')}</textarea>
+    <div class="inline-note-actions"><button class="btn" type="button" data-note-cancel>Anulează</button><button class="btn primary" type="button" data-note-save>Salvează</button></div>`;
+  document.body.appendChild(pop);
+  positionFloatingUnder(pop, anchor.closest('td') || anchor);
+  const ta=pop.querySelector('.inline-note-input');
+  ta.focus();
+  ta.setSelectionRange(ta.value.length,ta.value.length);
+  pop.querySelector('[data-note-cancel]')?.addEventListener('click',()=>pop.remove());
+  pop.querySelector('[data-note-save]')?.addEventListener('click',()=>{
+    c.notes=ta.value.trim();
+    overrides.edits=overrides.edits||{};
+    overrides.edits[c.id]=overrides.edits[c.id]||{};
+    overrides.edits[c.id].notes=c.notes;
+    saveOverrides(overrides);
+    pop.remove();
+    if(typeof renderTable==='function')renderTable();
+    if(typeof renderPipeline==='function')renderPipeline();
+  });
+  setTimeout(()=>{
+    const close=ev=>{if(!pop.contains(ev.target)&&ev.target!==anchor){pop.remove();document.removeEventListener('click',close)}};
+    document.addEventListener('click',close);
+  },0);
+}
+
 function updateCaseField(c, field, value) {
   c[field] = value;
+  c.deadlineUrgent = labDeadlineStatus(c).urgent;
   c.priority = computePriority(c);
   overrides.edits = overrides.edits || {};
   overrides.edits[c.id] = overrides.edits[c.id] || {};
   overrides.edits[c.id][field] = value;
   if (field === 'priority') overrides.edits[c.id].priority = value;
+  overrides.edits[c.id].deadlineUrgent = c.deadlineUrgent;
   overrides.edits[c.id].priority = c.priority;
   saveOverrides(overrides);
 }
@@ -852,9 +937,16 @@ function attachInlineEditors(root) {
       const id = Number(tr.dataset.caseId);
       const c = getCase(id);
       if (!c) return;
-      const items = COMMON_TYPES.map(t => ({ value: t, label: t }));
+      const items = [...allWorkTypes().map(t => ({ value: t, label: t })), { value: '__custom__', label: '+ Adaugă tip nou' }];
       openInlinePopover(el, items, sel => {
-        updateCaseField(c, 'type', sel.value);
+        let value=sel.value;
+        if(value==='__custom__'){
+          value=prompt('Tip lucrare nou:','');
+          if(!value||!value.trim())return;
+          value=value.trim();
+          rememberWorkType(value);
+        }
+        updateCaseField(c, 'type', value);
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
       }, 'Tip lucrare');
@@ -909,7 +1001,7 @@ function attachInlineEditors(root) {
         saveOverrides(overrides);
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
-      }, 'Schimbă etapă');
+      }, 'Schimbă etapă', { positionAnchor: el.closest('td') || el });
     });
   });
 
@@ -951,13 +1043,8 @@ function attachInlineEditors(root) {
         } else if (sel.value.startsWith('tech:')) {
           c.assignees[stage] = sel.value.slice(5);
         } else {
-          c.stageStatuses[stage] = sel.value;
-          if (sel.value === 'finalizat') {
-            const ms = getEtapeLabStages(c.type);
-            const nx = ms.indexOf(stage) + 1;
-            if (nx < ms.length) c.stage = ms[nx];
-            else if (ms.every(s => c.stageStatuses[s] === 'finalizat')) c.stage = 'proba';
-          }
+          if (sel.value === 'finalizat') completeLabStage(c, stage);
+          else c.stageStatuses[stage] = sel.value;
         }
         overrides.edits = overrides.edits || {};
         overrides.edits[c.id] = overrides.edits[c.id] || {};
@@ -971,7 +1058,7 @@ function attachInlineEditors(root) {
         saveOverrides(overrides);
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
-      }, 'Etapă: ' + (getStage(stage)?.name || stage));
+      }, 'Etapă: ' + (getStage(stage)?.name || stage), { positionAnchor: el.closest('td') || el.closest('.flow') || el });
     });
   });
 
@@ -1000,10 +1087,12 @@ function attachInlineEditors(root) {
       const tdIdx = cells.indexOf(el.parentElement);
       const field = fieldMap[tdIdx] || 'finala';
       c[field] = which;
+      c.deadlineUrgent = labDeadlineStatus(c).urgent;
       c.priority = computePriority(c);
       overrides.edits = overrides.edits || {};
       overrides.edits[c.id] = overrides.edits[c.id] || {};
       overrides.edits[c.id][field] = which;
+      overrides.edits[c.id].deadlineUrgent = c.deadlineUrgent;
       overrides.edits[c.id].priority = c.priority;
       saveOverrides(overrides);
       if (typeof renderTable === 'function') renderTable();
@@ -1068,19 +1157,12 @@ function attachInlineEditors(root) {
     el.style.cursor = 'pointer';
     el.addEventListener('click', e => {
       e.stopPropagation();
+      e.preventDefault();
       const tr = el.closest('tr,.kb-card');
       if (!tr) return;
       const c = getCase(Number(tr.dataset.caseId));
       if (!c) return;
-      const newNotes = prompt('Notițe pentru caz:', c.notes || '');
-      if (newNotes === null) return;
-      c.notes = newNotes.trim();
-      overrides.edits = overrides.edits || {};
-      overrides.edits[c.id] = overrides.edits[c.id] || {};
-      overrides.edits[c.id].notes = c.notes;
-      saveOverrides(overrides);
-      if (typeof renderTable === 'function') renderTable();
-      if (typeof renderPipeline === 'function') renderPipeline();
+      openInlineNoteEditor(el,c);
     });
   });
 
