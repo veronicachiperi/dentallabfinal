@@ -3,8 +3,8 @@
 // Fill in SUPABASE_URL and SUPABASE_ANON_KEY from:
 //   https://app.supabase.com → Project Settings → API
 // ============================================================
-const SUPABASE_URL      = '';   // e.g. 'https://xyzabc.supabase.co'
-const SUPABASE_ANON_KEY = '';   // your project's anon/public key
+const SUPABASE_URL      = 'https://rzfxahuaoblpniaakqun.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_k6Ur07RTH1U0n41YEuAOhQ__f740fT2';
 
 const SUPABASE_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
