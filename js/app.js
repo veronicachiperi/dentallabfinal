@@ -510,7 +510,7 @@ function renderClinic(){
 
   // Clinics see only their own portal — admins/techs see tabs to navigate between all
   const currentUser=getCurrentUser();
-  const isAdminOrTech=!currentUser||currentUser.role==='admin'||currentUser.role==='tech';
+  const isAdminOrTech=!currentUser||currentUser.role==='admin'||currentUser.role==='tech'||currentUser.role==='technician';
   const clinicTabs=isAdminOrTech
     ? CLINICS.map(cl=>`<button class="pc-clinic-tab ${cl.id===clinicId?'on':''}" data-clinic-id="${cl.id}">${cl.name}</button>`).join('')
     : '';
