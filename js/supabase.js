@@ -4,7 +4,7 @@
 //   https://app.supabase.com → Project Settings → API
 // ============================================================
 const SUPABASE_URL      = 'https://rzfxahuaoblpniaakqun.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_k6Ur07RTH1U0n41YEuAOhQ__f740fT2';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ6ZnhhaHVhb2JscG5pYWFrcXVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3NTE3NTAsImV4cCI6MjA5NDMyNzc1MH0.LKmQNLhvg8t93yBp-zNSP1-csVbJwjrusdVL4yNxq5Q';
 
 const SUPABASE_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
@@ -48,7 +48,7 @@ async function sbRequireAuth() {
 
 async function sbSignIn(username, password) {
   const { data, error } = await _client().auth.signInWithPassword({
-    email:    username.toLowerCase().trim() + '@lab.md',
+    email:    username.toLowerCase().trim() + '@labdentar.com',
     password,
   });
   if (error) throw error;
@@ -71,7 +71,7 @@ async function sbSignIn(username, password) {
 
 async function sbSignUp(username, password, role, clinicId, employeeId) {
   const { data, error } = await _client().auth.signUp({
-    email:    username.toLowerCase().trim() + '@lab.md',
+    email:    username.toLowerCase().trim() + '@labdentar.com',
     password,
   });
   if (error) throw error;
