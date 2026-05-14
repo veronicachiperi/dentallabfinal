@@ -619,6 +619,13 @@ button{font-family:inherit;cursor:pointer}
 .sp-logout-btn{font-size:11px;color:var(--text-dim);background:none;border:0.5px solid var(--border);border-radius:4px;padding:5px 10px;cursor:pointer;font-family:inherit;text-align:left;width:100%}
 .sp-logout-btn:hover{background:var(--bg-soft);color:#A32D2D;border-color:#A32D2D}
 
+/* Jaw quick-select controls */
+.tc-jaw-controls{display:flex;gap:6px;margin-bottom:8px}
+.tc-jaw-btn{font-size:11px;padding:4px 10px;border:0.5px solid var(--border);border-radius:4px;background:var(--bg-soft);color:var(--text-muted);cursor:pointer;font-family:inherit;position:relative}
+.tc-jaw-btn:hover{background:var(--bg);color:var(--text)}
+.tc-jaw-clear{color:#A32D2D;border-color:#A32D2D}
+.tc-jaw-clear:hover{background:#FDF0F0}
+
 /* All nav items always visible regardless of role */
 .nav-item[data-roles]{display:flex}
 .tbl tbody tr.tbl-row-faded { opacity: 0.55; background: var(--bg-soft); }
