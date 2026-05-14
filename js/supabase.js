@@ -21,6 +21,11 @@ function _client() {
   return _sb;
 }
 
+// Converts any username to a valid email local part
+function _toEmail(username) {
+  return username.toLowerCase().trim().replace(/[^a-z0-9._+-]/g, '_') + '@gmail.com';
+}
+
 // ── Auth ─────────────────────────────────────────────────────
 async function sbRequireAuth() {
   if (!SUPABASE_CONFIGURED) return null;
@@ -48,7 +53,7 @@ async function sbRequireAuth() {
 
 async function sbSignIn(username, password) {
   const { data, error } = await _client().auth.signInWithPassword({
-    email:    username.toLowerCase().trim() + '@labdentar.com',
+    email:    _toEmail(username),
     password,
   });
   if (error) throw error;
@@ -71,7 +76,7 @@ async function sbSignIn(username, password) {
 
 async function sbSignUp(username, password, role, clinicId, employeeId) {
   const { data, error } = await _client().auth.signUp({
-    email:    username.toLowerCase().trim() + '@labdentar.com',
+    email:    _toEmail(username),
     password,
   });
   if (error) throw error;

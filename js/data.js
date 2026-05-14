@@ -53,11 +53,13 @@ const CLINICS = [
 ];
 
 const EMPLOYEES = [
-  { id: 'pc', name: 'Private CAD', initials: 'PC' },
-  { id: 'ik', name: 'Ivan Kara',   initials: 'IK' },
-  { id: 'vc', name: 'Vadim Celac', initials: 'VC' },
-  { id: 'an', name: 'Andrei N.',   initials: 'AN' },
-  { id: 'mt', name: 'Maria T.',    initials: 'MT' }
+  { id: 'tchi', name: 'Timofei Chiochiu',    initials: 'TC', stage: 'design' },
+  { id: 'vcel', name: 'Vadim Celac',          initials: 'VC', stage: 'design' },
+  { id: 'ikar', name: 'Ivan Kara',            initials: 'IK', stage: 'design' },
+  { id: 'acur', name: 'Alina Curtis',         initials: 'AC', stage: 'ceramica' },
+  { id: 'vgra', name: 'Valentin Grajdianu',   initials: 'VG', stage: 'ceramica' },
+  { id: 'amoi', name: 'Alexandru Moisei',     initials: 'AM', stage: 'prelucrare' },
+  { id: 'avar', name: 'Alexandru Varzari',    initials: 'AV', stage: 'prelucrare' },
 ];
 
 const CASES = [];
@@ -216,7 +218,7 @@ function todayLabDate() {
   return d;
 }
 
-const STAGE_ASSIGNEE_DEFAULTS = { design:'pc', cam:'ik', la_print:'ik', prelucrare:'vc', ceramica:'mt', proba:'an', terminat:'an', trimis:'an' };
+const STAGE_ASSIGNEE_DEFAULTS = { design:'tchi', cam:'tchi', la_print:'tchi', prelucrare:'amoi', ceramica:'acur', proba:'acur', terminat:'acur', trimis:'acur' };
 
 CASES.forEach(c => {
   c.assignees = c.assignees || {};
@@ -297,11 +299,13 @@ const COMMON_TYPES = ['ZR FULL', 'ZR FULL IMPL', 'ZR STR DINTE', 'ZR STR IMPL', 
 const COLORS_VITA = ['A1','A2','A3','A3.5','A4','B1','B2','B3','B4','C1','C2','C3','D2','D3','BL1','BL2','BL3','BL4'];
 // Mapare tehnician → etapă
 const TECH_STAGE_MAP = {
-  pc: 'design',
-  ik: 'cam',
-  vc: 'prelucrare',
-  mt: 'ceramica',
-  an: 'prelucrare'
+  tchi: 'design',
+  vcel: 'design',
+  ikar: 'design',
+  acur: 'ceramica',
+  vgra: 'ceramica',
+  amoi: 'prelucrare',
+  avar: 'prelucrare',
 };
 function techStage(techId) { return TECH_STAGE_MAP[techId] || 'design'; }
 
