@@ -524,7 +524,7 @@ function renderClinic(){
       </div>
       <div class="spacer"></div>
       <a href="${termsPageUrl(clinicId)}" class="btn">Termenii laboratorului</a>
-      ${!currentUser||currentUser.role==='admin'||currentUser.role==='technician'?'<a href="index.html" class="btn">Vezi panoul echipei</a>':''}
+      ${currentUser&&(currentUser.role==='admin'||currentUser.role==='technician'||currentUser.role==='tech')?'<a href="index.html" class="btn">Vezi panoul echipei</a>':''}
       <button class="btn primary" id="newCaseBtnClinic">+ Caz nou</button>
     </div>
     <div class="pc-quick-row">
