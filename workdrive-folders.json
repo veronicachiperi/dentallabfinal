@@ -1,7 +1,27 @@
 {
-  "crisdent": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/CRISDENT" },
-  "pana": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/PANA DENT" },
-  "elite": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/ELITE MED" },
-  "fav": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/FAV DENTAL" },
-  "esthetic": { "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/DENTAL ESTHETICS" }
+  "crisdent": {
+    "folder_id": "",
+    "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/CRISDENT",
+    "label": "CRISDENT"
+  },
+  "pana": {
+    "folder_id": "",
+    "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/PANA DENT",
+    "label": "PANA DENT"
+  },
+  "elite": {
+    "folder_id": "",
+    "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/ELITE MED",
+    "label": "ELITE MED"
+  },
+  "fav": {
+    "folder_id": "",
+    "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/FAV DENTAL",
+    "label": "FAV DENTAL"
+  },
+  "esthetic": {
+    "folder_id": "",
+    "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/DENTAL ESTHETICS",
+    "label": "DENTAL ESTHETICS"
+  }
 }
