@@ -700,7 +700,7 @@ function renderCalendar(){
 function renderTechnicianPortal(){
   const root=document.getElementById('techShell');if(!root)return;
   let user=getCurrentUser();
-  if(!user||user.role!=='tech'){user={id:'mt',name:'Maria T.',initials:'MT',role:'tech'};setCurrentUser(user)}
+  if(!user||!(user.role==='tech'||user.role==='technician')){user={id:'mt',name:'Maria T.',initials:'MT',role:'tech'};setCurrentUser(user)}
   const myStage=techStage(user.id);
   const stage=getStage(myStage);
   const stageName=stage.name;
