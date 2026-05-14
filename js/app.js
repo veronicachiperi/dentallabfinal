@@ -134,30 +134,51 @@ function _syncCase(c){
 // === ROLE-BASED SIDEBAR ===
 function applySidebarRoles(){
   const user=getCurrentUser()||{role:'admin',name:'Admin',initials:'AD',id:'admin'};
-  // Normalize: Supabase stores 'technician', but data-roles uses 'tech'
   const roleKey=user.role==='technician'?'tech':user.role;
+  // Topbar avatar
   const av=document.getElementById('userAvatar');
-  if(av){av.textContent=user.initials;av.title=user.name;av.style.cursor='pointer';av.onclick=()=>sbSignOut&&sbSignOut()}
+  if(av){av.textContent=user.initials;av.title=user.name;}
+  // Sidebar profile block
+  const spAv=document.getElementById('spAvatar');
+  const spName=document.getElementById('spName');
+  const spRole=document.getElementById('spRole');
+  const roleLabel={admin:'Administrator',technician:'Tehnician',tech:'Tehnician',clinic:'Clinică'}[user.role]||user.role;
+  if(spAv)spAv.textContent=user.initials;
+  if(spName)spName.textContent=user.name;
+  if(spRole)spRole.textContent=roleLabel;
+  // Status
+  const savedStatus=localStorage.getItem('dental-lab-status')||'online';
+  const spDot=document.getElementById('spStatusDot');
+  const spSel=document.getElementById('spStatusSelect');
+  if(spDot)spDot.className='sp-dot '+savedStatus;
+  if(spSel){
+    spSel.value=savedStatus;
+    spSel.onchange=()=>{
+      localStorage.setItem('dental-lab-status',spSel.value);
+      if(spDot)spDot.className='sp-dot '+spSel.value;
+    };
+  }
   // Hide nav items not allowed for this role
   document.querySelectorAll('[data-roles]').forEach(el=>{
     const roles=el.dataset.roles.split(',');
     el.style.display=roles.includes(roleKey)?'':'none';
   });
-  // Activity log link: only admin
   document.querySelectorAll('[data-admin-only]').forEach(el=>{
     el.style.display=user.role==='admin'?'':'none';
   });
   // Build sidebar if it's a dynamic sidebar (activity page etc.)
   const sb=document.getElementById('sidebar');
-  if(sb&&sb.children.length===0)sb.innerHTML=buildSidebarHTML(user.role);
+  if(sb&&sb.children.length===0)sb.innerHTML=buildSidebarHTML(user.role,user);
 }
 
-function buildSidebarHTML(role){
-  const item=(href,label,active,adminOnly)=>{
-    if(adminOnly&&role!=='admin')return'';
+function buildSidebarHTML(role,user){
+  const u=user||getCurrentUser()||{name:'',initials:'?'};
+  const item=(href,label)=>{
     const cur=location.pathname.includes(href);
     return`<a class="nav-item${cur?' active':''}" href="${href}"><span class="nav-icon"></span>${label}</a>`;
   };
+  const savedStatus=localStorage.getItem('dental-lab-status')||'online';
+  const roleLabel={admin:'Administrator',technician:'Tehnician',tech:'Tehnician',clinic:'Clinică'}[role]||role;
   return`<div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div>
 <div class="nav-section">Workflow</div>
 ${role!=='clinic'?item('tehnician.html','Acasă'):''}
@@ -171,8 +192,24 @@ ${role==='admin'?item('echipa.html','Echipa'):''}
 ${role!=='clinic'?item('workdrive.html','WorkDrive'):''}
 ${role!=='clinic'?item('termeni.html','Termeni'):''}
 ${role==='admin'?item('activity.html','Activitate'):''}
-<div class="nav-section">Cont</div>
-<a class="nav-item" href="#" onclick="sbSignOut&&sbSignOut();return false"><span class="nav-icon round"></span>Deconectare</a>`;
+<div class="sidebar-profile" id="sidebarProfile">
+  <div class="sp-user">
+    <div class="sp-avatar" id="spAvatar">${escHTML(u.initials||'?')}</div>
+    <div class="sp-info">
+      <div class="sp-name" id="spName">${escHTML(u.name||'')}</div>
+      <div class="sp-role" id="spRole">${roleLabel}</div>
+    </div>
+  </div>
+  <div class="sp-status-row">
+    <span class="sp-dot ${savedStatus}" id="spStatusDot"></span>
+    <select class="sp-status-sel" id="spStatusSelect">
+      <option value="online"${savedStatus==='online'?' selected':''}>Online</option>
+      <option value="iesit"${savedStatus==='iesit'?' selected':''}>Ieșit</option>
+      <option value="offline"${savedStatus==='offline'?' selected':''}>Offline</option>
+    </select>
+  </div>
+  <button class="sp-logout-btn" onclick="sbSignOut&&sbSignOut();return false">Deconectare</button>
+</div>`;
 }
 
 function updateMainSummary(){
@@ -484,7 +521,8 @@ function attachDropZone(col,stageId){
 function renderClinic(){
   const root=document.getElementById('clinicShell');
   if(!root)return;
-  const clinicId=new URLSearchParams(location.search).get('id')||'crisdent';
+  const _cu=getCurrentUser();
+  const clinicId=(_cu&&_cu.role==='clinic'&&_cu.clinic)?_cu.clinic:(new URLSearchParams(location.search).get('id')||'crisdent');
   const clinic=getClinic(clinicId);
   if(!clinic){root.innerHTML='<p>Clinică inexistentă</p>';return}
   const cases=casesForClinic(clinicId);
@@ -510,7 +548,8 @@ function renderClinic(){
 
   // Clinics see only their own portal — admins/techs see tabs to navigate between all
   const currentUser=getCurrentUser();
-  const isAdminOrTech=!currentUser||currentUser.role==='admin'||currentUser.role==='tech'||currentUser.role==='technician';
+  const isClinicUser=currentUser&&currentUser.role==='clinic';
+  const isAdminOrTech=!isClinicUser&&(!currentUser||currentUser.role==='admin'||currentUser.role==='tech'||currentUser.role==='technician');
   const clinicTabs=isAdminOrTech
     ? CLINICS.map(cl=>`<button class="pc-clinic-tab ${cl.id===clinicId?'on':''}" data-clinic-id="${cl.id}">${cl.name}</button>`).join('')
     : '';
@@ -1518,7 +1557,11 @@ async function initApp(){
   // Auth + data loading
   if(SUPABASE_CONFIGURED){
     const prof=await sbRequireAuth();
-    if(!prof)return; // sbRequireAuth redirects to login.html if no session
+    if(!prof)return;
+    // Clinic users go straight to their own portal
+    if(prof.role==='clinic'&&prof.clinic_id&&!location.pathname.includes('clinic.html')){
+      location.href='clinic.html?id='+prof.clinic_id;return;
+    }
     const sbCases=await sbLoadCases();
     if(sbCases){
       CASES.length=0;
