@@ -48,7 +48,8 @@ const CLINICS = [
   { id: 'pana',     name: 'PANA DENT',       doctor: 'Dr. Pană M.' },
   { id: 'elite',    name: 'ELITE MED',       doctor: 'Dr. Ionescu R.' },
   { id: 'fav',      name: 'FAV Dental',      doctor: 'Dr. Favorov S.' },
-  { id: 'esthetic', name: 'Dental Esthetic', doctor: 'Dr. Stoica L.' }
+  { id: 'esthetic', name: 'Dental Esthetic', doctor: 'Dr. Stoica L.' },
+  { id: 'melian',   name: 'Melian Clinic',   doctor: 'Dr. —' }
 ];
 
 const EMPLOYEES = [

@@ -71,12 +71,16 @@ const activeFilter={tab:'all',clinic:'all'};
 function applyFilter(cases){
   const today=todayLabDate();
   const weekEnd=new Date(today);weekEnd.setDate(today.getDate()+7);
-  return cases.filter(c=>{
+  const user=getCurrentUser();
+  // Clinic users see only their own clinic's cases
+  let src=cases;
+  if(user?.role==='clinic'&&user?.clinic){src=cases.filter(c=>c.clinic===user.clinic)}
+  return src.filter(c=>{
     const isTrimis=c.stage==='trimis';
     if(activeFilter.tab==='trimise')return isTrimis;
     if(isTrimis)return false;
     if(activeFilter.clinic!=='all'&&c.clinic!==activeFilter.clinic)return false;
-    if(activeFilter.tab==='mine'){const u=getCurrentUser();if(!u||c.assignee!==u.id)return false}
+    if(activeFilter.tab==='mine'){if(!user||c.assignee!==user.id)return false}
     if(activeFilter.tab==='late'&&!c.late)return false;
     if(activeFilter.tab==='today'){const f=parseShortDate(c.finala);if(!f||f.toDateString()!==today.toDateString())return false}
     if(activeFilter.tab==='week'){const f=parseShortDate(c.finala);if(!f||f<today||f>weekEnd)return false}
@@ -88,11 +92,87 @@ function applyFilter(cases){
   });
 }
 
+// Delete case (admin + owning clinic)
+async function deleteCase(id){
+  const c=getCase(id);if(!c)return;
+  if(!confirm(`Ștergi cazul "${c.name}"? Această acțiune nu poate fi anulată.`))return;
+  if(typeof sbDeleteCase==='function'&&SUPABASE_CONFIGURED){
+    try{await sbDeleteCase(c.id,c.name)}catch(e){alert('Eroare la ștergere: '+e.message);return}
+  }
+  const i=CASES.findIndex(x=>x.id===id);
+  if(i>=0)CASES.splice(i,1);
+  overrides.edits=overrides.edits||{};delete overrides.edits[id];
+  overrides.stages=overrides.stages||{};delete overrides.stages[id];
+  saveOverrides(overrides);
+  reRenderAll();
+  if(location.pathname.includes('case.html'))location.href='index.html';
+}
+
+// Move case to a different stage
+async function moveCaseToStage(id,stageId){
+  const c=getCase(id);if(!c)return;
+  c.stage=stageId;c.notStarted=false;
+  overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;
+  overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:stageId,notStarted:false};
+  saveOverrides(overrides);
+  if(typeof sbUpdateField==='function'&&SUPABASE_CONFIGURED){
+    await sbUpdateField(c,'stage',stageId);
+    await sbUpdateField(c,'notStarted',false);
+  }
+  reRenderAll();
+}
+
+function reRenderAll(){
+  updateMainSummary();
+  if(typeof renderTable==='function')renderTable();
+  renderPipeline();renderClinic();
+}
+function _syncCase(c){
+  if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED)sbSaveCase(c).catch(e=>console.warn('[sb sync]',e.message));
+}
+
 // === ROLE-BASED SIDEBAR ===
 function applySidebarRoles(){
   const user=getCurrentUser()||{role:'admin',name:'Admin',initials:'AD',id:'admin'};
+  // Normalize: Supabase stores 'technician', but data-roles uses 'tech'
+  const roleKey=user.role==='technician'?'tech':user.role;
   const av=document.getElementById('userAvatar');
-  if(av)av.textContent=user.initials;
+  if(av){av.textContent=user.initials;av.title=user.name;av.style.cursor='pointer';av.onclick=()=>sbSignOut&&sbSignOut()}
+  // Hide nav items not allowed for this role
+  document.querySelectorAll('[data-roles]').forEach(el=>{
+    const roles=el.dataset.roles.split(',');
+    el.style.display=roles.includes(roleKey)?'':'none';
+  });
+  // Activity log link: only admin
+  document.querySelectorAll('[data-admin-only]').forEach(el=>{
+    el.style.display=user.role==='admin'?'':'none';
+  });
+  // Build sidebar if it's a dynamic sidebar (activity page etc.)
+  const sb=document.getElementById('sidebar');
+  if(sb&&sb.children.length===0)sb.innerHTML=buildSidebarHTML(user.role);
+}
+
+function buildSidebarHTML(role){
+  const item=(href,label,active,adminOnly)=>{
+    if(adminOnly&&role!=='admin')return'';
+    const cur=location.pathname.includes(href);
+    return`<a class="nav-item${cur?' active':''}" href="${href}"><span class="nav-icon"></span>${label}</a>`;
+  };
+  return`<div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div>
+<div class="nav-section">Workflow</div>
+${role!=='clinic'?item('tehnician.html','Acasă'):''}
+${role!=='clinic'?item('index.html','Lucrări'):''}
+${role!=='clinic'?item('calendar.html','Calendar'):''}
+${role!=='clinic'?item('arhiva.html','Arhivă'):''}
+${role==='admin'?item('stats.html','Statistici'):''}
+<div class="nav-section">Date</div>
+${item('clinici.html','Clinici')}
+${role==='admin'?item('echipa.html','Echipa'):''}
+${role!=='clinic'?item('workdrive.html','WorkDrive'):''}
+${role!=='clinic'?item('termeni.html','Termeni'):''}
+${role==='admin'?item('activity.html','Activitate'):''}
+<div class="nav-section">Cont</div>
+<a class="nav-item" href="#" onclick="sbSignOut&&sbSignOut();return false"><span class="nav-icon round"></span>Deconectare</a>`;
 }
 
 function updateMainSummary(){
@@ -330,13 +410,28 @@ function renderKanbanCard(c){
   card.querySelector('.kb-card-menu')?.addEventListener('click',e=>{
     e.preventDefault();e.stopPropagation();
     document.querySelectorAll('.kb-card-popover,.kb-col-popover').forEach(p=>p.remove());
+    const user=getCurrentUser()||{role:'admin'};
+    const isAdminOrTech=user.role==='admin'||user.role==='technician'||user.role==='tech';
+    const stageOpts=PIPELINE_STAGES.map(s=>{const st=getStage(s);return`<button class="kb-pop-item" type="button" data-act="move" data-stage="${s}">&nbsp;&nbsp;&nbsp;${st?.name||s}</button>`}).join('');
     const m=document.createElement('div');m.className='kb-card-popover';
-    m.innerHTML=`<button class="kb-pop-item danger" type="button" data-act="reset">Clear all → Neînceput</button><button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button>`;
+    m.innerHTML=
+      `<button class="kb-pop-item" type="button" data-act="view-pdf">Fișă PDF — Vizualizează</button>`+
+      `<button class="kb-pop-item" type="button" data-act="dl-pdf">Fișă PDF — Descarcă</button>`+
+      `<div class="kb-pop-sep"></div>`+
+      `<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button>`+
+      (isAdminOrTech?`<div class="kb-pop-sep"></div><div class="kb-pop-label">Mută la etapă</div>${stageOpts}`+
+      `<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="reset">Clear → Neînceput</button>`:'')+
+      (user.role==='admin'||user.role==='clinic'?`<button class="kb-pop-item danger" type="button" data-act="delete">Șterge cazul</button>`:'');
     card.appendChild(m);
     m.querySelectorAll('.kb-pop-item').forEach(it=>it.addEventListener('click',ev=>{
       ev.stopPropagation();
-      if(it.dataset.act==='reset'&&confirm(`Ștergi progresul pentru ${c.name} și îl trimiți la Neînceput?`))resetCaseToNotStarted(c);
-      if(it.dataset.act==='open')location.href=`case.html?id=${c.id}`;
+      const act=it.dataset.act;
+      if(act==='view-pdf'){previewFisaPDF(c)}
+      if(act==='dl-pdf'){generateFisaPDF(c)}
+      if(act==='reset'&&confirm(`Resetezi progresul pentru ${c.name}?`))resetCaseToNotStarted(c);
+      if(act==='open')location.href=`case.html?id=${c.id}`;
+      if(act==='move'){moveCaseToStage(c.id,it.dataset.stage)}
+      if(act==='delete'){deleteCase(c.id)}
       m.remove();
     }));
     setTimeout(()=>{const cl=ev=>{if(!m.contains(ev.target)&&ev.target!==e.target){m.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
@@ -358,6 +453,7 @@ function resetCaseToNotStarted(c){
   overrides.edits=overrides.edits||{};
   overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,assignee:c.assignee,assignees:c.assignees,stageStatuses:c.stageStatuses,deadlineUrgent:c.deadlineUrgent,priority:c.priority};
   saveOverrides(overrides);
+  _syncCase(c);
   renderPipeline();
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
@@ -376,6 +472,7 @@ function attachDropZone(col,stageId){
       overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;
       overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted};
       saveOverrides(overrides);
+      _syncCase(c);
       renderPipeline();
       updateMainSummary();
       if(typeof renderTable==='function')renderTable();
@@ -485,11 +582,11 @@ function handleClinicAction(action,caseId){
   const c=getCase(caseId);if(!c)return;
   if(action==='approve'){
     c.stage='terminat';
-    overrides.stages=overrides.stages||{};overrides.stages[c.id]='terminat';saveOverrides(overrides);
+    overrides.stages=overrides.stages||{};overrides.stages[c.id]='terminat';saveOverrides(overrides);_syncCase(c);
     alert('Probă aprobată — lucrarea a trecut la finalizare');renderClinic();
   } else if(action==='pickup'){
     c.stage='trimis';c.sentDate=fmtShortDate(todayLabDate());
-    overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';saveOverrides(overrides);
+    overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';saveOverrides(overrides);_syncCase(c);
     alert('Ridicare confirmată — lucrarea a fost arhivată');renderClinic();
   } else if(action==='note'){
     const n=prompt('Adaugă notă:');if(n){c.notes=(c.notes||'')+'\n'+n;
@@ -514,11 +611,11 @@ function renderCaseDetail(){
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
   const deadlineUrgent=labDeadlineStatus(c).urgent;
   const stageLabel=publicStageName(c);
-  root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="index.html" class="cd-back">← Pipeline</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu"><button type="button" data-case-action="edit">Editare rapidă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="pdf">Descarcă fișa PDF</button><button type="button" data-case-action="attach">Atașează fișiere</button></div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||clinic.doctor}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date">${c.probaDate||'—'}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date ${c.late||deadlineUrgent?'late':''}">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div></div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn">Vizibil doar lab</button><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"><div class="note-item"><div class="note-author">${clinic.name.slice(0,2)}</div><div style="flex:1"><div class="note-meta"><b>${c.doctor||clinic.doctor}</b> · acum 2 ore</div><div class="note-text">${c.notes||'Lucrare standard.'}</div></div></div></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=c.stageStatuses?.[sId]||'neincepute';const cls=st==='finalizat'?'done':(st==='in_lucru'||st==='la_proba')?'now':'';const t=getEmployee(c.assignees?.[sId]);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':'în așteptare';return `<div class="tl-item ${cls}"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${t?`<span class="tl-tech ${t.id}">${t.initials}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button><div class="file-storage-note">Temporar salvat local. După integrarea Zoho, fișierele vor merge în folderul clinicii.</div></div></aside></div></div>`;
+  root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="index.html" class="cd-back">← Pipeline</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu"><button type="button" data-case-action="edit">Editare rapidă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button><button type="button" data-case-action="delete" class="danger">Șterge cazul</button></div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||clinic.doctor}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date">${c.probaDate||'—'}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date ${c.late||deadlineUrgent?'late':''}">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div></div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn">Vizibil doar lab</button><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"><div class="note-item"><div class="note-author">${clinic.name.slice(0,2)}</div><div style="flex:1"><div class="note-meta"><b>${c.doctor||clinic.doctor}</b> · acum 2 ore</div><div class="note-text">${c.notes||'Lucrare standard.'}</div></div></div></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=c.stageStatuses?.[sId]||'neincepute';const cls=st==='finalizat'?'done':(st==='in_lucru'||st==='la_proba')?'now':'';const t=getEmployee(c.assignees?.[sId]);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':'în așteptare';return `<div class="tl-item ${cls}"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${t?`<span class="tl-tech ${t.id}">${t.initials}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button><div class="file-storage-note">Fișierele merg direct în folderul clinicii pe Zoho WorkDrive.</div></div></aside></div></div>`;
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
   const advance=()=>{
     const next=nextStage(c.stage,c.type);if(next===c.stage){alert('Etapă finală deja');return}
-    c.stage=next;overrides.stages=overrides.stages||{};overrides.stages[c.id]=next;saveOverrides(overrides);renderCaseDetail();
+    c.stage=next;overrides.stages=overrides.stages||{};overrides.stages[c.id]=next;saveOverrides(overrides);_syncCase(c);renderCaseDetail();
   };
   const input=document.getElementById('caseFileInput');
   const attach=()=>input?.click();
@@ -529,8 +626,15 @@ function renderCaseDetail(){
     e.stopPropagation();document.getElementById('caseActionsMenu')?.classList.remove('open');
     if(b.dataset.caseAction==='edit')openQuickEdit(c.id);
     if(b.dataset.caseAction==='advance')advance();
+    if(b.dataset.caseAction==='view-pdf')previewFisaPDF(c);
     if(b.dataset.caseAction==='pdf')generateFisaPDF(c);
     if(b.dataset.caseAction==='attach')attach();
+    if(b.dataset.caseAction==='move'){
+      const stageOpts=PIPELINE_STAGES.map(s=>{const st=getStage(s);return`<option value="${s}"${c.stage===s?' selected':''}>${st?.name||s}</option>`}).join('');
+      openModal(`<div class="modal-head"><div class="modal-title">Mută cazul · ${c.name}</div><button class="modal-close" type="button">×</button></div><div class="modal-body"><div class="field"><label>Etapă nouă</label><select id="moveStageSelect">${stageOpts}</select></div></div><div class="modal-foot"><button class="btn modal-close">Anulează</button><button class="btn primary" id="moveSaveBtn">Mută</button></div>`);
+      document.getElementById('moveSaveBtn')?.addEventListener('click',()=>{moveCaseToStage(c.id,document.getElementById('moveStageSelect').value);closeModal();renderCaseDetail()});
+    }
+    if(b.dataset.caseAction==='delete')deleteCase(c.id);
   }));
   if(window.caseActionsCloseHandler)document.removeEventListener('click',window.caseActionsCloseHandler);
   window.caseActionsCloseHandler=e=>{if(!e.target.closest('.case-actions'))document.getElementById('caseActionsMenu')?.classList.remove('open')};
@@ -628,7 +732,7 @@ function renderTechnicianPortal(){
       else if(act==='finalize')completeLabStage(c,sid)
       overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
       Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,notStarted:c.notStarted,assignee:c.assignee});
-      saveOverrides(overrides);renderTechnicianPortal();
+      saveOverrides(overrides);_syncCase(c);renderTechnicianPortal();
     });
   });
 }
@@ -864,9 +968,14 @@ function openNewCaseModal(defClinic){
     const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
     const type=document.getElementById('ncType').value.trim()||allWorkTypes()[0]||'Lucrare';
     rememberWorkType(type);
-    const nc={id:nextCaseId(),name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:document.getElementById('ncClinic').value,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:document.getElementById('ncIntrata').value,probaDate:document.getElementById('ncProba').value,finala:document.getElementById('ncFinala').value,teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
+    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:document.getElementById('ncClinic').value,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:document.getElementById('ncIntrata').value,probaDate:document.getElementById('ncProba').value,finala:document.getElementById('ncFinala').value,teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
+    if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
     nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
-    nc.priority=computePriority(nc);CASES.push(nc);persistNewCase(nc);if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
+    nc.priority=computePriority(nc);
+    if(SUPABASE_CONFIGURED){try{await sbSaveCase(nc)}catch(e){alert('Eroare la salvare: '+e.message);return}}
+    else{persistNewCase(nc)}
+    CASES.unshift(nc);
+    if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
     updateMainSummary();
     if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
   });
@@ -885,7 +994,7 @@ function openQuickEdit(id){
     c.deadlineUrgent=labDeadlineStatus(c).urgent;
     c.priority=computePriority(c);
     overrides.edits=overrides.edits||{};overrides.edits[c.id]={name:c.name,stage:c.stage,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,finala:c.finala,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority};
-    saveOverrides(overrides);closeModal();renderCaseDetail();if(typeof renderTable==='function')renderTable();renderPipeline();
+    saveOverrides(overrides);_syncCase(c);closeModal();renderCaseDetail();if(typeof renderTable==='function')renderTable();renderPipeline();
   });
 }
 
@@ -925,17 +1034,101 @@ function buildFisaHTML(c){
 function generateFisaPDF(c){
   if(typeof html2pdf==='undefined'){alert('Librăria nu s-a încărcat');return}
   const w=document.createElement('div');w.innerHTML=buildFisaHTML(c);w.style.position='absolute';w.style.left='-9999px';document.body.appendChild(w);
-  html2pdf().from(w.firstElementChild).set({margin:[6,6,6,6],filename:`fisa-${c.id}-${(c.lastName||c.name).split(' ')[0].toLowerCase()}.pdf`,html2canvas:{scale:2.5},jsPDF:{unit:'mm',format:'a5',orientation:'portrait'}}).save().finally(()=>document.body.removeChild(w));
+  html2pdf().from(w.firstElementChild).set({margin:[6,6,6,6],filename:`fisa-${c.id}-${(c.lastName||c.name||'').split(' ')[0].toLowerCase()||'caz'}.pdf`,html2canvas:{scale:2.5,useCORS:true},jsPDF:{unit:'mm',format:'a5',orientation:'portrait'}}).save().finally(()=>document.body.removeChild(w));
+}
+
+function previewFisaPDF(c){
+  const html=buildFisaHTML(c);
+  openModal(`<div class="modal-head"><div class="modal-title">Fișă caz #${c.id} · ${c.name}</div><button class="modal-close" type="button">×</button></div><div class="modal-body" style="padding:0;overflow:auto;max-height:72vh"><div style="padding:16px;background:#F3F4F6">${html}</div></div><div class="modal-foot"><button class="btn modal-close" type="button">Închide</button><button class="btn primary" id="pdfDlBtn" type="button">Descarcă PDF</button></div>`,'modal-wide');
+  document.getElementById('pdfDlBtn')?.addEventListener('click',()=>generateFisaPDF(c));
 }
 
 // === LOGIN ===
 function renderLogin(){
   const root=document.getElementById('loginShell');if(!root)return;
-  const techBtns=EMPLOYEES.map(e=>`<button class="login-role-btn" data-user='${JSON.stringify({id:e.id,name:e.name,initials:e.initials,role:'tech'})}' data-href="tehnician.html"><div class="login-role-icon">${e.initials}</div><div><span class="login-role-name">${e.name}</span><div class="login-role-sub">Tehnician</div></div></button>`).join('');
-  const clinicBtns=CLINICS.map(c=>`<button class="login-role-btn" data-user='${JSON.stringify({id:'clinic_'+c.id,name:c.name,initials:c.name.slice(0,2),role:'clinic',clinic:c.id})}' data-href="clinic.html?id=${c.id}"><div class="login-role-icon">${c.name.slice(0,2)}</div><div><span class="login-role-name">${c.name}</span><div class="login-role-sub">${c.doctor}</div></div></button>`).join('');
-  root.innerHTML=`<div class="login-shell"><div class="login-box"><div class="login-brand"><div class="login-brand-mark">L</div><div class="login-brand-name">Laborator Dentar</div></div><div class="login-prompt">Continuă ca:</div><button class="login-role-btn" data-user='{"id":"admin","name":"Admin","initials":"AD","role":"admin"}' data-href="index.html"><div class="login-role-icon">AD</div><div><span class="login-role-name">Admin / Manager</span><div class="login-role-sub">Acces complet</div></div></button><div class="login-divider">Tehnicieni</div>${techBtns}<button class="login-role-btn" id="showCl"><div class="login-role-icon">CL</div><div><span class="login-role-name">Reprezentant clinică</span><div class="login-role-sub">Doar cazurile clinicii</div></div></button><div class="login-clinic-select" id="clSel">${clinicBtns}</div><div class="login-divider">demo</div><div class="login-foot">Selectează cine ești</div></div></div>`;
-  document.getElementById('showCl')?.addEventListener('click',()=>document.getElementById('clSel').classList.toggle('show'));
-  root.querySelectorAll('[data-user]').forEach(b=>b.addEventListener('click',()=>{try{setCurrentUser(JSON.parse(b.dataset.user));location.href=b.dataset.href}catch(e){console.error(e)}}));
+  const sb=typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED;
+  const clinicOpts=CLINICS.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  const empOpts=EMPLOYEES.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  if(sb){
+    // Supabase mode: username + password
+    root.innerHTML=`<div class="login-shell"><div class="login-box"><div class="login-brand"><div class="login-brand-mark">L</div><div class="login-brand-name">Laborator Dentar</div></div>
+<div id="loginForm"><div class="login-prompt">Autentificare</div>
+<div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="ex: maria_t" autocomplete="username"></div>
+<div class="field" style="margin-bottom:16px"><label>Parolă</label><input id="lPass" type="password" autocomplete="current-password"></div>
+<div id="loginErr" class="login-err" style="display:none"></div>
+<button class="btn primary" id="lSubmit" style="width:100%;margin-bottom:12px">Intră în cont</button>
+<button class="btn" id="showReg" style="width:100%;font-size:12px">Nu ai cont? Înregistrare</button></div>
+<div id="regForm" style="display:none"><div class="login-prompt">Cont nou</div>
+<div class="field" style="margin-bottom:10px"><label>Utilizator</label><input id="rUser" placeholder="ex: maria_t" autocomplete="username"></div>
+<div class="field" style="margin-bottom:10px"><label>Parolă</label><input id="rPass" type="password" autocomplete="new-password"></div>
+<div class="field" style="margin-bottom:10px"><label>Rol</label><select id="rRole"><option value="technician">Tehnician</option><option value="clinic">Clinică</option><option value="admin">Admin</option></select></div>
+<div id="rClinicWrap" class="field" style="margin-bottom:10px;display:none"><label>Clinică</label><select id="rClinic">${clinicOpts}</select></div>
+<div id="rEmpWrap" class="field" style="margin-bottom:16px;display:none"><label>Cont tehnician</label><select id="rEmp">${empOpts}</select></div>
+<div id="regErr" class="login-err" style="display:none"></div>
+<button class="btn primary" id="rSubmit" style="width:100%;margin-bottom:12px">Creează cont</button>
+<button class="btn" id="showLogin" style="width:100%;font-size:12px">← Înapoi la autentificare</button></div>
+</div></div>`;
+    // Login submit
+    const doLogin=async()=>{
+      const u=root.querySelector('#lUser').value.trim(),p=root.querySelector('#lPass').value;
+      if(!u||!p){_loginErr('loginErr','Completați toate câmpurile');return}
+      root.querySelector('#lSubmit').textContent='...';
+      try{const prof=await sbSignIn(u,p);_redirectAfterLogin(prof)}
+      catch(e){root.querySelector('#lSubmit').textContent='Intră în cont';_loginErr('loginErr',e.message||'Eroare de autentificare')}
+    };
+    root.querySelector('#lSubmit')?.addEventListener('click',doLogin);
+    root.querySelector('#lPass')?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+    root.querySelector('#showReg')?.addEventListener('click',()=>{root.querySelector('#loginForm').style.display='none';root.querySelector('#regForm').style.display=''});
+    root.querySelector('#showLogin')?.addEventListener('click',()=>{root.querySelector('#regForm').style.display='none';root.querySelector('#loginForm').style.display=''});
+    root.querySelector('#rRole')?.addEventListener('change',e=>{
+      root.querySelector('#rClinicWrap').style.display=e.target.value==='clinic'?'':'none';
+      root.querySelector('#rEmpWrap').style.display=e.target.value==='technician'?'':'none';
+    });
+    root.querySelector('#rSubmit')?.addEventListener('click',async()=>{
+      const u=root.querySelector('#rUser').value.trim(),p=root.querySelector('#rPass').value;
+      const role=root.querySelector('#rRole').value;
+      const clinic=root.querySelector('#rClinic').value;
+      const emp=root.querySelector('#rEmp').value;
+      if(!u||!p){_loginErr('regErr','Completați toate câmpurile');return}
+      root.querySelector('#rSubmit').textContent='...';
+      try{
+        await sbSignUp(u,p,role,role==='clinic'?clinic:null,role==='technician'?emp:null);
+        const prof=await sbSignIn(u,p);_redirectAfterLogin(prof);
+      }catch(e){root.querySelector('#rSubmit').textContent='Creează cont';_loginErr('regErr',e.message||'Eroare la înregistrare')}
+    });
+  } else {
+    // Legacy demo mode (no Supabase) — role selection buttons
+    const techBtns=EMPLOYEES.map(e=>`<button class="login-role-btn" data-user='${JSON.stringify({id:e.id,name:e.name,initials:e.initials,role:'tech'})}' data-href="tehnician.html"><div class="login-role-icon">${e.initials}</div><div><span class="login-role-name">${e.name}</span><div class="login-role-sub">Tehnician</div></div></button>`).join('');
+    const clinicBtns=CLINICS.map(c=>`<button class="login-role-btn" data-user='${JSON.stringify({id:'clinic_'+c.id,name:c.name,initials:c.name.slice(0,2),role:'clinic',clinic:c.id})}' data-href="clinic.html?id=${c.id}"><div class="login-role-icon">${c.name.slice(0,2)}</div><div><span class="login-role-name">${c.name}</span><div class="login-role-sub">${c.doctor}</div></div></button>`).join('');
+    root.innerHTML=`<div class="login-shell"><div class="login-box"><div class="login-brand"><div class="login-brand-mark">L</div><div class="login-brand-name">Laborator Dentar</div></div><div class="login-notice">Supabase neconfigurat — mod demo</div><div class="login-prompt">Continuă ca:</div><button class="login-role-btn" data-user='{"id":"admin","name":"Admin","initials":"AD","role":"admin"}' data-href="index.html"><div class="login-role-icon">AD</div><div><span class="login-role-name">Admin / Manager</span><div class="login-role-sub">Acces complet</div></div></button><div class="login-divider">Tehnicieni</div>${techBtns}<button class="login-role-btn" id="showCl"><div class="login-role-icon">CL</div><div><span class="login-role-name">Clinică</span><div class="login-role-sub">Doar cazurile clinicii</div></div></button><div class="login-clinici-select" id="clSel">${clinicBtns}</div></div></div>`;
+    root.querySelector('#showCl')?.addEventListener('click',()=>root.querySelector('#clSel').classList.toggle('show'));
+    root.querySelectorAll('[data-user]').forEach(b=>b.addEventListener('click',()=>{try{setCurrentUser(JSON.parse(b.dataset.user));location.href=b.dataset.href}catch(e){console.error(e)}}));
+  }
+}
+function _loginErr(id,msg){const el=document.getElementById(id);if(el){el.textContent=msg;el.style.display='block'}}
+function _redirectAfterLogin(prof){
+  if(!prof)return;
+  if(prof.role==='clinic')location.href=`clinic.html?id=${prof.clinic_id}`;
+  else if(prof.role==='technician')location.href='tehnician.html';
+  else location.href='index.html';
+}
+
+// === ACTIVITY LOG ===
+async function renderActivityLog(){
+  const root=document.getElementById('activityShell');if(!root)return;
+  const user=getCurrentUser();if(user?.role!=='admin'&&user?.role!=='ad'){return}
+  root.innerHTML=`<h1 style="font-size:20px;font-weight:500;margin:0 0 4px">Istoricul activității</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Toate acțiunile înregistrate în sistem</div><div id="actLog" style="font-size:13px">Se încarcă...</div>`;
+  const logs=await sbLoadActivityLog(300);
+  if(!logs.length){document.getElementById('actLog').innerHTML='<div style="color:var(--text-dim);font-style:italic;padding:16px 0">Nicio activitate înregistrată.</div>';return}
+  const actionLabel={add_case:'Adăugat caz',update_case:'Actualizat caz',delete_case:'Șters caz',add_file:'Fișier adăugat',login:'Autentificare'};
+  const rows=logs.map(l=>{
+    const dt=new Date(l.created_at);
+    const date=dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const time=dt.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});
+    const det=l.details?Object.entries(l.details).map(([k,v])=>`${k}: ${v}`).join(' · '):'';
+    return`<div class="act-row"><span class="act-time">${date} ${time}</span><span class="act-user">${l.username||'?'}</span><span class="act-role act-${l.role}">${l.role||''}</span><span class="act-action">${actionLabel[l.action]||l.action}</span><span class="act-detail">${det}</span></div>`;
+  }).join('');
+  document.getElementById('actLog').innerHTML=`<div class="act-table">${rows}</div>`;
 }
 
 // === SEARCH + FILTERS ===
@@ -1013,6 +1206,7 @@ function openInlineNoteEditor(anchor, c) {
     overrides.edits[c.id]=overrides.edits[c.id]||{};
     overrides.edits[c.id].notes=c.notes;
     saveOverrides(overrides);
+    _syncCase(c);
     pop.remove();
     if(typeof renderTable==='function')renderTable();
     if(typeof renderPipeline==='function')renderPipeline();
@@ -1034,6 +1228,7 @@ function updateCaseField(c, field, value) {
   overrides.edits[c.id].deadlineUrgent = c.deadlineUrgent;
   overrides.edits[c.id].priority = c.priority;
   saveOverrides(overrides);
+  _syncCase(c);
 }
 
 function attachInlineEditors(root) {
@@ -1090,6 +1285,7 @@ function attachInlineEditors(root) {
         overrides.edits[c.id] = overrides.edits[c.id] || {};
         overrides.edits[c.id].priority = sel.value;
         saveOverrides(overrides);
+        _syncCase(c);
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
       }, 'Prioritate');
@@ -1114,6 +1310,7 @@ function attachInlineEditors(root) {
         overrides.stages = overrides.stages || {};
         overrides.stages[c.id] = sel.value;
         saveOverrides(overrides);
+        _syncCase(c);
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
       }, 'Schimbă etapă', { positionAnchor: el.closest('td') || el });
@@ -1171,6 +1368,7 @@ function attachInlineEditors(root) {
           notStarted: c.notStarted
         });
         saveOverrides(overrides);
+        _syncCase(c);
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
       }, 'Etapă: ' + (getStage(stage)?.name || stage), { positionAnchor: el.closest('td') || el.closest('.flow') || el });
@@ -1210,6 +1408,7 @@ function attachInlineEditors(root) {
       overrides.edits[c.id].deadlineUrgent = c.deadlineUrgent;
       overrides.edits[c.id].priority = c.priority;
       saveOverrides(overrides);
+      _syncCase(c);
       if (typeof renderTable === 'function') renderTable();
       if (typeof renderPipeline === 'function') renderPipeline();
     });
@@ -1234,6 +1433,7 @@ function attachInlineEditors(root) {
       overrides.edits[c.id] = overrides.edits[c.id] || {};
       overrides.edits[c.id].name = c.name;
       saveOverrides(overrides);
+      _syncCase(c);
       if (typeof renderTable === 'function') renderTable();
       if (typeof renderPipeline === 'function') renderPipeline();
     });
@@ -1258,6 +1458,7 @@ function attachInlineEditors(root) {
         overrides.edits[c.id] = overrides.edits[c.id] || {};
         overrides.edits[c.id].clinic = sel.value;
         saveOverrides(overrides);
+        _syncCase(c);
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
       }, 'Schimbă clinică');
@@ -1311,7 +1512,20 @@ if (typeof window !== 'undefined') {
   }, 0);
 }
 
-document.addEventListener('DOMContentLoaded',()=>{
+async function initApp(){
+  // Login page — just render login form, no auth needed
+  if(document.getElementById('loginShell')){renderLogin();return}
+  // Auth + data loading
+  if(SUPABASE_CONFIGURED){
+    const prof=await sbRequireAuth();
+    if(!prof)return; // sbRequireAuth redirects to login.html if no session
+    const sbCases=await sbLoadCases();
+    if(sbCases){
+      CASES.length=0;
+      sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
+    }
+    sbSubscribeCases(reRenderAll);
+  }
   applySidebarRoles();
   updateMainSummary();
   renderClinic();
@@ -1323,10 +1537,13 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderClinici();
   renderTermeniPage();
   renderStats();
-  renderLogin();
   attachSearch();
   attachFilters();
   attachNotifications();
   attachMobileMenu();
   document.getElementById('newCaseBtnGlobal')?.addEventListener('click',()=>openNewCaseModal());
-});
+  if(document.getElementById('activityShell'))await renderActivityLog();
+  // Re-render table/pipeline after Supabase data loaded (table.js may have rendered with empty data)
+  if(SUPABASE_CONFIGURED&&typeof setMainView==='function')setMainView(localStorage.getItem('dental-lab-view')||'table');
+}
+document.addEventListener('DOMContentLoaded',initApp);

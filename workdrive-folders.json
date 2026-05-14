@@ -1,27 +1,38 @@
 {
   "crisdent": {
-    "folder_id": "",
+    "folder_id": "eokywbecdb38844074629bd90adf3ed5f4eae",
     "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/CRISDENT",
+    "url": "https://workdrive.zoho.eu/folder/eokywbecdb38844074629bd90adf3ed5f4eae",
     "label": "CRISDENT"
   },
   "pana": {
-    "folder_id": "",
+    "folder_id": "eokyw093140666d894ae18720eb01a2a4062c",
     "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/PANA DENT",
+    "url": "https://workdrive.zoho.eu/folder/eokyw093140666d894ae18720eb01a2a4062c",
     "label": "PANA DENT"
   },
   "elite": {
-    "folder_id": "",
+    "folder_id": "eokyw9fb75ba747cb43a0bfb0dad1b7f6395b",
     "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/ELITE MED",
+    "url": "https://workdrive.zoho.eu/folder/eokyw9fb75ba747cb43a0bfb0dad1b7f6395b",
     "label": "ELITE MED"
   },
   "fav": {
-    "folder_id": "",
+    "folder_id": "eokywa692ea75e6e84bf4a6704c1930fb3a73",
     "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/FAV DENTAL",
+    "url": "https://workdrive.zoho.eu/folder/eokywa692ea75e6e84bf4a6704c1930fb3a73",
     "label": "FAV DENTAL"
   },
   "esthetic": {
-    "folder_id": "",
+    "folder_id": "eokyw6314cf7dadd9466d9ed7577582106fbd",
     "path": "/Users/macos/Library/CloudStorage/ZohoWorkDriveTrueSync-PRIVATECAD/My Folders/LAB - Program/DENTAL ESTHETICS",
-    "label": "DENTAL ESTHETICS"
+    "url": "https://workdrive.zoho.eu/folder/eokyw6314cf7dadd9466d9ed7577582106fbd",
+    "label": "Dental Esthetics"
+  },
+  "melian": {
+    "folder_id": "eokyw819169514ec84575b75eeee39ec8cb90",
+    "path": "",
+    "url": "https://workdrive.zoho.eu/folder/eokyw819169514ec84575b75eeee39ec8cb90",
+    "label": "Melian Clinic"
   }
 }

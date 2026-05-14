@@ -25,8 +25,9 @@
     <a class="nav-item" href="echipa.html" data-roles="admin"><span class="nav-icon round"></span>Echipa</a>
     <a class="nav-item" href="workdrive.html" data-roles="admin,tech"><span class="nav-icon round"></span>WorkDrive</a>
     <a class="nav-item" href="termeni.html" data-roles="admin,tech"><span class="nav-icon round"></span>Termeni</a>
-    <div class="nav-section">Setări</div>
-    <a class="nav-item" href="login.html" data-roles="admin,tech,clinici"><span class="nav-icon round"></span>Schimbă rol</a>
+    <a class="nav-item" href="activity.html" data-roles="admin"><span class="nav-icon round"></span>Activitate</a>
+    <div class="nav-section">Cont</div>
+    <a class="nav-item" href="#" onclick="sbSignOut&&sbSignOut();return false" data-roles="admin,tech,clinic"><span class="nav-icon round"></span>Deconectare</a>
   </aside>
 
   <main class="main">
@@ -67,6 +68,7 @@
           <div class="chip-menu-item" data-value="elite">ELITE MED</div>
           <div class="chip-menu-item" data-value="fav">FAV Dental</div>
           <div class="chip-menu-item" data-value="esthetic">Dental Esthetic</div>
+          <div class="chip-menu-item" data-value="melian">Melian Clinic</div>
         </div>
       </div>
     </div>
@@ -74,7 +76,9 @@
     <div class="pipeline-board" id="pipeline" style="display:none"></div>
   </main>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/data.js"></script>
+<script src="js/supabase.js"></script>
 <script src="js/app.js"></script>
 <script src="js/table.js"></script>
 </body>
