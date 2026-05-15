@@ -565,6 +565,7 @@ function renderClinic(){
       <a href="${termsPageUrl(clinicId)}" class="btn">Termenii laboratorului</a>
       ${currentUser&&(currentUser.role==='admin'||currentUser.role==='technician'||currentUser.role==='tech')?'<a href="index.html" class="btn">Vezi panoul echipei</a>':''}
       <button class="btn primary" id="newCaseBtnClinic">+ Caz nou</button>
+      <button class="btn" id="clinicLogoutBtn" style="color:#A32D2D;border-color:#A32D2D">Deconectare</button>
     </div>
     <div class="pc-quick-row">
       <a class="pc-quick-card" href="${termsPageUrl(clinicId)}"><b>Termenii laboratorului</b><span>Consultați timpii de execuție înainte de a seta data finală.</span></a>
@@ -615,6 +616,7 @@ function renderClinic(){
   document.querySelectorAll('.pc-clinic-tab[data-clinic-id]').forEach(t=>{
     t.addEventListener('click',()=>{location.href=`clinic.html?id=${t.dataset.clinicId}`});
   });
+  document.getElementById('clinicLogoutBtn')?.addEventListener('click',()=>sbSignOut&&sbSignOut());
 }
 
 function handleClinicAction(action,caseId){
@@ -628,10 +630,23 @@ function handleClinicAction(action,caseId){
     overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';saveOverrides(overrides);_syncCase(c);
     alert('Ridicare confirmată — lucrarea a fost arhivată');renderClinic();
   } else if(action==='note'){
-    const n=prompt('Adaugă notă:');if(n){c.notes=(c.notes||'')+'\n'+n;
-      overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};saveOverrides(overrides);
-      alert('Notă salvată');
-    }
+    function _parseNotes(raw){if(!raw)return[];try{const p=JSON.parse(raw);return Array.isArray(p)?p:[{text:raw,author:'—',initials:'—',ts:0}]}catch{return raw.trim()?[{text:raw,author:'—',initials:'—',ts:0}]:[]}}
+    openModal(`<div class="modal-head"><div class="modal-title">Notă · ${escHTML(c.name)}</div><button class="modal-close" type="button">×</button></div>
+      <div class="modal-body">
+        <div class="note-list" id="clinicNoteList" style="margin-bottom:14px;max-height:200px;overflow-y:auto">${_parseNotes(c.notes).slice().reverse().map(n=>`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div class="note-text">${escHTML(n.text)}</div></div></div>`).join('')||'<div style="color:var(--text-dim);font-size:12px">Nicio notă.</div>'}
+        </div>
+        <div class="field"><label>Notă nouă</label><textarea id="clinicNoteInput" rows="3" placeholder="Scrie o notă..."></textarea></div>
+      </div>
+      <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="clinicNoteSave" type="button">Trimite</button></div>`);
+    document.getElementById('clinicNoteSave')?.addEventListener('click',()=>{
+      const txt=document.getElementById('clinicNoteInput')?.value.trim();if(!txt)return;
+      const user=getCurrentUser()||{name:'Clinică',initials:'CL'};
+      const notes=_parseNotes(c.notes);
+      notes.push({text:txt,author:user.name,initials:user.initials,ts:Date.now()});
+      c.notes=JSON.stringify(notes);
+      overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};
+      saveOverrides(overrides);_syncCase(c);closeModal();
+    });
   }
 }
 
@@ -678,10 +693,28 @@ function renderCaseDetail(){
   if(window.caseActionsCloseHandler)document.removeEventListener('click',window.caseActionsCloseHandler);
   window.caseActionsCloseHandler=e=>{if(!e.target.closest('.case-actions'))document.getElementById('caseActionsMenu')?.classList.remove('open')};
   document.addEventListener('click',window.caseActionsCloseHandler);
+  // Render existing notes from c.notes (stored as JSON array)
+  function parseNotes(raw){
+    if(!raw)return[];
+    try{const p=JSON.parse(raw);return Array.isArray(p)?p:[{text:raw,author:'—',initials:'—',ts:0}]}
+    catch{return raw.trim()?[{text:raw,author:'—',initials:'—',ts:0}]:[]}
+  }
+  function renderNoteList(){
+    const list=document.getElementById('noteList');if(!list)return;
+    const notes=parseNotes(c.notes);
+    if(!notes.length){list.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:8px 0">Nicio notă adăugată.</div>';return}
+    list.innerHTML=notes.slice().reverse().map(n=>`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div class="note-text">${escHTML(n.text)}</div></div></div>`).join('');
+  }
+  renderNoteList();
   document.getElementById('addNoteBtn')?.addEventListener('click',()=>{
-    const ta=document.getElementById('noteInput');if(!ta.value.trim())return;
-    document.getElementById('noteList').insertAdjacentHTML('afterbegin',`<div class="note-item"><div class="note-author">EU</div><div style="flex:1"><div class="note-meta"><b>Tu</b> · acum</div><div class="note-text">${ta.value}</div></div></div>`);
-    ta.value='';
+    const ta=document.getElementById('noteInput');const txt=ta.value.trim();if(!txt)return;
+    const user=getCurrentUser()||{name:'Utilizator',initials:'?'};
+    const notes=parseNotes(c.notes);
+    notes.push({text:txt,author:user.name,initials:user.initials,ts:Date.now()});
+    c.notes=JSON.stringify(notes);
+    overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};
+    saveOverrides(overrides);_syncCase(c);
+    ta.value='';renderNoteList();
   });
 }
 
@@ -1255,21 +1288,29 @@ function openInlinePopover(anchor, items, onSelect, header, options={}) {
   }, 0);
 }
 
+function _parseNotes(raw){if(!raw)return[];try{const p=JSON.parse(raw);return Array.isArray(p)?p:[{text:raw,author:'—',initials:'—',ts:0}]}catch{return raw.trim()?[{text:raw,author:'—',initials:'—',ts:0}]:[]}}
+function _noteItemHTML(n){return`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div class="note-text">${escHTML(n.text)}</div></div></div>`}
+
 function openInlineNoteEditor(anchor, c) {
   document.querySelectorAll('.inline-note-editor').forEach(p => p.remove());
+  const existing=_parseNotes(c.notes);
   const pop = document.createElement('div');
   pop.className = 'inline-note-editor';
-  pop.innerHTML = `<div class="inline-pop-header">Notițe caz</div>
-    <textarea class="inline-note-input" rows="5" placeholder="Adaugă notițe...">${escHTML(c.notes||'')}</textarea>
-    <div class="inline-note-actions"><button class="btn" type="button" data-note-cancel>Anulează</button><button class="btn primary" type="button" data-note-save>Salvează</button></div>`;
+  pop.innerHTML = `<div class="inline-pop-header">Notițe · ${escHTML(c.name)}</div>
+    ${existing.length?`<div class="note-list" style="max-height:140px;overflow-y:auto;margin-bottom:8px">${existing.slice().reverse().map(_noteItemHTML).join('')}</div>`:''}
+    <textarea class="inline-note-input" rows="3" placeholder="Adaugă o notă nouă..."></textarea>
+    <div class="inline-note-actions"><button class="btn" type="button" data-note-cancel>Anulează</button><button class="btn primary" type="button" data-note-save>Trimite</button></div>`;
   document.body.appendChild(pop);
   positionFloatingUnder(pop, anchor.closest('td') || anchor);
   const ta=pop.querySelector('.inline-note-input');
   ta.focus();
-  ta.setSelectionRange(ta.value.length,ta.value.length);
   pop.querySelector('[data-note-cancel]')?.addEventListener('click',()=>pop.remove());
   pop.querySelector('[data-note-save]')?.addEventListener('click',()=>{
-    c.notes=ta.value.trim();
+    const txt=ta.value.trim();if(!txt)return;
+    const user=getCurrentUser()||{name:'Utilizator',initials:'?'};
+    const notes=_parseNotes(c.notes);
+    notes.push({text:txt,author:user.name,initials:user.initials,ts:Date.now()});
+    c.notes=JSON.stringify(notes);
     overrides.edits=overrides.edits||{};
     overrides.edits[c.id]=overrides.edits[c.id]||{};
     overrides.edits[c.id].notes=c.notes;
