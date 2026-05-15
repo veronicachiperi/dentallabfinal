@@ -367,8 +367,9 @@ button{font-family:inherit;cursor:pointer}
 .workdrive-frame-wrap iframe{display:block;width:100%;height:calc(100vh - 150px);min-height:520px;border:0}
 
 /* Clinic portal */
-.pc-shell{max-width:1100px;margin:0 auto}
-.pc-topbar{padding:14px 24px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;gap:14px;background:var(--bg)}
+.pc-topbar-wrap{background:var(--bg);border-bottom:0.5px solid var(--border);position:sticky;top:0;z-index:20}
+.pc-shell{max-width:1100px;margin:0 auto;padding:0 24px}
+.pc-topbar{max-width:1100px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:14px;background:var(--bg)}
 .pc-logo{width:36px;height:36px;border-radius:var(--radius-md);background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500}
 .pc-clinic-name{font-size:16px;font-weight:500}
 .pc-clinic-sub{font-size:11px;color:var(--text-dim);margin-top:2px}

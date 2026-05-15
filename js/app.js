@@ -554,7 +554,7 @@ function renderClinic(){
     ? CLINICS.map(cl=>`<button class="pc-clinic-tab ${cl.id===clinicId?'on':''}" data-clinic-id="${cl.id}">${cl.name}</button>`).join('')
     : '';
 
-  root.innerHTML=`<div class="pc-shell">
+  root.innerHTML=`<div class="pc-topbar-wrap">
     <div class="pc-topbar">
       <div class="pc-logo">${clinic.name.slice(0,2)}</div>
       <div>
@@ -567,6 +567,8 @@ function renderClinic(){
       <button class="btn primary" id="newCaseBtnClinic">+ Caz nou</button>
       <button class="btn" id="clinicLogoutBtn" style="color:#A32D2D;border-color:#A32D2D">Deconectare</button>
     </div>
+  </div>
+  <div class="pc-shell">
     <div class="pc-quick-row">
       <a class="pc-quick-card" href="${termsPageUrl(clinicId)}"><b>Termenii laboratorului</b><span>Consultați timpii de execuție înainte de a seta data finală.</span></a>
     </div>
@@ -598,6 +600,7 @@ function renderClinic(){
         </div>`;
       }).join('')}
     </div>
+  </div>
   </div>`;
 
   document.getElementById('newCaseBtnClinic')?.addEventListener('click',()=>openNewCaseModal(clinicId));
