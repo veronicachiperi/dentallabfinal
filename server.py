@@ -252,9 +252,11 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if urlparse(self.path).path == "/api/health":
+            root = root_folder_config()
             self.send_json(200, {
                 "ok":             True,
-                "uploadRoot":     str(UPLOAD_ROOT),
+                "labRoot":        str(root["path"]),
+                "labRootId":      root["folder_id"],
                 "workdriveMap":   str(WORKDRIVE_MAP_PATH),
                 "zohoConfigured": zoho_configured(),
                 "zohoRegion":     ZOHO_REGION if zoho_configured() else None,
