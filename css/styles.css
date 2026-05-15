@@ -123,11 +123,13 @@ button{font-family:inherit;cursor:pointer}
 .flow{display:inline-flex;align-items:center;gap:0;padding:2px 0}
 .node{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:white;flex-shrink:0;position:relative;z-index:1;cursor:pointer;transition:transform 0.1s}
 .node:hover{transform:scale(1.12)}
-.node.an{background:#444441}
-.node.vc{background:#534AB7}
-.node.mt{background:#1D9E75}
-.node.ik{background:#185FA5}
-.node.pc{background:#D85A30}
+.node.tchi{background:#5B8DEF}
+.node.vcel{background:#534AB7}
+.node.ikar{background:#185FA5}
+.node.acur{background:#D85A30}
+.node.vgra{background:#1D9E75}
+.node.amoi{background:#B07D2A}
+.node.avar{background:#444441}
 .node-em{width:22px;height:22px;border-radius:50%;border:1.2px dashed #B4B2A9;background:var(--bg);display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:#B4B2A9;font-weight:500;flex-shrink:0;position:relative;z-index:1;cursor:pointer;transition:all 0.1s}
 .node-em:hover{border-color:var(--text-muted);color:var(--text-muted);transform:scale(1.12)}
 .line{width:12px;height:1.5px;background:#D3D1C7;flex-shrink:0}
@@ -166,7 +168,7 @@ button{font-family:inherit;cursor:pointer}
 .kb-note-chip.has-note{color:var(--text);background:#fff}
 .kb-card-foot{display:flex;align-items:center;margin-top:4px;padding-top:6px;border-top:0.5px solid var(--border)}
 .kb-av{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:500;color:white;position:relative;flex-shrink:0}
-.kb-av.an{background:#444441}.kb-av.vc{background:#534AB7}.kb-av.mt{background:#1D9E75}.kb-av.ik{background:#185FA5}.kb-av.pc{background:#D85A30}
+.kb-av.tchi{background:#5B8DEF}.kb-av.vcel{background:#534AB7}.kb-av.ikar{background:#185FA5}.kb-av.acur{background:#D85A30}.kb-av.vgra{background:#1D9E75}.kb-av.amoi{background:#B07D2A}.kb-av.avar{background:#444441}
 .kb-tehnician-name{font-size:11px;color:var(--text-muted);margin-left:8px}
 .kb-unassigned{font-size:11px;color:var(--text-dim);font-style:italic}
 
@@ -343,7 +345,7 @@ button{font-family:inherit;cursor:pointer}
 .tl-name{font-weight:500;font-size:12px}
 .tl-meta{font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:5px;margin-top:2px}
 .tl-tech{width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:500;color:white}
-.tl-tech.an{background:#444441}.tl-tech.vc{background:#534AB7}.tl-tech.mt{background:#1D9E75}.tl-tech.ik{background:#185FA5}.tl-tech.pc{background:#D85A30}
+.tl-tech.tchi{background:#5B8DEF}.tl-tech.vcel{background:#534AB7}.tl-tech.ikar{background:#185FA5}.tl-tech.acur{background:#D85A30}.tl-tech.vgra{background:#1D9E75}.tl-tech.amoi{background:#B07D2A}.tl-tech.avar{background:#444441}
 
 .file-list{display:flex;flex-direction:column;gap:8px}
 .file-item{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--radius-sm);font-size:12px}
@@ -580,11 +582,13 @@ button{font-family:inherit;cursor:pointer}
 .ar-action-icon{font-size:11px;color:var(--text-secondary);padding:3px 8px;border:0.5px solid var(--border);border-radius:4px;background:var(--bg);cursor:pointer}
 .ar-tech-av-mini{display:inline-flex;align-items:center;gap:5px}
 .ar-tech-av-circle-mini{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:white}
-.ar-tech-av-circle-mini.an{background:#444441}
-.ar-tech-av-circle-mini.vc{background:#534AB7}
-.ar-tech-av-circle-mini.mt{background:#1D9E75}
-.ar-tech-av-circle-mini.ik{background:#185FA5}
-.ar-tech-av-circle-mini.pc{background:#D85A30}
+.ar-tech-av-circle-mini.tchi{background:#5B8DEF}
+.ar-tech-av-circle-mini.vcel{background:#534AB7}
+.ar-tech-av-circle-mini.ikar{background:#185FA5}
+.ar-tech-av-circle-mini.acur{background:#D85A30}
+.ar-tech-av-circle-mini.vgra{background:#1D9E75}
+.ar-tech-av-circle-mini.amoi{background:#B07D2A}
+.ar-tech-av-circle-mini.avar{background:#444441}
 
 /* === LOGIN === */
 .login-shell{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg-page)}
@@ -607,7 +611,13 @@ button{font-family:inherit;cursor:pointer}
 /* Sidebar profile block */
 .sidebar-profile{margin-top:auto;padding-top:14px;border-top:0.5px solid var(--border);display:flex;flex-direction:column;gap:8px}
 .sp-user{display:flex;align-items:center;gap:10px}
-.sp-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sp-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;cursor:pointer;transition:transform 0.12s}
+.sp-avatar:hover{transform:scale(1.08)}
+.avatar-color-picker{position:absolute;bottom:calc(100% + 8px);left:0;background:var(--bg);border:0.5px solid var(--border-strong);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.18);padding:10px;display:grid;grid-template-columns:repeat(6,24px);gap:6px;z-index:300}
+.avatar-color-picker::after{content:'';position:absolute;bottom:-5px;left:14px;width:9px;height:9px;background:var(--bg);border-right:0.5px solid var(--border-strong);border-bottom:0.5px solid var(--border-strong);transform:rotate(45deg)}
+.av-swatch{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform 0.1s,border-color 0.15s}
+.av-swatch:hover{transform:scale(1.18)}
+.av-swatch.selected{border-color:var(--accent)}
 .sp-info{min-width:0}
 .sp-name{font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sp-role{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px}
@@ -675,13 +685,13 @@ button{font-family:inherit;cursor:pointer}
 }
 
 /* Tab-uri clinici sus */
-.pc-clinici-tabs-row {
+.pc-clinic-tabs-row {
   padding: 0 24px 16px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
-.pc-clinici-tab {
+.pc-clinic-tab {
   font-size: 12px;
   padding: 6px 14px;
   border: 0.5px solid var(--border);
@@ -691,11 +701,11 @@ button{font-family:inherit;cursor:pointer}
   cursor: pointer;
   font-family: inherit;
 }
-.pc-clinici-tab:hover {
+.pc-clinic-tab:hover {
   background: var(--bg-soft);
   color: var(--text);
 }
-.pc-clinici-tab.on {
+.pc-clinic-tab.on {
   background: var(--accent);
   color: var(--bg);
   border-color: var(--accent);

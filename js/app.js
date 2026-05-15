@@ -132,6 +132,46 @@ function _syncCase(c){
   if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED)sbSaveCase(c).catch(e=>console.warn('[sb sync]',e.message));
 }
 
+// === AVATAR COLOR PICKER ===
+const AVATAR_PASTEL_COLORS=['#F28B82','#FBBC04','#34A853','#4285F4','#AA46BB','#FA7B17','#3DC4BF','#E8C27A','#B39DDB','#80DEEA','#A5D6A7','#FFAB91'];
+function getUserAvatarColor(userId){return localStorage.getItem('dental-lab-av-color-'+(userId||'me'))||'';}
+function setUserAvatarColor(userId,color){localStorage.setItem('dental-lab-av-color-'+(userId||'me'),color);}
+function applyUserAvatarColor(){
+  const user=getCurrentUser()||{id:'admin'};
+  const color=getUserAvatarColor(user.id);
+  if(!color)return;
+  const spAv=document.getElementById('spAvatar');
+  const topAv=document.getElementById('userAvatar');
+  if(spAv){spAv.style.background=color;spAv.style.color='white';}
+  if(topAv){topAv.style.background=color;topAv.style.color='white';}
+}
+function openAvatarColorPicker(){
+  const existing=document.getElementById('avatarColorPicker');
+  if(existing){existing.remove();return;}
+  const user=getCurrentUser()||{id:'admin'};
+  const current=getUserAvatarColor(user.id);
+  const picker=document.createElement('div');
+  picker.id='avatarColorPicker';
+  picker.className='avatar-color-picker';
+  picker.innerHTML=AVATAR_PASTEL_COLORS.map(c=>`<div class="av-swatch${c===current?' selected':''}" data-color="${c}" style="background:${c}" title="${c}"></div>`).join('');
+  picker.querySelectorAll('.av-swatch').forEach(sw=>{
+    sw.addEventListener('click',e=>{
+      e.stopPropagation();
+      const color=sw.dataset.color;
+      setUserAvatarColor(user.id,color);
+      applyUserAvatarColor();
+      picker.remove();
+    });
+  });
+  const spAv=document.getElementById('spAvatar');
+  if(spAv){
+    const wrap=spAv.parentElement;
+    wrap.style.position='relative';
+    wrap.appendChild(picker);
+  }
+  setTimeout(()=>document.addEventListener('click',function h(){picker.remove();document.removeEventListener('click',h);},{once:true}),10);
+}
+
 // === ROLE-BASED SIDEBAR ===
 function applySidebarRoles(){
   const user=getCurrentUser()||{role:'admin',name:'Admin',initials:'AD',id:'admin'};
@@ -144,9 +184,10 @@ function applySidebarRoles(){
   const spName=document.getElementById('spName');
   const spRole=document.getElementById('spRole');
   const roleLabel={admin:'Administrator',technician:'Tehnician',tech:'Tehnician',clinic:'Clinică'}[user.role]||user.role;
-  if(spAv)spAv.textContent=user.initials;
+  if(spAv){spAv.textContent=user.initials;spAv.onclick=e=>{e.stopPropagation();openAvatarColorPicker();};}
   if(spName)spName.textContent=user.name;
   if(spRole)spRole.textContent=roleLabel;
+  applyUserAvatarColor();
   // Status
   const savedStatus=localStorage.getItem('dental-lab-status')||'online';
   const spDot=document.getElementById('spStatusDot');
@@ -169,7 +210,7 @@ function applySidebarRoles(){
   });
   // Build sidebar if it's a dynamic sidebar (activity page etc.)
   const sb=document.getElementById('sidebar');
-  if(sb&&sb.children.length===0)sb.innerHTML=buildSidebarHTML(user.role,user);
+  if(sb&&sb.children.length===0){sb.innerHTML=buildSidebarHTML(user.role,user);applyUserAvatarColor();}
 }
 
 function buildSidebarHTML(role,user){
@@ -866,7 +907,7 @@ function renderEchipa(){
     if(st==='finalizat')stats[t].done++;
     else if(st==='in_lucru'||st==='la_proba'){stats[t].active++;if(c.late)stats[t].late++}
   }));
-  root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a><div class="nav-section">Date</div><a class="nav-item" href="clinici.html"><span class="nav-icon round"></span>Clinici</a><a class="nav-item active" href="echipa.html"><span class="nav-icon round"></span>Echipa</a></aside><main class="main"><div style="padding:24px;max-width:900px"><h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Echipa</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id];const stageColor={pc:'#D85A30',ik:'#185FA5',vc:'#534AB7',mt:'#1D9E75',an:'#444441'}[e.id];const role={pc:'Designer (CAD)',ik:'Tehnician CAM',vc:'Tehnician prelucrare',mt:'Tehnician ceramică',an:'Tehnician finisaj'}[e.id]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${e.initials}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${e.name}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div></div></main></div>`;
+  root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><a class="nav-item" href="stats.html"><span class="nav-icon"></span>Statistici</a><div class="nav-section">Date</div><a class="nav-item" href="clinici.html"><span class="nav-icon round"></span>Clinici</a><a class="nav-item active" href="echipa.html"><span class="nav-icon round"></span>Echipa</a></aside><main class="main"><div style="padding:24px;max-width:900px"><h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Echipa</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id];const TECH_COLORS={tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'};const TECH_ROLES={design:'Designer CAD',cam:'Tehnician CAM',ceramica:'Tehnician ceramică',prelucrare:'Tehnician prelucrare'};const stageColor=TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${e.initials}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${e.name}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div></div></main></div>`;
 }
 
 // === STATS ===
@@ -885,7 +926,7 @@ function renderStats(){
     new Chart(document.getElementById('chartClinic'),{type:'bar',data:{labels:cd.map(c=>c.name),datasets:[{data:cd.map(c=>c.count),backgroundColor:'#1a1a1a'}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}});
     const techCnt={};EMPLOYEES.forEach(e=>techCnt[e.id]=0);
     CASES.forEach(c=>{Object.values(c.assignees||{}).forEach(t=>{if(techCnt[t]!==undefined)techCnt[t]++})});
-    new Chart(document.getElementById('chartTech'),{type:'bar',data:{labels:EMPLOYEES.map(e=>e.name),datasets:[{data:EMPLOYEES.map(e=>techCnt[e.id]),backgroundColor:['#D85A30','#185FA5','#534AB7','#444441','#1D9E75']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+    new Chart(document.getElementById('chartTech'),{type:'bar',data:{labels:EMPLOYEES.map(e=>e.name),datasets:[{data:EMPLOYEES.map(e=>techCnt[e.id]),backgroundColor:EMPLOYEES.map(e=>({tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'})[e.id]||'#8B8B8B')}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
     new Chart(document.getElementById('chartOnTime'),{type:'doughnut',data:{labels:['La timp','Întârziate'],datasets:[{data:[onTime.onTime,onTime.late],backgroundColor:['#1D9E75','#A32D2D'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%'}});
   },50);
 }
