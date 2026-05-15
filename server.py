@@ -193,6 +193,25 @@ def load_workdrive_map():
         return {}
 
 
+def root_folder_config():
+    mapping = load_workdrive_map()
+    root = mapping.get("_root") or {}
+    if isinstance(root, str):
+        root = {"path": root}
+    configured_path = root.get("path")
+    folder_path = (
+        Path(configured_path).expanduser()
+        if configured_path
+        else UPLOAD_ROOT
+    )
+    return {
+        "path":      folder_path,
+        "folder_id": root.get("folder_id", ""),
+        "url":       root.get("url", ""),
+        "label":     root.get("label", "LAB"),
+    }
+
+
 def clinic_folder_config(clinic_id, clinic_name):
     mapping = load_workdrive_map()
     value = mapping.get(clinic_id) or mapping.get(clinic_name) or {}
@@ -200,18 +219,20 @@ def clinic_folder_config(clinic_id, clinic_name):
         value = {"path": value}
     folder_id = value.get("folder_id", "")
     configured_path = value.get("path")
+    root = root_folder_config()
     folder_path = (
         Path(configured_path).expanduser()
         if configured_path
-        else Path(safe_name(clinic_name or clinic_id, "Unknown clinic"))
+        else root["path"] / safe_name(clinic_name or clinic_id, "Unknown clinic")
     )
     if not folder_path.is_absolute():
-        folder_path = UPLOAD_ROOT / folder_path
+        folder_path = root["path"] / folder_path
     return {
         "path":      folder_path,
         "folder_id": folder_id,
         "url":       value.get("url", ""),
         "label":     value.get("label") or clinic_name or clinic_id,
+        "root_folder_id": root["folder_id"],
     }
 
 
@@ -278,12 +299,18 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
 
         saved = []
 
-        if zoho_configured() and clinic_folder["folder_id"]:
+        # Use clinic folder_id; if missing, fall back to root → create clinic subfolder first
+        effective_folder_id = clinic_folder["folder_id"] or clinic_folder.get("root_folder_id", "")
+        if zoho_configured() and effective_folder_id:
             # ── Zoho WorkDrive API path ──────────────────────
             try:
-                case_folder_id = zoho_find_or_create_folder(
-                    clinic_folder["folder_id"], case_folder_name
-                )
+                parent_id = effective_folder_id
+                if not clinic_folder["folder_id"] and clinic_folder.get("root_folder_id"):
+                    parent_id = zoho_find_or_create_folder(
+                        clinic_folder["root_folder_id"],
+                        safe_name(clinic, "Clinica")
+                    )
+                case_folder_id = zoho_find_or_create_folder(parent_id, case_folder_name)
             except Exception as e:
                 self.send_json(500, {"ok": False, "error": f"Folder error: {e}"})
                 return

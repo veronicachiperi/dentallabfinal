@@ -65,7 +65,11 @@ function renderTableRow(c) {
   const deadlineUrgent = labDeadlineStatus(c).urgent;
   const dueClass = c.late || deadlineUrgent ? 'late' : c.warn ? 'warn' : '';
   const finalText = c.late ? 'restant' : c.finala;
-  const noteText = (c.notes || '—').replace(/</g, '&lt;');
+  const parsedNotes=typeof _parseNotes==='function'?_parseNotes(c.notes):[];
+  const lastNote=parsedNotes.length?parsedNotes[parsedNotes.length-1].text:'';
+  const noteText=lastNote||'—';
+  const noteEsc=noteText.replace(/</g,'&lt;');
+  const hasNote=parsedNotes.length>0;
  return `<tr data-case-id="${c.id}" class="${c.notStarted?'tbl-row-faded':''}">
     <td><span class="tbl-num">#${c._monthlyNum || c.id}</span></td>
     <td><span class="tbl-name">${c.name}</span></td>
@@ -78,7 +82,7 @@ function renderTableRow(c) {
     <td><span class="tbl-prio ${c.priority}">${c.priority}</span></td>
     <td>${renderFlowIndicator(c)}</td>
     <td><span class="tbl-pill" style="background:${withAlpha(stageColor,0.15)};color:${stageColor}">${stageIcon}<span style="margin-left:${stageIcon?'4px':'0'}">${stageLabel}</span></span></td>
-    <td><span class="tbl-notes" title="${noteText}">${noteText}</span></td>
+    <td><span class="tbl-notes ${hasNote?'has-note':''}" title="${noteEsc}">${noteEsc}</span></td>
   </tr>`;
 }
 
@@ -171,7 +175,7 @@ function handleStageClick(caseId, stageId) {
 function exportCSV() {
   const cases = applyFilter(CASES);
   const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Intrată','Probă','Finală','Prioritate','Dinți','Implant','Amprentă','Note'];
-  const rows = cases.map(c => [c.id, c.name, getClinic(c.clinic).name, c.doctor || getClinic(c.clinic).doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), c.implantType || '', c.amprentaType || '', (c.notes || '').replace(/[\r\n]+/g, ' ')]);
+  const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');return [c.id, c.name, getClinic(c.clinic).name, c.doctor || getClinic(c.clinic).doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), c.implantType || '', c.amprentaType || '', notes]});
   const csv = [headers, ...rows].map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
