@@ -36,6 +36,7 @@ function persistCaseFiles(caseId,files){
   attachments[caseId]=saved;
   saveAttachments(attachments);
 }
+const UPLOAD_SERVER='http://localhost:8003';
 async function storeCaseFiles(caseId,files){
   const arr=Array.from(files||[]);
   if(!arr.length)return 0;
@@ -47,7 +48,7 @@ async function storeCaseFiles(caseId,files){
   fd.append('patientName',c?.name||`case-${caseId}`);
   arr.forEach(f=>fd.append('files',f,f.name));
   try{
-    const res=await fetch('/api/upload',{method:'POST',body:fd});
+    const res=await fetch(UPLOAD_SERVER+'/api/upload',{method:'POST',body:fd});
     if(!res.ok)throw new Error('upload failed');
     const json=await res.json();
     const saved=filesForCase(caseId).slice();
