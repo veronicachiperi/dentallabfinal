@@ -144,6 +144,8 @@ function attachTableHandlers(root) {
   if(window.tableActionsCloseHandler)document.removeEventListener('click',window.tableActionsCloseHandler);
   window.tableActionsCloseHandler=e=>{if(!e.target.closest('.row-actions'))root.querySelectorAll('.row-actions-menu.open').forEach(m=>m.classList.remove('open'))};
   document.addEventListener('click',window.tableActionsCloseHandler);
+  // Always attach inline editors after table renders
+  if(typeof attachInlineEditors==='function')attachInlineEditors(root);
 }
 
 function handleStageClick(caseId, stageId) {

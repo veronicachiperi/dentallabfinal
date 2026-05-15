@@ -713,7 +713,7 @@ button{font-family:inherit;cursor:pointer}
 
 /* === INLINE POPOVER (dropdown for editing) === */
 .inline-popover {
-  position: absolute;
+  position: fixed;
   background: var(--bg);
   border: 0.5px solid var(--border-strong);
   border-radius: var(--radius-md);
@@ -759,7 +759,7 @@ button{font-family:inherit;cursor:pointer}
   background: var(--bg-soft);
 }
 .inline-note-editor {
-  position: absolute;
+  position: fixed;
   z-index: 1001;
   width: 280px;
   background: var(--bg);
