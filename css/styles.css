@@ -118,6 +118,8 @@ button{font-family:inherit;cursor:pointer}
 .row-actions-menu.open{display:flex;flex-direction:column;gap:1px}
 .row-actions-menu button{border:none;background:transparent;text-align:left;padding:8px 10px;border-radius:var(--radius-sm);font-size:12px;color:var(--text)}
 .row-actions-menu button:hover{background:var(--bg-soft)}
+.row-actions-menu button.danger{color:var(--late)}
+.row-actions-menu button.danger:hover{background:var(--late-bg,#FCEBEB)}
 
 /* Etape lab — 4-stage flow with avatar nodes */
 .flow{display:inline-flex;align-items:center;gap:0;padding:2px 0}

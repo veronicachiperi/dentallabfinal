@@ -117,7 +117,7 @@ function _dbToCase(row) {
     type:         row.type           || '',
     color:        row.color          || '',
     stage:        row.stage          || 'design',
-    notStarted:   row.not_started !== false,
+    notStarted:   row.not_started === true,
     assignee:     row.assignee       || null,
     assignees:    row.assignees      || {},
     stageStatuses:row.stage_statuses || {},
