@@ -654,13 +654,32 @@ function renderClinic(){
   const ready=cases.filter(c=>c.stage==='terminat');
   const late=cases.filter(c=>c.late);
 
-  const CLINIC_STAGES=['design','cam','prelucrare','ceramica','proba','terminat'];
+  function clinicFlowFor(c){
+    const labStages=getEtapeLabStages(c.type);
+    return ['design','proba_aprobata',...labStages.filter(s=>s!=='design'),'terminat'];
+  }
 
-  function progressPct(stageId){
-    if(stageId==='trimis')return 100;
-    const idx=CLINIC_STAGES.indexOf(stageId);
-    if(idx===-1)return 0;
-    return Math.round(((idx+1)/CLINIC_STAGES.length)*100);
+  function clinicProgressIndex(c){
+    if(isCaseNotStarted(c))return -1;
+    const flow=clinicFlowFor(c);
+    if(c.stage==='trimis')return flow.length-1;
+    if(probaApprovedStage(c))return flow.indexOf('proba_aprobata');
+    if(c.stage==='proba')return flow.indexOf('proba_aprobata');
+    return flow.indexOf(c.stage);
+  }
+
+  function progressPct(c){
+    const flow=clinicFlowFor(c);
+    const idx=clinicProgressIndex(c);
+    if(idx<0)return 0;
+    return Math.round(((idx+1)/flow.length)*100);
+  }
+
+  function clinicFlowHTML(c){
+    const flow=clinicFlowFor(c);
+    const idx=clinicProgressIndex(c);
+    const labels={design:'Design',proba_aprobata:'Probă aprobată',cam:'CAM',ceramica:'Ceramică',prelucrare:'Prelucrare',terminat:'Gata'};
+    return `<div class="pc-stage-trail">${flow.map((s,i)=>`<span class="${i<idx?'done':i===idx?'current':''}">${labels[s]}</span>`).join('<b>›</b>')}</div>`;
   }
 
   function ra(c){
@@ -708,7 +727,7 @@ function renderClinic(){
       </div>
       ${cases.map(c=>{
         const a=ra(c);
-        const pct=c.notStarted?0:progressPct(c.stage);
+        const pct=progressPct(c);
         const stageName=publicStageName(c);
         return `<div class="pc-row-grid ${isCaseNotStarted(c)?'not-started':''} ${isCaseAtProba(c)?'proba-row':''}" data-case-id="${c.id}">
           <div class="tbl-num">#${c.id}</div>
@@ -717,6 +736,7 @@ function renderClinic(){
           <div class="pc-progress-cell">
             <div class="pc-progress-bar"><div class="pc-progress-fill" style="width:${pct}%"></div></div>
             <span class="pc-progress-label">${stageName}</span>
+            ${clinicFlowHTML(c)}
           </div>
           <div class="tbl-due-bold ${c.late||labDeadlineStatus(c).urgent?'late':''}">${c.late?'restant':c.finala}</div>
           <div><button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button></div>
@@ -1339,68 +1359,27 @@ function buildFisaHTML(c){
     ? Object.entries(byType).map(([t,ns])=>`${labels[t]}: ${ns.sort((a,b)=>a-b).join(', ')}`).join(' | ')
     : 'Niciun dinte selectat';
   const notes=_parseNotes(c.notes).map(n=>safe(n.text)).join('<br>')||'Fără indicații suplimentare';
-  const teethRows=(c.teeth||[]).map(t=>`<tr>
-    <td>${safe(t.n)}</td>
-    <td>${safe((labels[t.type]||t.type||'—'))}</td>
-    <td>${safe(c.implantType)}</td>
-    <td>${safe(c.color)}</td>
-  </tr>`).join('')||'<tr><td colspan="4">Niciun dinte selectat</td></tr>';
-  const row=(a,b)=>`<div style="display:flex;gap:8px;margin-bottom:4px"><div style="width:72px;font-weight:700">${a}</div><div>${safe(b)}</div></div>`;
-  return `<div style="font-family:Arial,sans-serif;color:#111;font-size:10px;line-height:1.35;width:500px;background:#fff">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+  const row=(a,b,c1,d)=>`<tr><th>${a}</th><td>${safe(b)}</td><th>${c1}</th><td>${safe(d)}</td></tr>`;
+  return `<div style="font-family:Arial,sans-serif;color:#111;font-size:10px;line-height:1.3;width:500px;background:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:9px">
       <div>
-        <div style="font-size:16px;font-weight:700;margin-bottom:2px">Fișă de laborator</div>
+        <div style="font-size:15px;font-weight:700">Fișă de laborator</div>
         <div style="font-size:9px">LAB CAD · Laborator Dentar</div>
       </div>
       <div style="font-size:16px;font-weight:700">#${c.id}</div>
     </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:10px">
-      <div>
-        <div style="font-size:11px;font-weight:700;margin-bottom:5px">Informații caz</div>
-        ${row('Pacient',c.name)}
-        ${row('Clinică',cl.name)}
-        ${row('Medic',c.doctor)}
-        ${row('Etapă',stageName)}
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;margin-bottom:5px">Termene</div>
-        ${row('Intrată',c.intrata)}
-        ${row('Probă',c.probaDate)}
-        ${row('Finală',c.finala)}
-        ${row('Tehnician',tehnician)}
-      </div>
-    </div>
-
-    <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Lucrare</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:10px">
-      <thead>
-        <tr>
-          <th style="border-bottom:1px solid #111;text-align:left;padding:4px 5px">Dinte</th>
-          <th style="border-bottom:1px solid #111;text-align:left;padding:4px 5px">Tip</th>
-          <th style="border-bottom:1px solid #111;text-align:left;padding:4px 5px">Implant</th>
-          <th style="border-bottom:1px solid #111;text-align:left;padding:4px 5px">Culoare</th>
-        </tr>
-      </thead>
-      <tbody>${teethRows.replace(/<td>/g,'<td style="border-bottom:1px solid #ddd;padding:5px">')}</tbody>
+      ${row('Pacient',c.name,'Clinică',cl.name)}
+      ${row('Medic',c.doctor,'Tip lucrare',c.type)}
+      ${row('Intrată',c.intrata,'Probă',c.probaDate)}
+      ${row('Finală',c.finala,'Culoare',c.color)}
+      ${row('Implant',c.implantType,'Amprentă',c.amprentaType)}
     </table>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:10px">
-      <div>
-        <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Detalii</div>
-        ${row('Tip lucrare',c.type)}
-        ${row('Amprentă',c.amprentaType)}
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Schema dentară FDI</div>
-        <table style="border-collapse:collapse;width:100%;table-layout:fixed;margin-bottom:5px">${trow(upper)}${trow(lower)}</table>
-        <div style="font-size:8.5px"><b>Legendă:</b> C = Coroană, I = Implant, E = Emax, F = Fațetă</div>
-      </div>
-    </div>
-
-    <div style="font-size:9px;margin-bottom:8px"><b>Selectate:</b> ${summaryHTML}</div>
+    <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Schema dentară FDI</div>
+    <table style="border-collapse:collapse;width:100%;table-layout:fixed;margin-bottom:6px">${trow(upper)}${trow(lower)}</table>
+    <div style="font-size:9px;margin-bottom:10px"><b>Legendă:</b> C = Coroană, I = Implant, E = Emax, F = Fațetă<br><b>Selectate:</b> ${summaryHTML}</div>
     <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Indicații speciale</div>
-    <div style="min-height:42px;border:1px solid #999;padding:7px;margin-bottom:16px">${notes}</div>
+    <div style="min-height:46px;border:1px solid #999;padding:7px;margin-bottom:16px">${notes}</div>
     <div style="display:flex;gap:20px;margin-top:8px">
       <div style="flex:1;border-top:1px solid #111;padding-top:4px">Semnătura medic</div>
       <div style="flex:1;border-top:1px solid #111;padding-top:4px">Semnătura tehnician</div>
