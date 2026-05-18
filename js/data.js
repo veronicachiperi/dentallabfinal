@@ -193,9 +193,8 @@ function completeLabStage(c, stageId) {
   if (nextIdx > 0 && nextIdx < stages.length) {
     const next = stages[nextIdx];
     c.stage = next;
-    if (!c.stageStatuses[next] || c.stageStatuses[next] === 'neincepute') c.stageStatuses[next] = 'in_lucru';
-    if (!c.assignees[next]) c.assignees[next] = STAGE_ASSIGNEE_DEFAULTS[next];
-    c.assignee = c.assignees[next];
+    if (!c.stageStatuses[next]) c.stageStatuses[next] = 'neincepute';
+    c.assignee = c.assignees[next] || null;
   } else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) {
     c.stage = 'proba';
   }

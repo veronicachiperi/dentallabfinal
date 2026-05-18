@@ -139,6 +139,7 @@ button{font-family:inherit;cursor:pointer}
 .substate-badge{position:absolute;bottom:-3px;right:-3px;width:11px;height:11px;border-radius:50%;border:1.5px solid var(--bg);display:flex;align-items:center;justify-content:center;font-size:6.5px;font-weight:700;color:white}
 .substate-badge.lucru{background:var(--warn)}
 .substate-badge.proba{background:var(--info)}
+.substate-badge.approved{background:var(--good)}
 .substate-badge.final{background:var(--good)}
 
 /* Pipeline kanban */
@@ -161,6 +162,7 @@ button{font-family:inherit;cursor:pointer}
 .kb-card-popover{position:absolute;top:28px;right:8px;background:var(--bg);border:0.5px solid var(--border-strong);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,0.15);z-index:60;padding:4px;min-width:170px;display:flex;flex-direction:column;gap:1px}
 .kb-card-name{font-size:13px;font-weight:500;line-height:1.25}
 .kb-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px}
+.kb-approval-chip{align-self:flex-start;font-size:10px;font-weight:500;padding:3px 7px;border-radius:var(--radius-sm);background:var(--good-bg);color:var(--good)}
 .kb-tag{font-size:10px;padding:2px 7px;background:var(--bg-soft);border:0.5px solid var(--border);border-radius:3px}
 .kb-final{font-size:11px;font-weight:600;color:var(--text);white-space:nowrap}
 .kb-final.late{color:var(--late)}
@@ -543,6 +545,7 @@ button{font-family:inherit;cursor:pointer}
 .tp-task-status{font-size:10px;padding:3px 8px;border-radius:var(--radius-sm);font-weight:500}
 .tp-task-status.in-lucru{background:var(--warn-bg);color:var(--warn)}
 .tp-task-status.la-proba{background:var(--info-bg);color:var(--info)}
+.tp-task-status.proba-approved{background:var(--good-bg);color:var(--good)}
 .tp-task-due{text-align:right;font-size:11px;color:var(--text-muted);white-space:nowrap}
 .tp-task-due-bold{font-size:12px;font-weight:600;color:var(--text)}
 .tp-task-due-bold.late{color:var(--late)}

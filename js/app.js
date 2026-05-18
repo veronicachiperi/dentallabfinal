@@ -271,6 +271,7 @@ ${role==='admin'?item('activity.html','Activitate'):''}
 }
 
 function updateMainSummary(){
+  refreshDerivedNotifications();
   const active=CASES.filter(c=>c.stage!=='trimis').length;
   const late=CASES.filter(c=>c.stage!=='trimis'&&c.late).length;
   const count=document.getElementById('navCountLucrari');
@@ -281,8 +282,10 @@ function updateMainSummary(){
     if(label)label.textContent=`${late} ${late===1?'lucrare':'lucrări'} în întârziere`;
     banner.style.display=late?'flex':'none';
   }
+  const currentUser=getCurrentUser();
+  const visibleNotifications=NOTIFICATIONS.filter(n=>!n.targetUserId||!currentUser||currentUser.role==='admin'||n.targetUserId===currentUser.id);
   const dot=document.querySelector('#bellBtn .bell-dot');
-  if(dot)dot.style.display=NOTIFICATIONS.some(n=>n.unread)?'block':'none';
+  if(dot)dot.style.display=visibleNotifications.some(n=>n.unread)?'block':'none';
   renderActionDashboard();
 }
 
@@ -299,6 +302,7 @@ function caseDueInfo(c){
 
 function publicStageName(c){
   if(isCaseNotStarted(c))return 'Neînceput';
+  if(probaApprovedStage(c))return 'Probă aprobată';
   if(isCaseAtProba(c))return 'La probă';
   if(c?.stage==='trimis')return 'Trimisă';
   if(c?.stage==='terminat')return 'Gata';
@@ -307,6 +311,7 @@ function publicStageName(c){
 
 function publicStageColor(c){
   if(isCaseNotStarted(c))return '#9CA3AF';
+  if(probaApprovedStage(c))return '#1D9E75';
   if(isCaseAtProba(c))return getStage('proba')?.color || '#EAC04A';
   return getStage(c?.stage)?.color || '#6B7280';
 }
@@ -318,8 +323,31 @@ function isCaseNotStarted(c){
 function probaLabStage(c){
   return getEtapeLabStages(c.type).find(s=>c.stageStatuses?.[s]==='la_proba')||null;
 }
+function probaApprovedStage(c){
+  return getEtapeLabStages(c.type).find(s=>c.stageStatuses?.[s]==='proba_aprobata')||null;
+}
 function isCaseAtProba(c){
   return Boolean(c&&(c.stage==='proba'||probaLabStage(c)));
+}
+function isCaseProbaApproved(c){
+  return Boolean(probaApprovedStage(c));
+}
+function refreshDerivedNotifications(){
+  NOTIFICATIONS.length=0;
+  CASES.forEach(c=>{
+    const stage=probaApprovedStage(c);
+    if(!stage)return;
+    const tech=getEmployee(c.assignees?.[stage]);
+    NOTIFICATIONS.push({
+      id:Number(`${c.id}${getStage(stage)?.order||0}`),
+      caseId:c.id,
+      targetUserId:tech?.id||null,
+      kind:'Probă aprobată',
+      text:`${c.name} · ${getStage(stage)?.name||stage} poate fi finalizat`,
+      time:'acum',
+      unread:!(overrides.read||[]).includes(Number(`${c.id}${getStage(stage)?.order||0}`))
+    });
+  });
 }
 
 function labTermsTableHTML(compact=false){
@@ -420,13 +448,16 @@ function closeNotificationDrawer(){
 
 function openNotificationDrawer(){
   closeNotificationDrawer();
+  refreshDerivedNotifications();
+  const currentUser=getCurrentUser();
+  const visibleNotifications=NOTIFICATIONS.filter(n=>!n.targetUserId||!currentUser||currentUser.role==='admin'||n.targetUserId===currentUser.id);
   const scrim=document.createElement('div');
   scrim.className='notif-scrim';
   const drawer=document.createElement('aside');
   drawer.className='notif-drawer';
-  const unread=NOTIFICATIONS.filter(n=>n.unread).length;
+  const unread=visibleNotifications.filter(n=>n.unread).length;
   drawer.innerHTML=`<div class="notif-head"><div><div class="notif-eyebrow">${unread} necitite</div><h2>Notificări</h2></div><button class="notif-close" type="button">×</button></div>
-    <div class="notif-list">${NOTIFICATIONS.map(n=>{const c=getCase(n.caseId);const cl=c?getClinic(c.clinic):null;return `<button class="notif-item ${n.unread?'unread':''}" type="button" data-notif-id="${n.id}" data-case-id="${n.caseId}">
+    <div class="notif-list">${visibleNotifications.map(n=>{const c=getCase(n.caseId);const cl=c?getClinic(c.clinic):null;return `<button class="notif-item ${n.unread?'unread':''}" type="button" data-notif-id="${n.id}" data-case-id="${n.caseId}">
       <span class="notif-dot"></span><span class="notif-body"><b>${n.kind}</b><span>${n.text}</span><small>${n.time}${cl?' · '+cl.name:''}</small></span>
     </button>`}).join('')}</div>
     <div class="notif-foot"><button class="btn" type="button" id="markNotificationsRead">Marchează citite</button></div>`;
@@ -443,8 +474,8 @@ function openNotificationDrawer(){
     location.href=`case.html?id=${item.dataset.caseId}`;
   }));
   drawer.querySelector('#markNotificationsRead')?.addEventListener('click',()=>{
-    NOTIFICATIONS.forEach(n=>n.unread=false);
-    overrides.read=NOTIFICATIONS.map(n=>n.id);
+    visibleNotifications.forEach(n=>n.unread=false);
+    overrides.read=[...new Set([...(overrides.read||[]),...visibleNotifications.map(n=>n.id)])];
     saveOverrides(overrides);
     updateMainSummary();
     openNotificationDrawer();
@@ -452,6 +483,7 @@ function openNotificationDrawer(){
 }
 
 function attachNotifications(){
+  refreshDerivedNotifications();
   document.getElementById('bellBtn')?.addEventListener('click',openNotificationDrawer);
 }
 
@@ -505,13 +537,14 @@ function renderKanbanCard(c){
   card.draggable=true;card.dataset.caseId=c.id;card.tabIndex=0;card.setAttribute('role','link');
   const clinic=getClinic(c.clinic);const tech=getEmployee(c.assignee);
   const ss=c.notStarted?'neincepute':(c.stageStatuses?.[c.stage]||'in_lucru');
-  const badge=ss==='finalizat'?`<span class="substate-badge final">✓</span>`:ss==='la_proba'?`<span class="substate-badge proba">P</span>`:`<span class="substate-badge lucru">●</span>`;
+  const badge=ss==='finalizat'?`<span class="substate-badge final">✓</span>`:ss==='proba_aprobata'?`<span class="substate-badge approved">A</span>`:ss==='la_proba'?`<span class="substate-badge proba">P</span>`:`<span class="substate-badge lucru">●</span>`;
   const ft=c.late?'restant':c.stage==='terminat'?'gata':c.finala;
   const fc=(c.late||deadlineUrgent)?'late':c.stage==='terminat'?'ready':'';
+  const approvalChip=isCaseProbaApproved(c)?'<span class="kb-approval-chip">Probă aprobată</span>':'';
   const parsedNotes=_parseNotes(c.notes);
   const note=parsedNotes.length>0;
   const notePreview=note?parsedNotes[parsedNotes.length-1].text:'';
-  card.innerHTML=`<div class="kb-card-top"><div class="kb-card-clinic">${clinic.name}</div><button class="kb-card-menu" type="button" title="Acțiuni">⋯</button></div><div class="kb-card-name">${c.name}</div><div class="kb-card-row"><span class="kb-tag">${c.type}</span><span class="kb-final ${fc}">${ft}</span></div><span class="kb-note-chip tbl-notes ${note?'has-note':''}" title="${escAttr(notePreview||'Adaugă notiță')}">${note?escHTML(notePreview.slice(0,40)):'+ Notițe'}</span><div class="kb-card-foot">${c.notStarted?`<span class="kb-unassigned">— neînceput</span>`:tech?`<span class="kb-av ${tech.id}" style="position:relative">${tech.initials}${badge}</span><span class="kb-tehnician-name">${tech.name}</span>`:`<span class="kb-unassigned">— neasignat</span>`}</div>`;
+  card.innerHTML=`<div class="kb-card-top"><div class="kb-card-clinic">${clinic.name}</div><button class="kb-card-menu" type="button" title="Acțiuni">⋯</button></div><div class="kb-card-name">${c.name}</div><div class="kb-card-row"><span class="kb-tag">${c.type}</span><span class="kb-final ${fc}">${ft}</span></div>${approvalChip}<span class="kb-note-chip tbl-notes ${note?'has-note':''}" title="${escAttr(notePreview||'Adaugă notiță')}">${note?escHTML(notePreview.slice(0,40)):'+ Notițe'}</span><div class="kb-card-foot">${c.notStarted?`<span class="kb-unassigned">— neînceput</span>`:tech?`<span class="kb-av ${tech.id}" style="position:relative">${tech.initials}${badge}</span><span class="kb-tehnician-name">${tech.name}</span>`:`<span class="kb-unassigned">— neasignat</span>`}</div>`;
   card.addEventListener('dragstart',e=>{card.style.opacity='0.4';e.dataTransfer.setData('text/plain',String(c.id))});
   card.addEventListener('dragend',()=>card.style.opacity='1');
   card.addEventListener('click',e=>{if(e.target.closest('button,.kb-card-popover,.tbl-notes,.kb-tag'))return;location.href=`case.html?id=${c.id}`});
@@ -699,12 +732,17 @@ function handleClinicAction(action,caseId){
   const c=getCase(caseId);if(!c)return;
   if(action==='approve'){
     const labStage=probaLabStage(c);
-    if(labStage)completeLabStage(c,labStage);
+    if(labStage){
+      c.stage=labStage;
+      c.stageStatuses[labStage]='proba_aprobata';
+      c.notStarted=false;
+      c.assignee=c.assignees?.[labStage]||c.assignee||null;
+    }
     else c.stage='terminat';
     overrides.stages=overrides.stages||{};overrides.stages[c.id]=c.stage;
     overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,notStarted:c.notStarted};
     saveOverrides(overrides);_syncCase(c);
-    alert(labStage?'Probă aprobată — lucrarea a revenit în fluxul laboratorului':'Probă aprobată — lucrarea a trecut la finalizare');renderClinic();
+    alert(labStage?'Probă aprobată — designerul a fost notificat':'Probă aprobată — lucrarea a trecut la finalizare');renderClinic();updateMainSummary();
   } else if(action==='pickup'){
     c.stage='trimis';c.sentDate=fmtShortDate(todayLabDate());
     overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';
@@ -909,7 +947,7 @@ function renderTechnicianPortal(){
   const myStage=techStage(user.id);
   const stage=getStage(myStage);
   const stageName=stage.name;
-  const myActive=CASES.filter(c=>c.assignees?.[myStage]===user.id&&['in_lucru','la_proba'].includes(c.stageStatuses?.[myStage]));
+  const myActive=CASES.filter(c=>c.assignees?.[myStage]===user.id&&['in_lucru','la_proba','proba_aprobata'].includes(c.stageStatuses?.[myStage]));
   const claimable=CASES.filter(c=>{
     const ms=getEtapeLabStages(c.type);
     if(!ms.includes(myStage))return false;
@@ -920,11 +958,24 @@ function renderTechnicianPortal(){
     return true;
   });
   const completed=CASES.filter(c=>c.stageStatuses?.[myStage]==='finalizat'&&c.assignees?.[myStage]===user.id);
+  const approvedCount=myActive.filter(c=>c.stageStatuses?.[myStage]==='proba_aprobata').length;
   const lateCount=myActive.filter(c=>c.late).length;
   const stageColors={design:'#85B7EB',cam:'#444441',prelucrare:'#854F0B',ceramica:'#EF9F27'};
   root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-mark">L</div><div class="brand-name">Laborator</div></div><div class="nav-section">Workflow</div><a class="nav-item active" href="tehnician.html"><span class="nav-icon round"></span>Acasă</a><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><div class="nav-section">Setări</div><a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a></aside><main class="main"><div class="tp-shell"><div class="tp-topbar"><div class="tp-tech-av" style="background:${stageColors[myStage]||'#1D9E75'}">${user.initials}</div><div><div class="tp-tech-name">${user.name}</div><div class="tp-tech-role">Tehnician ${stageName.toLowerCase()}</div></div><div class="spacer"></div><a href="login.html" class="btn">Schimbă rol</a></div><div class="tp-greet"><h1 class="tp-greet-title">Bună, ${user.name.split(' ')[0]}</h1><div class="tp-greet-sub">${myActive.length} lucrări în curs · ${claimable.length} de revendicat</div></div><div class="tp-stats"><div class="tp-stat"><div class="tp-stat-num warn">${myActive.length}</div><div class="tp-stat-lbl">În lucru</div></div><div class="tp-stat"><div class="tp-stat-num">${claimable.length}</div><div class="tp-stat-lbl">De revendicat</div></div><div class="tp-stat"><div class="tp-stat-num good">${completed.length}</div><div class="tp-stat-lbl">Finalizate</div></div><div class="tp-stat"><div class="tp-stat-num late">${lateCount}</div><div class="tp-stat-lbl">În întârziere</div></div></div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În lucru la tine</span><span class="tp-section-count">${myActive.length} lucrări</span></div>${myActive.length?myActive.map(c=>{const cl=getClinic(c.clinic);const st=c.stageStatuses?.[myStage];const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card ${c.late||deadlineUrgent?'late':c.warn?'warn':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':c.finala}</div><div>finală</div></div><span class="tp-task-status ${st==='la_proba'?'la-proba':'in-lucru'}">${st==='la_proba'?'La probă':'În lucru'}</span><div class="tp-task-actions">${st==='in_lucru'?`<button class="tp-task-btn" data-action="proba" data-case-id="${c.id}" data-stage="${myStage}">La probă</button>`:''}<button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare activă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Așteaptă să fie revendicate</span><span class="tp-section-count">${claimable.length} lucrări</span></div>${claimable.length?claimable.map(c=>{const cl=getClinic(c.clinic);const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card tp-claimable ${c.late||deadlineUrgent?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':c.finala}</div><div>finală</div></div><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="claim" data-case-id="${c.id}" data-stage="${myStage}">Pun în proces</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare de revendicat</div>'}</div></div></main></div>`;
   root.querySelector('.sidebar')?.replaceWith(Object.assign(document.createElement('div'),{innerHTML:adminSidebarHTML('tehnician')}).firstElementChild);
   applySidebarRoles();
+  const greetSub=root.querySelector('.tp-greet-sub');
+  if(greetSub)greetSub.textContent=`${myActive.length} lucrări în curs · ${approvedCount} probe aprobate · ${claimable.length} de revendicat`;
+  const approvedCases=myActive.filter(c=>c.stageStatuses?.[myStage]==='proba_aprobata');
+  if(approvedCases.length){
+    root.querySelector('.tp-stats')?.insertAdjacentHTML('afterend',`<div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Probe aprobate</span><span class="tp-section-count">${approvedCases.length} lucrări</span></div>${approvedCases.map(c=>`<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${getClinic(c.clinic).name}</div><div class="tp-task-info">Clinica a aprobat proba. Designul poate fi finalizat.</div></div><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează design</button></div></div>`).join('')}</div>`);
+  }
+  root.querySelectorAll('.tp-task-card[data-case-id]').forEach(card=>{
+    const c=getCase(Number(card.dataset.caseId));
+    if(c?.stageStatuses?.[myStage]!=='proba_aprobata')return;
+    const status=card.querySelector('.tp-task-status');
+    if(status){status.className='tp-task-status proba-approved';status.textContent='Probă aprobată';}
+  });
   document.querySelectorAll('.tp-task-card[data-case-id]').forEach(card=>{
     card.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${card.dataset.caseId}`});
   });

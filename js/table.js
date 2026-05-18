@@ -94,8 +94,9 @@ function renderFlowIndicator(c) {
     const status = c.stageStatuses?.[sId] || 'neincepute';
     const techId = c.assignees?.[sId];
     const tech = techId ? getEmployee(techId) : null;
-    if ((status === 'finalizat' || status === 'in_lucru' || status === 'la_proba') && tech) {
+    if ((status === 'finalizat' || status === 'in_lucru' || status === 'la_proba' || status === 'proba_aprobata') && tech) {
       const badge = status === 'finalizat' ? `<span class="substate-badge final">✓</span>` :
+                    status === 'proba_aprobata' ? `<span class="substate-badge approved">A</span>` :
                     status === 'la_proba' ? `<span class="substate-badge proba">P</span>` :
                     `<span class="substate-badge lucru">●</span>`;
       html += `<span class="node ${tech.id}" data-case-id="${c.id}" data-stage="${sId}" title="${tech.name} · ${status}">${tech.initials}${badge}</span>`;
