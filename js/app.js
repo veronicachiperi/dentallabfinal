@@ -835,7 +835,10 @@ function renderCaseDetail(){
         c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
         if(sel.value==='claim'){activateLabStage(c,sId,user.id);}
         else if(sel.value==='reset'){c.stageStatuses[sId]='neincepute';c.assignees[sId]=null;}
-        else if(sel.value.startsWith('tech:')){c.assignees[sId]=sel.value.slice(5);}
+        else if(sel.value.startsWith('tech:')){
+          c.assignees[sId]=sel.value.slice(5);
+          if(c.stage===sId)c.assignee=c.assignees[sId];
+        }
         else{
           if(sel.value==='finalizat')completeLabStage(c,sId);
           else if(sel.value==='in_lucru')activateLabStage(c,sId,c.assignees[sId]||user.id);
@@ -1681,6 +1684,7 @@ function attachInlineEditors(root) {
           c.assignees[stage] = null;
         } else if (sel.value.startsWith('tech:')) {
           c.assignees[stage] = sel.value.slice(5);
+          if(c.stage===stage)c.assignee=c.assignees[stage];
         } else {
           if (sel.value === 'finalizat') completeLabStage(c, stage);
           else if(sel.value==='in_lucru') activateLabStage(c,stage,c.assignees[stage]||user.id);
