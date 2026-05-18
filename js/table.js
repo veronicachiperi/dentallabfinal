@@ -158,7 +158,8 @@ function handleStageClick(caseId, stageId) {
   c.stageStatuses = c.stageStatuses || {}; c.assignees = c.assignees || {};
   const status = c.stageStatuses[stageId] || 'neincepute';
 
-  // Cycle: neincepute → in_lucru → la_proba → finalizat → (next stage)
+  // Design: neincepute → in_lucru → la_proba → finalizat.
+  // Restul etapelor: neincepute → in_lucru → finalizat.
   if (status === 'neincepute') {
     if(typeof activateLabStage==='function')activateLabStage(c,stageId,c.assignees[stageId]||user.id);
     else {
@@ -168,10 +169,12 @@ function handleStageClick(caseId, stageId) {
       c.stage = stageId;
       c.assignee = c.assignees[stageId];
     }
-  } else if (status === 'in_lucru') {
+  } else if (status === 'in_lucru' && typeof labStageRequiresProbe==='function' && labStageRequiresProbe(stageId)) {
     c.stageStatuses[stageId] = 'la_proba';
     c.stage = stageId;
     c.notStarted = false;
+  } else if (status === 'in_lucru') {
+    completeLabStage(c, stageId);
   } else if (status === 'la_proba') {
     completeLabStage(c, stageId);
   } else if (status === 'finalizat') {

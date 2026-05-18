@@ -199,6 +199,9 @@ function completeLabStage(c, stageId) {
     c.stage = 'proba';
   }
 }
+function labStageRequiresProbe(stageId) {
+  return stageId === 'design';
+}
 function nextCaseId() { return CASES.length ? Math.max(...CASES.map(c => c.id)) + 1 : 1; }
 
 function parseShortDate(str) {
