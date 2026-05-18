@@ -834,7 +834,11 @@ function renderCaseDetail(){
       openInlinePopover(item,items,sel=>{
         c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
         if(sel.value==='claim'){activateLabStage(c,sId,user.id);}
-        else if(sel.value==='reset'){c.stageStatuses[sId]='neincepute';c.assignees[sId]=null;}
+        else if(sel.value==='reset'){
+          resetCaseToNotStarted(c);
+          renderCaseDetail();
+          return;
+        }
         else if(sel.value.startsWith('tech:')){
           c.assignees[sId]=sel.value.slice(5);
           if(c.stage===sId)c.assignee=c.assignees[sId];
@@ -1679,8 +1683,8 @@ function attachInlineEditors(root) {
         if (sel.value === 'claim') {
           activateLabStage(c,stage,user.id);
         } else if (sel.value === 'reset') {
-          c.stageStatuses[stage] = 'neincepute';
-          c.assignees[stage] = null;
+          resetCaseToNotStarted(c);
+          return;
         } else if (sel.value.startsWith('tech:')) {
           c.assignees[stage] = sel.value.slice(5);
           if(c.stage===stage)c.assignee=c.assignees[stage];
