@@ -157,11 +157,18 @@ function handleStageClick(caseId, stageId) {
 
   // Cycle: neincepute → in_lucru → la_proba → finalizat → (next stage)
   if (status === 'neincepute') {
-    c.stageStatuses[stageId] = 'in_lucru';
-    if (!c.assignees[stageId]) c.assignees[stageId] = user.id;
-    c.notStarted = false;
+    if(typeof activateLabStage==='function')activateLabStage(c,stageId,c.assignees[stageId]||user.id);
+    else {
+      c.stageStatuses[stageId] = 'in_lucru';
+      if (!c.assignees[stageId]) c.assignees[stageId] = user.id;
+      c.notStarted = false;
+      c.stage = stageId;
+      c.assignee = c.assignees[stageId];
+    }
   } else if (status === 'in_lucru') {
     c.stageStatuses[stageId] = 'la_proba';
+    c.stage = stageId;
+    c.notStarted = false;
   } else if (status === 'la_proba') {
     completeLabStage(c, stageId);
   } else if (status === 'finalizat') {

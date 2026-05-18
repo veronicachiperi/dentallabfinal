@@ -204,19 +204,28 @@ function nextCaseId() { return CASES.length ? Math.max(...CASES.map(c => c.id)) 
 
 function parseShortDate(str) {
   if (!str) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
   const months = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
-  const [m, d] = str.split(' ');
+  const [m, d, explicitYear] = str.split(' ');
   if (months[m] === undefined) return null;
   const month = months[m];
   const today = new Date();
-  let year = today.getFullYear();
+  let year = explicitYear ? Number(explicitYear) : today.getFullYear();
   const todayMonth = today.getMonth();
-  if (month - todayMonth > 6) year--;
-  else if (todayMonth - month > 6) year++;
+  if (!explicitYear) {
+    if (month - todayMonth > 6) year--;
+    else if (todayMonth - month > 6) year++;
+  }
   return new Date(year, month, parseInt(d));
 }
 function fmtShortDate(date) {
-  return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][date.getMonth()] + ' ' + date.getDate();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 function todayLabDate() {
   const d = new Date();
@@ -280,7 +289,12 @@ function getCalendarStatus(c) {
 
 function statsCountsByStage() { return STAGES.map(s => ({ name: s.name, count: casesInStage(s.id).length, color: s.color })); }
 function statsCountsByClinic() { return CLINICS.map(c => ({ name: c.name, count: casesForClinic(c.id).length })); }
-function statsOnTimeRate() { const total = CASES.length, late = CASES.filter(c => c.late).length; return { total, late, onTime: total - late, rate: total ? Math.round(((total - late) / total) * 100) : 100 }; }
+function statsOnTimeRate() {
+  const sent = CASES.filter(c => c.stage === 'trimis');
+  const total = sent.length;
+  const late = sent.filter(c => c.late).length;
+  return { total, late, onTime: total - late, rate: total ? Math.round(((total - late) / total) * 100) : 100 };
+}
 
 const NEW_CASES_KEY = 'dental-lab-new-cases-v3-clean';
 function loadNewCases() {

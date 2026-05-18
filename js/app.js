@@ -113,9 +113,14 @@ async function deleteCase(id){
 // Move case to a different stage
 async function moveCaseToStage(id,stageId){
   const c=getCase(id);if(!c)return;
-  c.stage=stageId;c.notStarted=false;
+  const labStages=getEtapeLabStages(c.type);
+  if(labStages.includes(stageId)){
+    activateLabStage(c,stageId,c.assignees?.[stageId]||STAGE_ASSIGNEE_DEFAULTS[stageId]);
+  }else{
+    c.stage=stageId;c.notStarted=false;
+  }
   overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;
-  overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:stageId,notStarted:false};
+  overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:stageId,notStarted:false,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee};
   saveOverrides(overrides);
   if(typeof sbUpdateField==='function'&&SUPABASE_CONFIGURED){
     await sbUpdateField(c,'stage',stageId);
@@ -128,6 +133,15 @@ function reRenderAll(){
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
   renderPipeline();renderClinic();
+}
+function activateLabStage(c,stageId,assigneeId){
+  c.stageStatuses=c.stageStatuses||{};
+  c.assignees=c.assignees||{};
+  c.stage=stageId;
+  c.notStarted=false;
+  c.stageStatuses[stageId]='in_lucru';
+  if(assigneeId)c.assignees[stageId]=assigneeId;
+  c.assignee=c.assignees[stageId]||assigneeId||c.assignee||null;
 }
 function _syncCase(c){
   if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED)sbSaveCase(c).catch(e=>console.warn('[sb sync]',e.message));
@@ -674,7 +688,9 @@ function handleClinicAction(action,caseId){
     alert('Probă aprobată — lucrarea a trecut la finalizare');renderClinic();
   } else if(action==='pickup'){
     c.stage='trimis';c.sentDate=fmtShortDate(todayLabDate());
-    overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';saveOverrides(overrides);_syncCase(c);
+    overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';
+    overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],sentDate:c.sentDate};
+    saveOverrides(overrides);_syncCase(c);
     alert('Ridicare confirmată — lucrarea a fost arhivată');renderClinic();
   } else if(action==='note'){
     function _parseNotes(raw){if(!raw)return[];try{const p=JSON.parse(raw);return Array.isArray(p)?p:[{text:raw,author:'—',initials:'—',ts:0}]}catch{return raw.trim()?[{text:raw,author:'—',initials:'—',ts:0}]:[]}}
@@ -740,10 +756,19 @@ function renderCaseDetail(){
       });
       openInlinePopover(item,items,sel=>{
         c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
-        if(sel.value==='claim'){c.stageStatuses[sId]='in_lucru';c.assignees[sId]=user.id;c.notStarted=false;}
+        if(sel.value==='claim'){activateLabStage(c,sId,user.id);}
         else if(sel.value==='reset'){c.stageStatuses[sId]='neincepute';c.assignees[sId]=null;}
         else if(sel.value.startsWith('tech:')){c.assignees[sId]=sel.value.slice(5);}
-        else{if(sel.value==='finalizat')completeLabStage(c,sId);else c.stageStatuses[sId]=sel.value;}
+        else{
+          if(sel.value==='finalizat')completeLabStage(c,sId);
+          else if(sel.value==='in_lucru')activateLabStage(c,sId,c.assignees[sId]||user.id);
+          else{
+            c.stage=sId;
+            c.notStarted=false;
+            c.stageStatuses[sId]=sel.value;
+            c.assignee=c.assignees[sId]||c.assignee||null;
+          }
+        }
         overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
         Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,assignee:c.assignee,notStarted:c.notStarted});
         saveOverrides(overrides);_syncCase(c);renderCaseDetail();
@@ -1184,7 +1209,12 @@ function openQuickEdit(id){
     c.color=document.getElementById('qeColor').value;c.implantType=document.getElementById('qeImplant').value;c.amprentaType=document.getElementById('qeAmprenta').value;
     c.intrata=document.getElementById('qeI').value;c.probaDate=document.getElementById('qeP').value;c.finala=document.getElementById('qeF').value;
     const qeNewText=document.getElementById('qeN').value.trim();
-    if(qeNewText!==notesText){const user=getCurrentUser()||{name:'Utilizator',initials:'?'};c.notes=qeNewText?JSON.stringify([{text:qeNewText,author:user.name,initials:user.initials,ts:Date.now()}]):''}
+    if(qeNewText!==notesText){
+      const user=getCurrentUser()||{name:'Utilizator',initials:'?'};
+      const notes=existingNotes.slice();
+      if(qeNewText)notes.push({text:qeNewText,author:user.name,initials:user.initials,ts:Date.now()});
+      c.notes=JSON.stringify(notes);
+    }
     c.deadlineUrgent=labDeadlineStatus(c).urgent;
     c.priority=computePriority(c);
     overrides.edits=overrides.edits||{};overrides.edits[c.id]={name:c.name,stage:c.stage,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,finala:c.finala,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority};
@@ -1255,7 +1285,7 @@ function renderLogin(){
 <div id="regForm" style="display:none"><div class="login-prompt">Cont nou</div>
 <div class="field" style="margin-bottom:10px"><label>Utilizator</label><input id="rUser" placeholder="ex: maria_t" autocomplete="username"></div>
 <div class="field" style="margin-bottom:10px"><label>Parolă</label><input id="rPass" type="password" autocomplete="new-password"></div>
-<div class="field" style="margin-bottom:10px"><label>Rol</label><select id="rRole"><option value="technician">Tehnician</option><option value="clinic">Clinică</option><option value="admin">Admin</option></select></div>
+<div class="field" style="margin-bottom:10px"><label>Rol</label><select id="rRole"><option value="technician">Tehnician</option><option value="clinic">Clinică</option></select></div>
 <div id="rClinicWrap" class="field" style="margin-bottom:10px;display:none"><label>Clinică</label><select id="rClinic">${clinicOpts}</select></div>
 <div id="rEmpWrap" class="field" style="margin-bottom:16px;display:none"><label>Cont tehnician</label><select id="rEmp">${empOpts}</select></div>
 <div id="regErr" class="login-err" style="display:none"></div>
@@ -1509,13 +1539,7 @@ function attachInlineEditors(root) {
       if (!c) return;
       const items = STAGES.map(s => ({ value: s.id, label: s.name }));
       openInlinePopover(el, items, sel => {
-        c.stage = sel.value;
-        overrides.stages = overrides.stages || {};
-        overrides.stages[c.id] = sel.value;
-        saveOverrides(overrides);
-        _syncCase(c);
-        if (typeof renderTable === 'function') renderTable();
-        if (typeof renderPipeline === 'function') renderPipeline();
+        moveCaseToStage(c.id,sel.value);
       }, 'Schimbă etapă', { positionAnchor: el.closest('td') || el });
     });
   });
@@ -1548,10 +1572,7 @@ function attachInlineEditors(root) {
         c.stageStatuses = c.stageStatuses || {};
         c.assignees = c.assignees || {};
         if (sel.value === 'claim') {
-          c.stageStatuses[stage] = 'in_lucru';
-          c.assignees[stage] = user.id;
-          c.assignee = user.id;
-          c.notStarted = false;
+          activateLabStage(c,stage,user.id);
         } else if (sel.value === 'reset') {
           c.stageStatuses[stage] = 'neincepute';
           c.assignees[stage] = null;
@@ -1559,7 +1580,13 @@ function attachInlineEditors(root) {
           c.assignees[stage] = sel.value.slice(5);
         } else {
           if (sel.value === 'finalizat') completeLabStage(c, stage);
-          else c.stageStatuses[stage] = sel.value;
+          else if(sel.value==='in_lucru') activateLabStage(c,stage,c.assignees[stage]||user.id);
+          else {
+            c.stage=stage;
+            c.notStarted=false;
+            c.stageStatuses[stage]=sel.value;
+            c.assignee=c.assignees[stage]||c.assignee||null;
+          }
         }
         overrides.edits = overrides.edits || {};
         overrides.edits[c.id] = overrides.edits[c.id] || {};
@@ -1591,9 +1618,7 @@ function attachInlineEditors(root) {
       const c = getCase(Number(tr.dataset.caseId));
       if (!c) return;
       const currentText = el.textContent.trim();
-      const isProba = el.previousElementSibling?.textContent?.includes('Probă') || tr.querySelector('th:nth-child(7)')?.textContent === 'Probă';
-      // Use prompt for simplicity
-      const which = prompt('Schimbă data (format: May 5):\nCurent: ' + currentText, currentText === '—' ? '' : currentText);
+      const which = prompt('Schimbă data (format: YYYY-MM-DD):\nCurent: ' + currentText, currentText === '—' ? '' : currentText);
       if (which === null) return;
       // Determine which date field based on column position
       const cells = Array.from(tr.children);
@@ -1727,14 +1752,10 @@ async function initApp(){
       location.href='clinic.html?id='+prof.clinic_id;return;
     }
     const sbCases=await sbLoadCases();
-    if(sbCases){
-      CASES.length=0;
-      sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
-      // Re-apply localStorage overrides to Supabase-loaded cases
-      applyOverrides();
-      // Re-add any locally-stored cases not yet synced to Supabase
-      loadNewCases();
-    }
+      if(sbCases){
+        CASES.length=0;
+        sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
+      }
     sbSubscribeCases(reRenderAll);
   }
   applySidebarRoles();

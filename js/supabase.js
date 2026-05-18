@@ -75,6 +75,7 @@ async function sbSignIn(username, password) {
 }
 
 async function sbSignUp(username, password, role, clinicId, employeeId) {
+  if (!['technician', 'clinic'].includes(role)) throw new Error('Rol invalid pentru auto-înregistrare');
   const { data, error } = await _client().auth.signUp({
     email:    _toEmail(username),
     password,
@@ -129,6 +130,7 @@ function _dbToCase(row) {
     teeth:        row.teeth          || [],
     notes:        row.notes          || '',
     priority:     row.priority       || 'mediu',
+    sentDate:     row.sent_date      || '',
     late:         false,
     warn:         false,
     deadlineUrgent: false,
@@ -158,6 +160,7 @@ function _caseToDb(c) {
     teeth:          c.teeth        || [],
     notes:          c.notes        || '',
     priority:       c.priority     || 'mediu',
+    sent_date:      c.sentDate     || null,
   };
 }
 
@@ -195,6 +198,7 @@ async function sbUpdateField(c, field, value) {
     stageStatuses: 'stage_statuses', notStarted: 'not_started',
     intrata: 'intrata', probaDate: 'proba_date', finala: 'finala',
     priority: 'priority', implantType: 'implant_type', amprentaType: 'amprenta_type',
+    sentDate: 'sent_date',
     teeth: 'teeth', doctor: 'doctor', clinic: 'clinic_id',
   };
   const col = colMap[field];
@@ -285,8 +289,11 @@ function postProcessCase(c) {
     const due   = parseShortDate(c.finala);
     if (due) {
       const d  = Math.ceil((due - today) / 86400000);
-      c.late   = d < 0 && c.stage !== 'trimis' && c.stage !== 'terminat';
-      c.warn   = d >= 0 && d <= 2 && c.stage !== 'trimis' && c.stage !== 'terminat';
+      const sent = parseShortDate(c.sentDate);
+      c.late   = c.stage === 'trimis'
+        ? Boolean(sent && sent > due)
+        : d < 0;
+      c.warn   = c.stage !== 'trimis' && d >= 0 && d <= 2;
     }
   }
 }

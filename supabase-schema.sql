@@ -19,7 +19,13 @@ CREATE POLICY "profiles_admin_read"  ON public.profiles FOR SELECT USING (
   EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
 );
 CREATE POLICY "profiles_self_insert" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
-CREATE POLICY "profiles_self_update" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+-- Profile role bindings are security-sensitive. Users may read their own profile,
+-- but only admins may change profile rows after signup.
+CREATE POLICY "profiles_admin_update" ON public.profiles FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+) WITH CHECK (
+  EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+);
 
 -- 2. Cases
 CREATE TABLE IF NOT EXISTS public.cases (
@@ -44,6 +50,7 @@ CREATE TABLE IF NOT EXISTS public.cases (
   teeth          JSONB DEFAULT '[]',
   notes          TEXT DEFAULT '',
   priority       TEXT DEFAULT 'mediu',
+  sent_date      TEXT,
   created_at     TIMESTAMPTZ DEFAULT NOW(),
   updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
