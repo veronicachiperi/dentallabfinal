@@ -100,6 +100,8 @@ function renderFlowIndicator(c) {
                     status === 'la_proba' ? `<span class="substate-badge proba">P</span>` :
                     `<span class="substate-badge lucru">●</span>`;
       html += `<span class="node ${tech.id}" data-case-id="${c.id}" data-stage="${sId}" title="${tech.name} · ${status}">${tech.initials}${badge}</span>`;
+    } else if (!c.notStarted && c.stage === sId) {
+      html += `<span class="node-current" data-case-id="${c.id}" data-stage="${sId}" title="Etapa curentă · nerevendicată">${labels[sId]}</span>`;
     } else {
       html += `<span class="node-em" data-case-id="${c.id}" data-stage="${sId}" title="Click pentru a începe">${labels[sId]}</span>`;
     }
@@ -119,7 +121,7 @@ function attachTableHandlers(root) {
       location.href = `case.html?id=${tr.dataset.caseId}`;
     });
   });
-  root.querySelectorAll('.node, .node-em').forEach(node => {
+  root.querySelectorAll('.node, .node-em, .node-current').forEach(node => {
     node.addEventListener('click', e => { if(node.dataset.menuAttached)return; e.stopPropagation(); handleStageClick(Number(node.dataset.caseId), node.dataset.stage); });
   });
   root.querySelectorAll('[data-row-actions]').forEach(btn => {
