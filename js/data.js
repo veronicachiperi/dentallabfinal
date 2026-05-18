@@ -281,8 +281,8 @@ CASES.forEach(c => { c.priority = computePriority(c); });
 // Calendar status — only 3 categories
 function getCalendarStatus(c) {
   if (c.stage === 'terminat' || c.stage === 'trimis') return 'terminat';
-  if (c.notStarted) return 'neincepute';
   const stages = getEtapeLabStages(c.type);
+  if (c.notStarted || stages.every(s => (c.stageStatuses?.[s] || 'neincepute') === 'neincepute')) return 'neincepute';
   const anyStarted = stages.some(s => c.stageStatuses?.[s] && c.stageStatuses[s] !== 'neincepute');
   return anyStarted ? 'proces' : 'neincepute';
 }

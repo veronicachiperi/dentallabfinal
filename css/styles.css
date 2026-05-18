@@ -680,6 +680,9 @@ button{font-family:inherit;cursor:pointer}
   color: var(--text);
   white-space: nowrap;
 }
+.pc-row-grid.not-started{background:var(--bg-soft);opacity:.72}
+.pc-row-grid.not-started:hover{opacity:1}
+.pc-row-grid.proba-row{background:rgba(234,192,74,.10)}
 
 /* Modificare grid pc-row-grid (era 7 coloane, acum 6) */
 .pc-row-grid {
