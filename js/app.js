@@ -1339,25 +1339,68 @@ function buildFisaHTML(c){
     ? Object.entries(byType).map(([t,ns])=>`${labels[t]}: ${ns.sort((a,b)=>a-b).join(', ')}`).join(' | ')
     : 'Niciun dinte selectat';
   const notes=_parseNotes(c.notes).map(n=>safe(n.text)).join('<br>')||'Fără indicații suplimentare';
-  const row=(a,b,c1,d)=>`<tr><th>${a}</th><td>${safe(b)}</td><th>${c1}</th><td>${safe(d)}</td></tr>`;
-  return `<div style="font-family:Arial,sans-serif;color:#111;font-size:10px;line-height:1.28;width:500px;background:#fff">
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding:0 0 6px;margin-bottom:8px">
-      <div><div style="font-size:15px;font-weight:700">Fișă de laborator</div><div>LAB CAD · Laborator Dentar</div></div>
+  const teethRows=(c.teeth||[]).map(t=>`<tr>
+    <td>${safe(t.n)}</td>
+    <td>${safe((labels[t.type]||t.type||'—'))}</td>
+    <td>${safe(c.implantType)}</td>
+    <td>${safe(c.color)}</td>
+  </tr>`).join('')||'<tr><td colspan="4">Niciun dinte selectat</td></tr>';
+  const row=(a,b)=>`<div style="display:flex;gap:8px;margin-bottom:4px"><div style="width:72px;font-weight:700">${a}</div><div>${safe(b)}</div></div>`;
+  return `<div style="font-family:Arial,sans-serif;color:#111;font-size:10px;line-height:1.35;width:500px;background:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:2px">Fișă de laborator</div>
+        <div style="font-size:9px">LAB CAD · Laborator Dentar</div>
+      </div>
       <div style="font-size:16px;font-weight:700">#${c.id}</div>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
-      ${row('Pacient',c.name,'Clinică',cl.name)}
-      ${row('Medic',c.doctor,'Tip lucrare',c.type)}
-      ${row('Intrată',c.intrata,'Probă',c.probaDate)}
-      ${row('Finală',c.finala,'Culoare',c.color)}
-      ${row('Etapă',stageName,'Tehnician',tehnician)}
-      ${row('Implant',c.implantType,'Amprentă',c.amprentaType)}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:700;margin-bottom:5px">Informații caz</div>
+        ${row('Pacient',c.name)}
+        ${row('Clinică',cl.name)}
+        ${row('Medic',c.doctor)}
+        ${row('Etapă',stageName)}
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;margin-bottom:5px">Termene</div>
+        ${row('Intrată',c.intrata)}
+        ${row('Probă',c.probaDate)}
+        ${row('Finală',c.finala)}
+        ${row('Tehnician',tehnician)}
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Lucrare</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:10px">
+      <thead>
+        <tr>
+          <th style="border-bottom:1px solid #111;text-align:left;padding:4px 5px">Dinte</th>
+          <th style="border-bottom:1px solid #111;text-align:left;padding:4px 5px">Tip</th>
+          <th style="border-bottom:1px solid #111;text-align:left;padding:4px 5px">Implant</th>
+          <th style="border-bottom:1px solid #111;text-align:left;padding:4px 5px">Culoare</th>
+        </tr>
+      </thead>
+      <tbody>${teethRows.replace(/<td>/g,'<td style="border-bottom:1px solid #ddd;padding:5px">')}</tbody>
     </table>
-    <div style="font-weight:700;text-transform:uppercase;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:5px">Schema dentară FDI</div>
-    <table style="border-collapse:collapse;width:100%;table-layout:fixed;margin-bottom:5px">${trow(upper)}${trow(lower)}</table>
-    <div style="font-size:9px;margin-bottom:8px"><b>Legendă:</b> C = Coroană, I = Implant, E = Emax, F = Fațetă<br><b>Selectate:</b> ${summaryHTML}</div>
-    <div style="font-weight:700;text-transform:uppercase;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:5px">Indicații speciale</div>
-    <div style="min-height:34px;border:1px solid #bbb;padding:6px;margin-bottom:14px">${notes}</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:10px">
+      <div>
+        <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Detalii</div>
+        ${row('Tip lucrare',c.type)}
+        ${row('Amprentă',c.amprentaType)}
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Schema dentară FDI</div>
+        <table style="border-collapse:collapse;width:100%;table-layout:fixed;margin-bottom:5px">${trow(upper)}${trow(lower)}</table>
+        <div style="font-size:8.5px"><b>Legendă:</b> C = Coroană, I = Implant, E = Emax, F = Fațetă</div>
+      </div>
+    </div>
+
+    <div style="font-size:9px;margin-bottom:8px"><b>Selectate:</b> ${summaryHTML}</div>
+    <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Indicații speciale</div>
+    <div style="min-height:42px;border:1px solid #999;padding:7px;margin-bottom:16px">${notes}</div>
     <div style="display:flex;gap:20px;margin-top:8px">
       <div style="flex:1;border-top:1px solid #111;padding-top:4px">Semnătura medic</div>
       <div style="flex:1;border-top:1px solid #111;padding-top:4px">Semnătura tehnician</div>
