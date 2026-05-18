@@ -75,7 +75,7 @@ function renderTableRow(c) {
     <td><span class="tbl-name">${c.name}</span></td>
     <td><span class="tbl-clinic">${clinic.name}</span></td>
     <td><span class="tag">${c.type}</span></td>
-    <td class="tbl-actions-cell"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare rapidă</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button></div></div></td>
+    <td class="tbl-actions-cell"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare rapidă</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button><button type="button" data-row-action="delete" data-case-id="${c.id}" class="danger">Șterge cazul</button></div></div></td>
     <td><span class="tbl-due">${c.intrata}</span></td>
     <td><span class="tbl-due-bold">${c.probaDate || '—'}</span></td>
     <td><span class="tbl-due-bold ${dueClass}">${finalText}</span></td>
@@ -139,6 +139,7 @@ function attachTableHandlers(root) {
       if(btn.dataset.rowAction==='pdf')generateFisaPDF(c);
       if(btn.dataset.rowAction==='attach')chooseFilesForCase(id,()=>renderTable());
       if(btn.dataset.rowAction==='view')location.href=`case.html?id=${id}`;
+      if(btn.dataset.rowAction==='delete')deleteCase(id);
     });
   });
   if(window.tableActionsCloseHandler)document.removeEventListener('click',window.tableActionsCloseHandler);
@@ -198,5 +199,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('tableView')) return;
   document.querySelectorAll('.view-tab').forEach(tab => tab.addEventListener('click', () => setMainView(tab.dataset.view)));
   document.getElementById('exportCsvBtn')?.addEventListener('click', exportCSV);
-  setMainView(localStorage.getItem('dental-lab-view') || 'table');
+  // Only do initial render when Supabase is NOT configured — otherwise app.js's initApp
+  // handles render after data loads (prevents flicker showing local data first, then real data)
+  if (typeof SUPABASE_CONFIGURED === 'undefined' || !SUPABASE_CONFIGURED) {
+    setMainView(localStorage.getItem('dental-lab-view') || 'table');
+  }
 });
