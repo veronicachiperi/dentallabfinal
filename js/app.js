@@ -87,6 +87,7 @@ function applyFilter(cases){
     if(activeFilter.tab==='week'){const f=parseShortDate(c.finala);if(!f||f<today||f>weekEnd)return false}
     if(activeFilter.tab==='notstarted'&&!isCaseNotStarted(c))return false;
     if(activeFilter.tab==='proba'&&!isCaseAtProba(c))return false;
+    if(activeFilter.tab==='approved'&&!isCaseProbaApproved(c))return false;
     if(activeFilter.tab==='ready'&&c.stage!=='terminat')return false;
     if(activeFilter.tab==='unassigned'&&!c.notStarted&&c.assignee)return false;
     return true;
@@ -405,14 +406,14 @@ function renderActionDashboard(){
   const dueToday=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===today.toDateString()});
   const late=active.filter(c=>c.late);
   const proba=active.filter(isCaseAtProba);
-  const ready=active.filter(c=>c.stage==='terminat');
-  const unassigned=active.filter(c=>c.notStarted||!c.assignee);
+  const approved=active.filter(isCaseProbaApproved);
+  const notStarted=active.filter(isCaseNotStarted);
   const stats=[
     {tab:'late',label:'Restante',value:late.length,tone:'late',hint:'necesită decizie'},
     {tab:'today',label:'Azi',value:dueToday.length,tone:'warn',hint:'date finale azi'},
     {tab:'proba',label:'La probă',value:proba.length,tone:'info',hint:'așteaptă clinică'},
-    {tab:'ready',label:'Gata de ridicat',value:ready.length,tone:'good',hint:'de trimis'},
-    {tab:'unassigned',label:'Neasignate',value:unassigned.length,tone:'muted',hint:'pornește lucrarea'}
+    {tab:'approved',label:'Probă aprobată',value:approved.length,tone:'good',hint:'revine la designer'},
+    {tab:'notstarted',label:'Neîncepute',value:notStarted.length,tone:'muted',hint:'pornește lucrarea'}
   ];
   const worklist=active.slice().sort((a,b)=>{
     const ad=caseDueInfo(a),bd=caseDueInfo(b);
@@ -555,6 +556,10 @@ function renderKanbanCard(c){
     const user=getCurrentUser()||{role:'admin'};
     const isAdminOrTech=user.role==='admin'||user.role==='technician'||user.role==='tech';
     const stageOpts=PIPELINE_STAGES.map(s=>{const st=getStage(s);return`<button class="kb-pop-item" type="button" data-act="move" data-stage="${s}">&nbsp;&nbsp;&nbsp;${st?.name||s}</button>`}).join('');
+    const currentStageAssignable=getEtapeLabStages(c.type).includes(c.stage);
+    const assignOpts=currentStageAssignable
+      ? EMPLOYEES.map(emp=>`<button class="kb-pop-item" type="button" data-act="assign" data-tech="${emp.id}">&nbsp;&nbsp;&nbsp;${emp.name}</button>`).join('')
+      : '';
     const m=document.createElement('div');m.className='kb-card-popover';
     m.innerHTML=
       `<button class="kb-pop-item" type="button" data-act="view-pdf">Fișă PDF — Vizualizează</button>`+
@@ -562,6 +567,7 @@ function renderKanbanCard(c){
       `<div class="kb-pop-sep"></div>`+
       `<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button>`+
       (isAdminOrTech?`<div class="kb-pop-sep"></div><div class="kb-pop-label">Mută la etapă</div>${stageOpts}`+
+      (currentStageAssignable?`<div class="kb-pop-sep"></div><div class="kb-pop-label">Reasignează ${getStage(c.stage)?.name||'etapa'}</div>${assignOpts}`:'')+
       `<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="reset">Clear → Neînceput</button>`:'')+
       (user.role==='admin'||user.role==='clinic'?`<button class="kb-pop-item danger" type="button" data-act="delete">Șterge cazul</button>`:'');
     card.appendChild(m);
@@ -573,6 +579,17 @@ function renderKanbanCard(c){
       if(act==='reset'&&confirm(`Resetezi progresul pentru ${c.name}?`))resetCaseToNotStarted(c);
       if(act==='open')location.href=`case.html?id=${c.id}`;
       if(act==='move'){moveCaseToStage(c.id,it.dataset.stage)}
+      if(act==='assign'){
+        c.assignees=c.assignees||{};
+        c.assignees[c.stage]=it.dataset.tech;
+        c.assignee=it.dataset.tech;
+        overrides.edits=overrides.edits||{};
+        overrides.edits[c.id]={...overrides.edits[c.id],assignees:c.assignees,assignee:c.assignee};
+        saveOverrides(overrides);
+        _syncCase(c);
+        renderPipeline();
+        if(typeof renderTable==='function')renderTable();
+      }
       if(act==='delete'){deleteCase(c.id)}
       m.remove();
     }));
