@@ -1388,8 +1388,21 @@ function buildFisaHTML(c){
 }
 function generateFisaPDF(c){
   if(typeof html2pdf==='undefined'){alert('Librăria nu s-a încărcat');return}
-  const w=document.createElement('div');w.innerHTML=buildFisaHTML(c);w.style.position='absolute';w.style.left='-9999px';document.body.appendChild(w);
-  html2pdf().from(w.firstElementChild).set({margin:[7,7,7,7],pagebreak:{mode:['avoid-all']},filename:`fisa-${c.id}-${(c.lastName||c.name||'').split(' ')[0].toLowerCase()||'caz'}.pdf`,html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'mm',format:'a5',orientation:'portrait'}}).save().finally(()=>document.body.removeChild(w));
+  const w=document.createElement('div');
+  w.innerHTML=buildFisaHTML(c);
+  w.style.position='fixed';
+  w.style.left='0';
+  w.style.top='0';
+  w.style.width='500px';
+  w.style.background='#fff';
+  w.style.zIndex='-1';
+  document.body.appendChild(w);
+  html2pdf().from(w.firstElementChild).set({
+    margin:[7,7,7,7],
+    filename:`fisa-${c.id}-${(c.lastName||c.name||'').split(' ')[0].toLowerCase()||'caz'}.pdf`,
+    html2canvas:{scale:2,useCORS:true,scrollX:0,scrollY:0},
+    jsPDF:{unit:'mm',format:'a5',orientation:'portrait'}
+  }).save().finally(()=>document.body.removeChild(w));
 }
 
 function previewFisaPDF(c){
