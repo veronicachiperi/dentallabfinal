@@ -216,9 +216,17 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('tableView')) return;
   document.querySelectorAll('.view-tab').forEach(tab => tab.addEventListener('click', () => setMainView(tab.dataset.view)));
   document.getElementById('exportCsvBtn')?.addEventListener('click', exportCSV);
-  // Only do initial render when Supabase is NOT configured — otherwise app.js's initApp
-  // handles render after data loads (prevents flicker showing local data first, then real data)
+  const savedView = localStorage.getItem('dental-lab-view') || 'table';
   if (typeof SUPABASE_CONFIGURED === 'undefined' || !SUPABASE_CONFIGURED) {
-    setMainView(localStorage.getItem('dental-lab-view') || 'table');
+    setMainView(savedView);
+  } else {
+    // Supabase: sync tab+layout immediately so there is no view-switch flash
+    // when initApp calls setMainView after data loads
+    document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('on', t.dataset.view === savedView));
+    const tbl = document.getElementById('tableView'), pipe = document.getElementById('pipeline');
+    if (tbl && pipe) {
+      tbl.style.display = savedView === 'pipeline' ? 'none' : 'block';
+      pipe.style.display = savedView === 'pipeline' ? 'grid' : 'none';
+    }
   }
 });
