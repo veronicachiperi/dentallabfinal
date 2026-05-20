@@ -280,7 +280,9 @@ function postProcessCase(c) {
         if (!c.stageStatuses[s]) c.stageStatuses[s] = 'in_lucru';
       }
     });
-    if (!c.assignee) c.assignee = c.assignees[c.stage] || c.assignees[stages[0]];
+    if (!c.assignee) c.assignee = typeof primaryStageAssignee === 'function'
+      ? (primaryStageAssignee(c,c.stage) || primaryStageAssignee(c,stages[0]))
+      : (Array.isArray(c.assignees[c.stage]) ? c.assignees[c.stage][0] : c.assignees[c.stage]) || (Array.isArray(c.assignees[stages[0]]) ? c.assignees[stages[0]][0] : c.assignees[stages[0]]);
   }
   if (typeof computePriority    === 'function') c.priority      = computePriority(c);
   if (typeof labDeadlineStatus  === 'function') c.deadlineUrgent = labDeadlineStatus(c).urgent;

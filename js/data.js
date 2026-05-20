@@ -278,7 +278,7 @@ CASES.forEach(c => {
     }
   });
   // Set primary assignee for backwards compat
-  if (!c.assignee) c.assignee = c.assignees[c.stage] || c.assignees[stages[0]];
+  if (!c.assignee) c.assignee = primaryStageAssignee(c,c.stage) || primaryStageAssignee(c,stages[0]);
 });
 
 function computePriority(c) {

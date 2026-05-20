@@ -116,7 +116,7 @@ async function moveCaseToStage(id,stageId){
   const c=getCase(id);if(!c)return;
   const labStages=getEtapeLabStages(c.type);
   if(labStages.includes(stageId)){
-    activateLabStage(c,stageId,c.assignees?.[stageId]||STAGE_ASSIGNEE_DEFAULTS[stageId]);
+    activateLabStage(c,stageId,primaryStageAssignee(c,stageId)||STAGE_ASSIGNEE_DEFAULTS[stageId]);
   }else{
     c.stage=stageId;c.notStarted=false;
   }
@@ -338,7 +338,7 @@ function refreshDerivedNotifications(){
   CASES.forEach(c=>{
     const stage=probaApprovedStage(c);
     if(!stage)return;
-    const tech=getEmployee(c.assignees?.[stage]);
+    const tech=getEmployee(primaryStageAssignee(c,stage));
     NOTIFICATIONS.push({
       id:Number(`${c.id}${getStage(stage)?.order||0}`),
       caseId:c.id,
@@ -560,10 +560,6 @@ function renderKanbanCard(c){
     const isAdminOrTech=user.role==='admin'||user.role==='technician'||user.role==='tech';
     const stageOpts=PIPELINE_STAGES.map(s=>{const st=getStage(s);return`<button class="kb-pop-item" type="button" data-act="move" data-stage="${s}">&nbsp;&nbsp;&nbsp;${st?.name||s}</button>`}).join('');
     const currentStageAssignable=getEtapeLabStages(c.type).includes(c.stage);
-    const assignedNow=stageAssignees(c,c.stage);
-    const assignOpts=currentStageAssignable
-      ? EMPLOYEES.filter(emp=>!assignedNow.includes(emp.id)).map(emp=>`<button class="kb-pop-item" type="button" data-act="assign" data-tech="${emp.id}">&nbsp;&nbsp;&nbsp;${emp.name}</button>`).join('')||'<div class="kb-pop-empty">Toți tehnicienii sunt adăugați</div>'
-      : '';
     const m=document.createElement('div');m.className='kb-card-popover';
     m.innerHTML=
       `<button class="kb-pop-item" type="button" data-act="view-pdf">Fișă PDF — Vizualizează</button>`+
@@ -571,7 +567,7 @@ function renderKanbanCard(c){
       `<div class="kb-pop-sep"></div>`+
       `<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button>`+
       (isAdminOrTech?`<div class="kb-pop-sep"></div><div class="kb-pop-label">Mută la etapă</div>${stageOpts}`+
-      (currentStageAssignable?`<div class="kb-pop-sep"></div><div class="kb-pop-label">Adaugă colaborator la ${getStage(c.stage)?.name||'etapa'}</div>${assignOpts}`:'')+
+      (currentStageAssignable?`<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="collaborators">Colaboratori...</button>`:'')+
       `<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="reset">Clear → Neînceput</button>`:'')+
       (user.role==='admin'||user.role==='clinic'?`<button class="kb-pop-item danger" type="button" data-act="delete">Șterge cazul</button>`:'');
     card.appendChild(m);
@@ -583,17 +579,7 @@ function renderKanbanCard(c){
       if(act==='reset'&&confirm(`Resetezi progresul pentru ${c.name}?`))resetCaseToNotStarted(c);
       if(act==='open')location.href=`case.html?id=${c.id}`;
       if(act==='move'){moveCaseToStage(c.id,it.dataset.stage)}
-      if(act==='assign'){
-        c.assignees=c.assignees||{};
-        addStageAssignee(c,c.stage,it.dataset.tech);
-        c.assignee=primaryStageAssignee(c,c.stage);
-        overrides.edits=overrides.edits||{};
-        overrides.edits[c.id]={...overrides.edits[c.id],assignees:c.assignees,assignee:c.assignee};
-        saveOverrides(overrides);
-        _syncCase(c);
-        renderPipeline();
-        if(typeof renderTable==='function')renderTable();
-      }
+      if(act==='collaborators'){openCollaboratorEditor(c,c.stage,()=>{renderPipeline();if(typeof renderTable==='function')renderTable();})}
       if(act==='delete'){deleteCase(c.id)}
       m.remove();
     }));
@@ -621,6 +607,38 @@ function resetCaseToNotStarted(c){
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
   renderClinic();
+}
+
+function openCollaboratorEditor(c,stageId,onDone){
+  if(!c||!stageId)return;
+  const stage=getStage(stageId);
+  const selected=new Set(stageAssignees(c,stageId));
+  openModal(`<div class="modal-head"><div class="modal-title">Colaboratori · ${stage?.name||stageId}</div><button class="modal-close" type="button">×</button></div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">${escHTML(c.name)} · alege unul sau mai mulți tehnicieni pentru această etapă.</div>
+      <div class="collab-list">
+        ${EMPLOYEES.map(emp=>`<label class="collab-option"><input type="checkbox" value="${emp.id}" ${selected.has(emp.id)?'checked':''}><span class="tl-tech ${emp.id}">${emp.initials}</span><span>${emp.name}</span></label>`).join('')}
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="saveCollaboratorsBtn" type="button">Salvează colaboratori</button></div>`);
+  document.getElementById('saveCollaboratorsBtn')?.addEventListener('click',()=>{
+    const ids=Array.from(document.querySelectorAll('.collab-option input:checked')).map(i=>i.value);
+    setStageAssignees(c,stageId,ids);
+    if(ids.length&&(!c.stageStatuses?.[stageId]||c.stageStatuses[stageId]==='neincepute')){
+      c.stageStatuses=c.stageStatuses||{};
+      c.stageStatuses[stageId]='in_lucru';
+      c.stage=stageId;
+      c.notStarted=false;
+      c.assignee=primaryStageAssignee(c,stageId);
+    }
+    overrides.edits=overrides.edits||{};
+    overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee};
+    saveOverrides(overrides);
+    _syncCase(c);
+    closeModal();
+    if(onDone)onDone();
+    else reRenderAll();
+  });
 }
 
 function attachDropZone(col,stageId){
@@ -777,7 +795,7 @@ function handleClinicAction(action,caseId){
       c.stage=labStage;
       c.stageStatuses[labStage]='proba_aprobata';
       c.notStarted=false;
-      c.assignee=c.assignees?.[labStage]||c.assignee||null;
+      c.assignee=primaryStageAssignee(c,labStage)||c.assignee||null;
     }
     else c.stage='terminat';
     overrides.stages=overrides.stages||{};overrides.stages[c.id]=c.stage;
@@ -850,6 +868,7 @@ function renderCaseDetail(){
         {value:'in_lucru',label:'Marchez ca: În lucru'},
         ...(labStageRequiresProbe(sId)?[{value:'la_proba',label:'Marchez ca: La probă'}]:[]),
         {value:'finalizat',label:'Marchez ca: Finalizat ✓'},
+        {value:'collaborators',label:'Colaboratori...'},
         {value:'reset',label:'Resetează (neincepute)'}
       ];
       const assignedStage=stageAssignees(c,sId);
@@ -859,6 +878,10 @@ function renderCaseDetail(){
       openInlinePopover(item,items,sel=>{
         c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
         if(sel.value==='claim'){activateLabStage(c,sId,user.id);}
+        else if(sel.value==='collaborators'){
+          openCollaboratorEditor(c,sId,()=>renderCaseDetail());
+          return;
+        }
         else if(sel.value==='reset'){
           resetCaseToNotStarted(c);
           renderCaseDetail();
@@ -996,9 +1019,9 @@ function renderTechnicianPortal(){
   const myStage=techStage(user.id);
   const stage=getStage(myStage);
   const stageName=stage.name;
-  const myInProgress=CASES.filter(c=>c.assignees?.[myStage]===user.id&&c.stageStatuses?.[myStage]==='in_lucru');
-  const sentToProbe=CASES.filter(c=>c.assignees?.[myStage]===user.id&&c.stageStatuses?.[myStage]==='la_proba');
-  const approvedCases=CASES.filter(c=>c.assignees?.[myStage]===user.id&&c.stageStatuses?.[myStage]==='proba_aprobata');
+  const myInProgress=CASES.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='in_lucru');
+  const sentToProbe=CASES.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='la_proba');
+  const approvedCases=CASES.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='proba_aprobata');
   const myActive=[...myInProgress,...approvedCases];
   const claimable=CASES.filter(c=>{
     const ms=getEtapeLabStages(c.type);
@@ -1009,7 +1032,7 @@ function renderTechnicianPortal(){
     if(my>0){const prev=ms[my-1];if(c.stageStatuses?.[prev]!=='finalizat')return false}
     return true;
   });
-  const completed=CASES.filter(c=>c.stageStatuses?.[myStage]==='finalizat'&&c.assignees?.[myStage]===user.id);
+  const completed=CASES.filter(c=>c.stageStatuses?.[myStage]==='finalizat'&&stageAssignees(c,myStage).includes(user.id));
   const approvedCount=approvedCases.length;
   const lateCount=[...myInProgress,...sentToProbe,...approvedCases].filter(c=>c.late).length;
   const stageColors={design:'#85B7EB',cam:'#444441',prelucrare:'#854F0B',ceramica:'#EF9F27'};
@@ -1033,7 +1056,7 @@ function renderTechnicianPortal(){
       const id=Number(btn.dataset.caseId),sid=btn.dataset.stage,act=btn.dataset.action;
       const c=getCase(id);if(!c)return;
       c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
-      if(act==='claim'){c.stageStatuses[sid]='in_lucru';c.assignees[sid]=user.id;c.notStarted=false;if(!c.assignee)c.assignee=user.id}
+      if(act==='claim'){c.stageStatuses[sid]='in_lucru';addStageAssignee(c,sid,user.id);c.notStarted=false;if(!c.assignee)c.assignee=primaryStageAssignee(c,sid)||user.id}
       else if(act==='proba'){c.stageStatuses[sid]='la_proba'}
       else if(act==='finalize')completeLabStage(c,sid)
       overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
@@ -1049,7 +1072,7 @@ function renderArchive(){
   const root=document.getElementById('archiveShell');if(!root)return;
   let trimise=CASES.filter(c=>c.stage==='trimis');
   if(archiveFilter.clinic!=='all')trimise=trimise.filter(c=>c.clinic===archiveFilter.clinic);
-  if(archiveFilter.tech!=='all')trimise=trimise.filter(c=>c.finalTech===archiveFilter.tech||c.assignee===archiveFilter.tech);
+  if(archiveFilter.tech!=='all')trimise=trimise.filter(c=>c.finalTech===archiveFilter.tech||c.assignee===archiveFilter.tech||Object.keys(c.assignees||{}).some(s=>stageAssignees(c,s).includes(archiveFilter.tech)));
   if(archiveFilter.type!=='all')trimise=trimise.filter(c=>c.type===archiveFilter.type);
   if(archiveFilter.q){const q=archiveFilter.q.toLowerCase();trimise=trimise.filter(c=>c.name.toLowerCase().includes(q)||String(c.id).includes(q))}
   if(archiveFilter.month!=='all')trimise=trimise.filter(c=>{const d=parseShortDate(c.sentDate||c.finala);return d&&d.getMonth()===Number(archiveFilter.month)});
@@ -1082,11 +1105,13 @@ function renderArchive(){
 function renderEchipa(){
   const root=document.getElementById('echipaShell');if(!root)return;
   const stats={};EMPLOYEES.forEach(e=>{stats[e.id]={active:0,done:0,late:0}});
-  CASES.forEach(c=>Object.entries(c.assignees||{}).forEach(([s,t])=>{
-    if(!stats[t])return;
+  CASES.forEach(c=>Object.keys(c.assignees||{}).forEach(s=>{
     const st=c.stageStatuses?.[s];
-    if(st==='finalizat')stats[t].done++;
-    else if(st==='in_lucru'||st==='la_proba'){stats[t].active++;if(c.late)stats[t].late++}
+    stageAssignees(c,s).forEach(t=>{
+      if(!stats[t])return;
+      if(st==='finalizat')stats[t].done++;
+      else if(st==='in_lucru'||st==='la_proba'||st==='proba_aprobata'){stats[t].active++;if(c.late)stats[t].late++}
+    });
   }));
   root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Echipa</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id];const TECH_COLORS={tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'};const TECH_ROLES={design:'Designer CAD',cam:'Tehnician CAM',ceramica:'Tehnician ceramică',prelucrare:'Tehnician prelucrare'};const stageColor=TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${e.initials}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${e.name}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div></div></main></div>`;
 }
@@ -1106,7 +1131,7 @@ function renderStats(){
     const cd=statsCountsByClinic();
     new Chart(document.getElementById('chartClinic'),{type:'bar',data:{labels:cd.map(c=>c.name),datasets:[{data:cd.map(c=>c.count),backgroundColor:'#1a1a1a'}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}});
     const techCnt={};EMPLOYEES.forEach(e=>techCnt[e.id]=0);
-    CASES.forEach(c=>{Object.values(c.assignees||{}).forEach(t=>{if(techCnt[t]!==undefined)techCnt[t]++})});
+    CASES.forEach(c=>{Object.keys(c.assignees||{}).forEach(s=>stageAssignees(c,s).forEach(t=>{if(techCnt[t]!==undefined)techCnt[t]++}))});
     new Chart(document.getElementById('chartTech'),{type:'bar',data:{labels:EMPLOYEES.map(e=>e.name),datasets:[{data:EMPLOYEES.map(e=>techCnt[e.id]),backgroundColor:EMPLOYEES.map(e=>({tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'})[e.id]||'#8B8B8B')}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
     new Chart(document.getElementById('chartOnTime'),{type:'doughnut',data:{labels:['La timp','Întârziate'],datasets:[{data:[onTime.onTime,onTime.late],backgroundColor:['#1D9E75','#A32D2D'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%'}});
   },50);
@@ -1694,7 +1719,7 @@ function attachInlineEditors(root) {
   });
 
   // STAGE NODE — click on .node or .node-em → richer menu
-  root.querySelectorAll('.node, .node-em').forEach(el => {
+  root.querySelectorAll('.node, .node-stack, .node-em, .node-current').forEach(el => {
     if (el.dataset.menuAttached) return;
     el.dataset.menuAttached = '1';
     el.addEventListener('click', e => {
@@ -1709,12 +1734,13 @@ function attachInlineEditors(root) {
         { value: 'in_lucru', label: 'Marchez ca: În lucru' },
         ...(labStageRequiresProbe(stage)?[{ value: 'la_proba', label: 'Marchez ca: La probă' }]:[]),
         { value: 'finalizat', label: 'Marchez ca: Finalizat ✓' },
+        { value: 'collaborators', label: 'Colaboratori...' },
         { value: 'reset', label: 'Resetează (neincepute)' }
       ];
       // Add tech-change submenu items
       EMPLOYEES.forEach(emp => {
-        if (emp.id !== c.assignees?.[stage]) {
-          items.push({ value: 'tech:' + emp.id, label: 'Reasignează → ' + emp.name });
+        if (!stageAssignees(c,stage).includes(emp.id)) {
+          items.push({ value: 'tech:' + emp.id, label: 'Adaugă colaborator → ' + emp.name });
         }
       });
       openInlinePopover(el, items, sel => {
@@ -1722,20 +1748,23 @@ function attachInlineEditors(root) {
         c.assignees = c.assignees || {};
         if (sel.value === 'claim') {
           activateLabStage(c,stage,user.id);
+        } else if (sel.value === 'collaborators') {
+          openCollaboratorEditor(c,stage,()=>{if(typeof renderTable==='function')renderTable();if(typeof renderPipeline==='function')renderPipeline();});
+          return;
         } else if (sel.value === 'reset') {
           resetCaseToNotStarted(c);
           return;
         } else if (sel.value.startsWith('tech:')) {
-          c.assignees[stage] = sel.value.slice(5);
-          if(c.stage===stage)c.assignee=c.assignees[stage];
+          addStageAssignee(c,stage,sel.value.slice(5));
+          if(c.stage===stage)c.assignee=primaryStageAssignee(c,stage);
         } else {
           if (sel.value === 'finalizat') completeLabStage(c, stage);
-          else if(sel.value==='in_lucru') activateLabStage(c,stage,c.assignees[stage]||user.id);
+          else if(sel.value==='in_lucru') activateLabStage(c,stage,primaryStageAssignee(c,stage)||user.id);
           else {
             c.stage=stage;
             c.notStarted=false;
             c.stageStatuses[stage]=sel.value;
-            c.assignee=c.assignees[stage]||c.assignee||null;
+            c.assignee=primaryStageAssignee(c,stage)||c.assignee||null;
           }
         }
         overrides.edits = overrides.edits || {};
