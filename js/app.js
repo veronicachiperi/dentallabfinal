@@ -688,7 +688,8 @@ function renderClinic(){
 
   function clinicFlowFor(c){
     const labStages=getEtapeLabStages(c.type);
-    return ['design','proba_aprobata',...labStages.filter(s=>s!=='design'),'terminat'];
+    const hasProbeStep=isCaseAtProba(c)||Boolean(probaApprovedStage(c))||c.stage==='proba';
+    return ['design',...(hasProbeStep?['proba_aprobata']:[]),...labStages.filter(s=>s!=='design'),'terminat'];
   }
 
   function clinicProgressIndex(c){
