@@ -1408,7 +1408,7 @@ function buildFisaHTML(c){
     <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:9px">
       <div>
         <div style="font-size:15px;font-weight:700">Fișă de laborator</div>
-        <div style="font-size:9px">LAB CAD · Laborator Dentar</div>
+        <div style="font-size:9px">PRIVATE CAD</div>
       </div>
       <div style="font-size:16px;font-weight:700">#${c.id}</div>
     </div>
