@@ -291,6 +291,8 @@ async function sbAdminCreateUser(username, password, role, clinicId, employeeId)
   if (!SUPABASE_CONFIGURED) return;
   const { data, error } = await _client().auth.signUp({ email: _toEmail(username), password });
   if (error) throw error;
+  // data.user is null when Supabase "Confirm email" is enabled — must be turned off
+  if (!data.user) throw new Error('Dezactivați "Confirm email" în Supabase → Authentication → Providers → Email');
   const { error: pe } = await _client().from('profiles').insert({
     id: data.user.id,
     username: username.trim(),

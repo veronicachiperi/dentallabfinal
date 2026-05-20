@@ -1174,14 +1174,24 @@ function openAddClinicModal(){
     status.textContent='Se salvează...';
     try{
       await sbSaveClinic(clinic);
-      if(createLogin&&username)await sbAdminCreateUser(username,pass,'clinic',id,null);
       CLINICS.push(clinic);
-      status.style.color='#1D9E75';status.textContent='✓ Clinică adăugată!';
-      setTimeout(()=>{closeModal();renderClinici();},800);
     }catch(e){
-      status.style.color='#A32D2D';status.textContent='Eroare: '+e.message;
+      status.style.color='#A32D2D';status.textContent='Eroare la salvare: '+e.message;
       document.getElementById('addCl_save').disabled=false;
+      return;
     }
+    if(createLogin&&username){
+      try{
+        await sbAdminCreateUser(username,pass,'clinic',id,null);
+      }catch(e){
+        status.style.color='#BA7517';
+        status.textContent='✓ Clinică salvată · Cont necreat: '+e.message;
+        setTimeout(()=>{closeModal();renderClinici();},3000);
+        return;
+      }
+    }
+    status.style.color='#1D9E75';status.textContent='✓ Clinică adăugată!';
+    setTimeout(()=>{closeModal();renderClinici();},800);
   });
 }
 
@@ -1224,14 +1234,24 @@ function openAddEmployeeModal(){
     status.textContent='Se salvează...';
     try{
       await sbSaveEmployee(emp);
-      if(createLogin&&username)await sbAdminCreateUser(username,pass,'technician',null,id);
       EMPLOYEES.push(emp);
-      status.style.color='#1D9E75';status.textContent='✓ Angajat adăugat!';
-      setTimeout(()=>{closeModal();renderEchipa();},800);
     }catch(e){
-      status.style.color='#A32D2D';status.textContent='Eroare: '+e.message;
+      status.style.color='#A32D2D';status.textContent='Eroare la salvare: '+e.message;
       document.getElementById('addEmp_save').disabled=false;
+      return;
     }
+    if(createLogin&&username){
+      try{
+        await sbAdminCreateUser(username,pass,'technician',null,id);
+      }catch(e){
+        status.style.color='#BA7517';
+        status.textContent='✓ Angajat salvat · Cont necreat: '+e.message;
+        setTimeout(()=>{closeModal();renderEchipa();},3000);
+        return;
+      }
+    }
+    status.style.color='#1D9E75';status.textContent='✓ Angajat adăugat!';
+    setTimeout(()=>{closeModal();renderEchipa();},800);
   });
 }
 
