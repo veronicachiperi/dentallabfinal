@@ -145,6 +145,7 @@ async function moveCaseToStage(id,stageId){
 }
 
 function reRenderAll(){
+  applyOverrides();
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
   renderPipeline();renderClinic();
@@ -320,17 +321,21 @@ function caseDueInfo(c){
 }
 
 function publicStageName(c){
+  // Final states must be checked first — stageStatuses retains historical values
+  // (e.g. proba_aprobata) even after a case advances to trimis/terminat
+  if(c?.stage==='trimis')return 'Trimisă';
+  if(c?.stage==='terminat')return 'Gata';
   if(isCaseNotStarted(c))return 'Neînceput';
   if(barsReadyStage(c))return 'Bare finalizate';
   if(barsWaitingStage(c))return 'În așteptarea barelor';
   if(probaApprovedStage(c))return 'Probă aprobată';
   if(isCaseAtProba(c))return 'La probă';
-  if(c?.stage==='trimis')return 'Trimisă';
-  if(c?.stage==='terminat')return 'Gata';
   return getStage(c?.stage)?.name || '—';
 }
 
 function publicStageColor(c){
+  if(c?.stage==='trimis')return getStage('trimis')?.color || '#27500A';
+  if(c?.stage==='terminat')return getStage('terminat')?.color || '#1D9E75';
   if(isCaseNotStarted(c))return '#9CA3AF';
   if(barsReadyStage(c))return '#1D9E75';
   if(barsWaitingStage(c))return '#854F0B';
@@ -359,6 +364,7 @@ function isCaseAtProba(c){
   return Boolean(c&&(c.stage==='proba'||probaLabStage(c)));
 }
 function isCaseProbaApproved(c){
+  if(!c||c.stage==='trimis'||c.stage==='terminat')return false;
   return Boolean(probaApprovedStage(c));
 }
 function refreshDerivedNotifications(){
@@ -1126,6 +1132,109 @@ function renderArchive(){
 }
 
 // === ECHIPA ===
+// ── Admin: add clinic ─────────────────────────────────────────
+function _slugify(str){return str.toLowerCase().trim().replace(/[^a-z0-9]+/g,'').slice(0,8);}
+function _initials(name){const p=name.trim().split(/\s+/);return((p[0]?.[0]||'')+(p[p.length-1]?.[0]||'')).toUpperCase();}
+
+function openAddClinicModal(){
+  const user=getCurrentUser();
+  if(!user||user.role!=='admin'){alert('Doar administratorul poate adăuga clinici.');return;}
+  openModal(`<div class="modal-header"><div class="modal-title">Clinică nouă</div><button class="modal-close" type="button">✕</button></div>
+  <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+    <div class="field"><label>Nume clinică *</label><input id="addCl_name" placeholder="ex: DENT SMILE" autocomplete="off"></div>
+    <div class="field"><label>Doctor (opțional)</label><input id="addCl_doctor" placeholder="Dr. Nume"></div>
+    <div class="field"><label>Telefon (opțional)</label><input id="addCl_phone" placeholder="+373 ..."></div>
+    <div style="padding:10px;background:var(--bg-soft);border-radius:6px;font-size:12px;color:var(--text-muted)">Contul de acces va fi creat cu username-ul generat automat.</div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="addCl_createLogin" checked> Creează cont de autentificare</label>
+    <div id="addCl_loginFields"><div class="field"><label>Username</label><input id="addCl_user" placeholder="ex: DentSmile" autocomplete="off"></div>
+    <div class="field"><label>Parolă temporară (min. 8 caractere)</label><input type="password" id="addCl_pass" autocomplete="new-password"></div></div>
+    <div id="addCl_status" style="font-size:13px;min-height:18px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="addCl_save" type="button">Salvează</button></div>
+  </div>`);
+  const nameEl=document.getElementById('addCl_name');
+  const userEl=document.getElementById('addCl_user');
+  nameEl.addEventListener('input',()=>{if(!userEl.dataset.edited)userEl.value=nameEl.value.trim().replace(/\s+/g,'');});
+  userEl.addEventListener('input',()=>userEl.dataset.edited='1');
+  document.getElementById('addCl_createLogin').addEventListener('change',e=>{
+    document.getElementById('addCl_loginFields').style.display=e.target.checked?'':'none';
+  });
+  document.getElementById('addCl_save').addEventListener('click',async()=>{
+    const name=nameEl.value.trim();
+    if(!name){alert('Introduceți numele clinicii.');return;}
+    let id=_slugify(name);
+    if(!id){alert('Nume invalid.');return;}
+    if(CLINICS.find(c=>c.id===id))id+=Date.now().toString().slice(-4);
+    const clinic={id,name,doctor:document.getElementById('addCl_doctor').value.trim(),phone:document.getElementById('addCl_phone').value.trim(),color:''};
+    const createLogin=document.getElementById('addCl_createLogin').checked;
+    const username=document.getElementById('addCl_user').value.trim();
+    const pass=document.getElementById('addCl_pass').value;
+    const status=document.getElementById('addCl_status');
+    if(createLogin&&pass.length<8){alert('Parola trebuie să aibă minim 8 caractere.');return;}
+    document.getElementById('addCl_save').disabled=true;
+    status.textContent='Se salvează...';
+    try{
+      await sbSaveClinic(clinic);
+      if(createLogin&&username)await sbAdminCreateUser(username,pass,'clinic',id,null);
+      CLINICS.push(clinic);
+      status.style.color='#1D9E75';status.textContent='✓ Clinică adăugată!';
+      setTimeout(()=>{closeModal();renderClinici();},800);
+    }catch(e){
+      status.style.color='#A32D2D';status.textContent='Eroare: '+e.message;
+      document.getElementById('addCl_save').disabled=false;
+    }
+  });
+}
+
+// ── Admin: add employee ───────────────────────────────────────
+function openAddEmployeeModal(){
+  const user=getCurrentUser();
+  if(!user||user.role!=='admin'){alert('Doar administratorul poate adăuga angajați.');return;}
+  openModal(`<div class="modal-header"><div class="modal-title">Angajat nou</div><button class="modal-close" type="button">✕</button></div>
+  <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+    <div class="field"><label>Nume complet *</label><input id="addEmp_name" placeholder="ex: Ion Popescu" autocomplete="off"></div>
+    <div class="field"><label>Secție *</label><select id="addEmp_stage"><option value="design">Design CAD</option><option value="cam">CAM</option><option value="ceramica">Ceramică</option><option value="prelucrare">Prelucrare</option></select></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="addEmp_createLogin" checked> Creează cont de autentificare</label>
+    <div id="addEmp_loginFields"><div class="field"><label>Username</label><input id="addEmp_user" placeholder="ex: IonPopescu" autocomplete="off"></div>
+    <div class="field"><label>Parolă temporară (min. 8 caractere)</label><input type="password" id="addEmp_pass" autocomplete="new-password"></div></div>
+    <div id="addEmp_status" style="font-size:13px;min-height:18px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="addEmp_save" type="button">Salvează</button></div>
+  </div>`);
+  const nameEl=document.getElementById('addEmp_name');
+  const userEl=document.getElementById('addEmp_user');
+  nameEl.addEventListener('input',()=>{if(!userEl.dataset.edited)userEl.value=nameEl.value.trim().replace(/\s+/g,'');});
+  userEl.addEventListener('input',()=>userEl.dataset.edited='1');
+  document.getElementById('addEmp_createLogin').addEventListener('change',e=>{
+    document.getElementById('addEmp_loginFields').style.display=e.target.checked?'':'none';
+  });
+  document.getElementById('addEmp_save').addEventListener('click',async()=>{
+    const name=nameEl.value.trim();
+    if(!name){alert('Introduceți numele angajatului.');return;}
+    const parts=name.split(/\s+/);
+    const initials=_initials(name);
+    let id=(parts[parts.length-1]||parts[0]).toLowerCase().slice(0,4).replace(/[^a-z]/g,'');
+    if(!id||EMPLOYEES.find(e=>e.id===id))id+='_'+Date.now().toString().slice(-3);
+    const stage=document.getElementById('addEmp_stage').value;
+    const emp={id,name,initials,stage,color:''};
+    const createLogin=document.getElementById('addEmp_createLogin').checked;
+    const username=document.getElementById('addEmp_user').value.trim();
+    const pass=document.getElementById('addEmp_pass').value;
+    const status=document.getElementById('addEmp_status');
+    if(createLogin&&pass.length<8){alert('Parola trebuie să aibă minim 8 caractere.');return;}
+    document.getElementById('addEmp_save').disabled=true;
+    status.textContent='Se salvează...';
+    try{
+      await sbSaveEmployee(emp);
+      if(createLogin&&username)await sbAdminCreateUser(username,pass,'technician',null,id);
+      EMPLOYEES.push(emp);
+      status.style.color='#1D9E75';status.textContent='✓ Angajat adăugat!';
+      setTimeout(()=>{closeModal();renderEchipa();},800);
+    }catch(e){
+      status.style.color='#A32D2D';status.textContent='Eroare: '+e.message;
+      document.getElementById('addEmp_save').disabled=false;
+    }
+  });
+}
+
 function renderEchipa(){
   const root=document.getElementById('echipaShell');if(!root)return;
   const stats={};EMPLOYEES.forEach(e=>{stats[e.id]={active:0,done:0,late:0}});
@@ -1137,7 +1246,9 @@ function renderEchipa(){
       else if(st==='in_lucru'||st==='la_proba'||st==='proba_aprobata'){stats[t].active++;if(c.late)stats[t].late++}
     });
   }));
-  root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Echipa</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id];const TECH_COLORS={tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'};const TECH_ROLES={design:'Designer CAD',cam:'Tehnician CAM',ceramica:'Tehnician ceramică',prelucrare:'Tehnician prelucrare'};const stageColor=TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${e.initials}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${e.name}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div></div></main></div>`;
+  const isAdmin=(getCurrentUser()||{}).role==='admin';
+  root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Echipa</h1>${isAdmin?'<button class="btn primary" id="addEmpBtn" type="button">+ Angajat nou</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id]||{active:0,done:0,late:0};const TECH_COLORS={tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'};const TECH_ROLES={design:'Designer CAD',cam:'Tehnician CAM',ceramica:'Tehnician ceramică',prelucrare:'Tehnician prelucrare'};const stageColor=e.color||TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${escHTML(e.initials)}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div></div></main></div>`;
+  document.getElementById('addEmpBtn')?.addEventListener('click',openAddEmployeeModal);
 }
 
 // === STATS ===
@@ -1164,7 +1275,9 @@ function renderStats(){
 // === CLINICI LIST ===
 function renderClinici(){
   const root=document.getElementById('cliniciShell');if(!root)return;
-  root.innerHTML=`<div class="app">${adminSidebarHTML('clinici')}<main class="main"><div style="padding:24px;max-width:1100px"><h1 style="font-size:22px;font-weight:500;margin:0 0 6px">Clinici</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${CLINICS.length} clinici · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${CLINICS.map(cl=>{const cases=casesForClinic(cl.id);const active=cases.filter(c=>c.stage!=='trimis').length;const late=cases.filter(c=>c.late).length;const ready=cases.filter(c=>c.stage==='terminat').length;const proba=cases.filter(c=>c.stage==='proba').length;return `<a href="clinic.html?id=${cl.id}" style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:18px;text-decoration:none;color:var(--text);display:block"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:42px;height:42px;border-radius:8px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--text-muted)">${cl.name.slice(0,2)}</div><div><div style="font-size:15px;font-weight:500">${cl.name}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:12px;border-top:0.5px solid var(--border)"><div><div style="font-size:18px;font-weight:500">${active}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Active</div></div><div><div style="font-size:18px;font-weight:500;color:#BA7517">${proba}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Probă</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${ready}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Gata</div></div><div><div style="font-size:18px;font-weight:500;color:${late?'#A32D2D':'var(--text-dim)'}">${late}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Restant</div></div></div></a>`}).join('')}</div></div></main></div>`;
+  const isAdmin=(getCurrentUser()||{}).role==='admin';
+  root.innerHTML=`<div class="app">${adminSidebarHTML('clinici')}<main class="main"><div style="padding:24px;max-width:1100px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Clinici</h1>${isAdmin?'<button class="btn primary" id="addClinicBtn" type="button">+ Clinică nouă</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${CLINICS.length} clinici · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${CLINICS.map(cl=>{const cases=casesForClinic(cl.id);const active=cases.filter(c=>c.stage!=='trimis').length;const late=cases.filter(c=>c.late).length;const ready=cases.filter(c=>c.stage==='terminat').length;const proba=cases.filter(c=>c.stage==='proba').length;return `<a href="clinic.html?id=${cl.id}" style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:18px;text-decoration:none;color:var(--text);display:block"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:42px;height:42px;border-radius:8px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--text-muted)">${escHTML(cl.name.slice(0,2))}</div><div><div style="font-size:15px;font-weight:500">${escHTML(cl.name)}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:12px;border-top:0.5px solid var(--border)"><div><div style="font-size:18px;font-weight:500">${active}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Active</div></div><div><div style="font-size:18px;font-weight:500;color:#BA7517">${proba}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Probă</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${ready}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Gata</div></div><div><div style="font-size:18px;font-weight:500;color:${late?'#A32D2D':'var(--text-dim)'}">${late}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Restant</div></div></div></a>`}).join('')}</div></div></main></div>`;
+  document.getElementById('addClinicBtn')?.addEventListener('click',openAddClinicModal);
 }
 
 function adminSidebarHTML(active){
@@ -1954,13 +2067,15 @@ async function initApp(){
     if(prof.role==='clinic'&&prof.clinic_id&&!location.pathname.includes('clinic.html')&&!location.pathname.includes('case.html')&&!location.pathname.includes('termeni.html')){
       location.href='clinic.html?id='+prof.clinic_id;return;
     }
-    const sbCases=await sbLoadCases();
-      if(sbCases){
-        CASES.length=0;
-        sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
-        applyOverrides();
-        loadNewCases();
-      }
+    const [sbCases,sbClinics,sbEmps]=await Promise.all([sbLoadCases(),sbLoadClinics(),sbLoadEmployees()]);
+    if(sbClinics){CLINICS.length=0;sbClinics.forEach(c=>CLINICS.push(c));}
+    if(sbEmps){EMPLOYEES.length=0;sbEmps.forEach(e=>EMPLOYEES.push(e));}
+    if(sbCases){
+      CASES.length=0;
+      sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
+      applyOverrides();
+      loadNewCases();
+    }
     sbSubscribeCases(reRenderAll);
   }
   applySidebarRoles();

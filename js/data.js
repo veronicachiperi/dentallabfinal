@@ -43,7 +43,7 @@ const PROBA_STATES = [
   { id: 'back',   label: 'Înapoi la lab' }
 ];
 
-const CLINICS = [
+let CLINICS = [
   { id: 'crisdent', name: 'CRISDENT',        doctor: 'Dr. Popescu A.' },
   { id: 'pana',     name: 'PANA DENT',       doctor: 'Dr. Pană M.' },
   { id: 'elite',    name: 'ELITE MED',       doctor: 'Dr. Ionescu R.' },
@@ -52,7 +52,7 @@ const CLINICS = [
   { id: 'melian',   name: 'Melian Clinic',   doctor: 'Dr. —' }
 ];
 
-const EMPLOYEES = [
+let EMPLOYEES = [
   { id: 'tchi', name: 'Timofei Chiochiu',    initials: 'TC', stage: 'design' },
   { id: 'vcel', name: 'Vadim Celac',          initials: 'VC', stage: 'design' },
   { id: 'ikar', name: 'Ivan Kara',            initials: 'IK', stage: 'design' },

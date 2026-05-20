@@ -238,6 +238,71 @@ async function sbLoadActivityLog(limit = 300) {
   return error ? [] : data;
 }
 
+// ── Clinics CRUD ─────────────────────────────────────────────
+async function sbLoadClinics() {
+  if (!SUPABASE_CONFIGURED) return null;
+  const { data, error } = await _client().from('clinics').select('*').order('name');
+  if (error) { console.error('[supabase] loadClinics:', error.message); return null; }
+  return data.map(r => ({ id: r.id, name: r.name, doctor: r.doctor || '', phone: r.phone || '', color: r.color || '' }));
+}
+
+async function sbSaveClinic(clinic) {
+  if (!SUPABASE_CONFIGURED) return;
+  const { error } = await _client().from('clinics').upsert(
+    { id: clinic.id, name: clinic.name, doctor: clinic.doctor || '', phone: clinic.phone || '', color: clinic.color || '' }
+  );
+  if (error) throw error;
+  await _sbLog('save_clinic', 'clinic', clinic.id, { name: clinic.name });
+}
+
+async function sbDeleteClinic(id) {
+  if (!SUPABASE_CONFIGURED) return;
+  const { error } = await _client().from('clinics').delete().eq('id', id);
+  if (error) throw error;
+  await _sbLog('delete_clinic', 'clinic', id, {});
+}
+
+// ── Employees CRUD ────────────────────────────────────────────
+async function sbLoadEmployees() {
+  if (!SUPABASE_CONFIGURED) return null;
+  const { data, error } = await _client().from('employees').select('*').order('name');
+  if (error) { console.error('[supabase] loadEmployees:', error.message); return null; }
+  return data.map(r => ({ id: r.id, name: r.name, initials: r.initials || '', stage: r.stage || 'design', color: r.color || '' }));
+}
+
+async function sbSaveEmployee(emp) {
+  if (!SUPABASE_CONFIGURED) return;
+  const { error } = await _client().from('employees').upsert(
+    { id: emp.id, name: emp.name, initials: emp.initials || '', stage: emp.stage || 'design', color: emp.color || '' }
+  );
+  if (error) throw error;
+  await _sbLog('save_employee', 'employee', emp.id, { name: emp.name });
+}
+
+async function sbDeleteEmployee(id) {
+  if (!SUPABASE_CONFIGURED) return;
+  const { error } = await _client().from('employees').delete().eq('id', id);
+  if (error) throw error;
+  await _sbLog('delete_employee', 'employee', id, {});
+}
+
+// Creates a login account for a clinic or employee (admin only)
+async function sbAdminCreateUser(username, password, role, clinicId, employeeId) {
+  if (!SUPABASE_CONFIGURED) return;
+  const { data, error } = await _client().auth.signUp({ email: _toEmail(username), password });
+  if (error) throw error;
+  const { error: pe } = await _client().from('profiles').insert({
+    id: data.user.id,
+    username: username.trim(),
+    role,
+    clinic_id:   clinicId   || null,
+    employee_id: employeeId || null,
+  });
+  if (pe) throw pe;
+  await _sbLog('create_user', 'profile', data.user.id, { username, role });
+  return data;
+}
+
 // ── Real-time ────────────────────────────────────────────────
 function sbSubscribeCases(onRefresh) {
   if (!SUPABASE_CONFIGURED) return;
