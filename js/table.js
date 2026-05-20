@@ -95,8 +95,9 @@ function renderFlowIndicator(c) {
     const techIds = stageAssignees(c,sId);
     const techs = techIds.map(id=>getEmployee(id)).filter(Boolean);
     const tech = techs[0] || null;
-    if ((status === 'finalizat' || status === 'in_lucru' || status === 'la_proba' || status === 'proba_aprobata' || status === 'asteptare_bari') && tech) {
+    if ((status === 'finalizat' || status === 'in_lucru' || status === 'la_proba' || status === 'proba_aprobata' || status === 'asteptare_bari' || status === 'bari_finalizate') && tech) {
       const badge = status === 'finalizat' ? `<span class="substate-badge final">✓</span>` :
+                    status === 'bari_finalizate' ? `<span class="substate-badge final">✓</span>` :
                     status === 'asteptare_bari' ? `<span class="substate-badge bars">B</span>` :
                     status === 'proba_aprobata' ? `<span class="substate-badge approved">A</span>` :
                     status === 'la_proba' ? `<span class="substate-badge proba">P</span>` :

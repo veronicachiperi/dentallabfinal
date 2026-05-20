@@ -553,6 +553,7 @@ button{font-family:inherit;cursor:pointer}
 .tp-task-status.in-lucru{background:var(--warn-bg);color:var(--warn)}
 .tp-task-status.la-proba{background:var(--info-bg);color:var(--info)}
 .tp-task-status.proba-approved{background:var(--good-bg);color:var(--good)}
+.tp-task-status.asteptare-bari{background:#FAEEDA;color:#854F0B}
 .tp-task-due{text-align:right;font-size:11px;color:var(--text-muted);white-space:nowrap}
 .tp-task-due-bold{font-size:12px;font-weight:600;color:var(--text)}
 .tp-task-due-bold.late{color:var(--late)}
