@@ -662,9 +662,12 @@ button{font-family:inherit;cursor:pointer}
 
 /* Progress bar pe portalul clinicii */
 .pc-progress-cell {
-  display: flex;
+  display: grid;
+  grid-template-columns: 90px minmax(110px,1fr);
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 3px;
+  min-width: 0;
 }
 .pc-progress-bar {
   width: 90px;
@@ -684,8 +687,12 @@ button{font-family:inherit;cursor:pointer}
   font-size: 12px;
   color: var(--text);
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.pc-stage-trail{display:flex;align-items:center;gap:5px;margin-top:4px;font-size:9px;color:var(--text-dim);white-space:nowrap}
+.pc-stage-trail{grid-column:1 / -1;display:flex;align-items:center;gap:5px;margin-top:2px;font-size:9px;color:var(--text-dim);white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.pc-stage-trail span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .pc-stage-trail span.current{color:var(--text);font-weight:600}
 .pc-stage-trail span.done{color:#1D9E75}
 .pc-stage-trail b{font-weight:400;color:#C7C5BD}
@@ -695,7 +702,8 @@ button{font-family:inherit;cursor:pointer}
 
 /* Modificare grid pc-row-grid (era 7 coloane, acum 6) */
 .pc-row-grid {
-  grid-template-columns: 60px 1.6fr 1fr 200px 100px 130px;
+  grid-template-columns: 60px minmax(170px,1.2fr) minmax(110px,.7fr) minmax(320px,1.5fr) 95px 130px;
+  align-items: center;
 }
 
 /* Tab-uri clinici sus */
