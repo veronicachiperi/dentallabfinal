@@ -92,14 +92,15 @@ function renderFlowIndicator(c) {
   let html = '<span class="flow">';
   stages.forEach((sId, i) => {
     const status = c.stageStatuses?.[sId] || 'neincepute';
-    const techId = c.assignees?.[sId];
-    const tech = techId ? getEmployee(techId) : null;
+    const techIds = stageAssignees(c,sId);
+    const techs = techIds.map(id=>getEmployee(id)).filter(Boolean);
+    const tech = techs[0] || null;
     if ((status === 'finalizat' || status === 'in_lucru' || status === 'la_proba' || status === 'proba_aprobata') && tech) {
       const badge = status === 'finalizat' ? `<span class="substate-badge final">✓</span>` :
                     status === 'proba_aprobata' ? `<span class="substate-badge approved">A</span>` :
                     status === 'la_proba' ? `<span class="substate-badge proba">P</span>` :
                     `<span class="substate-badge lucru">●</span>`;
-      html += `<span class="node ${tech.id}" data-case-id="${c.id}" data-stage="${sId}" title="${tech.name} · ${status}">${tech.initials}${badge}</span>`;
+      html += `<span class="node-stack" data-case-id="${c.id}" data-stage="${sId}" title="${techs.map(t=>t.name).join(', ')} · ${status}"><span class="node ${tech.id}">${tech.initials}${badge}</span>${techs.slice(1,3).map(t=>`<span class="node mini ${t.id}">${t.initials}</span>`).join('')}</span>`;
     } else if (!c.notStarted && c.stage === sId) {
       html += `<span class="node-current" data-case-id="${c.id}" data-stage="${sId}" title="Etapa curentă · nerevendicată">${labels[sId]}</span>`;
     } else {
@@ -117,11 +118,11 @@ function renderFlowIndicator(c) {
 function attachTableHandlers(root) {
   root.querySelectorAll('tbody tr').forEach(tr => {
     tr.addEventListener('click', e => {
-      if (e.target.closest('.node, .node-em, .fisa-btn, button, .row-actions-menu')) return;
+      if (e.target.closest('.node, .node-stack, .node-em, .fisa-btn, button, .row-actions-menu')) return;
       location.href = `case.html?id=${tr.dataset.caseId}`;
     });
   });
-  root.querySelectorAll('.node, .node-em, .node-current').forEach(node => {
+  root.querySelectorAll('.node, .node-stack, .node-em, .node-current').forEach(node => {
     node.addEventListener('click', e => { if(node.dataset.menuAttached)return; e.stopPropagation(); handleStageClick(Number(node.dataset.caseId), node.dataset.stage); });
   });
   root.querySelectorAll('[data-row-actions]').forEach(btn => {
@@ -164,10 +165,10 @@ function handleStageClick(caseId, stageId) {
     if(typeof activateLabStage==='function')activateLabStage(c,stageId,c.assignees[stageId]||user.id);
     else {
       c.stageStatuses[stageId] = 'in_lucru';
-      if (!c.assignees[stageId]) c.assignees[stageId] = user.id;
+      if (!stageAssignees(c,stageId).length) addStageAssignee(c,stageId,user.id);
       c.notStarted = false;
       c.stage = stageId;
-      c.assignee = c.assignees[stageId];
+      c.assignee = primaryStageAssignee(c,stageId);
     }
   } else if (status === 'in_lucru' && typeof labStageRequiresProbe==='function' && labStageRequiresProbe(stageId)) {
     c.stageStatuses[stageId] = 'la_proba';

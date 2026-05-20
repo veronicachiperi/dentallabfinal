@@ -194,13 +194,31 @@ function completeLabStage(c, stageId) {
     const next = stages[nextIdx];
     c.stage = next;
     if (!c.stageStatuses[next]) c.stageStatuses[next] = 'neincepute';
-    c.assignee = c.assignees[next] || null;
+    c.assignee = primaryStageAssignee(c,next);
   } else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) {
     c.stage = 'proba';
   }
 }
 function labStageRequiresProbe(stageId) {
   return stageId === 'design';
+}
+function stageAssignees(c, stageId) {
+  const raw = c?.assignees?.[stageId];
+  if (!raw) return [];
+  return Array.isArray(raw) ? raw.filter(Boolean) : [raw];
+}
+function primaryStageAssignee(c, stageId) {
+  return stageAssignees(c, stageId)[0] || null;
+}
+function setStageAssignees(c, stageId, ids) {
+  c.assignees = c.assignees || {};
+  const clean = [...new Set((ids || []).filter(Boolean))];
+  if (!clean.length) delete c.assignees[stageId];
+  else c.assignees[stageId] = clean.length === 1 ? clean[0] : clean;
+  if (c.stage === stageId) c.assignee = clean[0] || null;
+}
+function addStageAssignee(c, stageId, id) {
+  setStageAssignees(c, stageId, [...stageAssignees(c, stageId), id]);
 }
 function nextCaseId() { return CASES.length ? Math.max(...CASES.map(c => c.id)) + 1 : 1; }
 
