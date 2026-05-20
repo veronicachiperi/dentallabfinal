@@ -230,10 +230,14 @@ function applySidebarRoles(){
       if(spDot)spDot.className='sp-dot '+spSel.value;
     };
   }
-  // Hide nav items not allowed for this role
+  // Admin and tech see all nav items; only clinic users get a restricted sidebar
   document.querySelectorAll('[data-roles]').forEach(el=>{
-    const roles=el.dataset.roles.split(',');
-    el.style.display=roles.includes(roleKey)?'':'none';
+    if(roleKey==='clinic'){
+      const roles=el.dataset.roles.split(',');
+      el.style.display=roles.includes('clinic')?'':'none';
+    } else {
+      el.style.display='';
+    }
   });
   document.querySelectorAll('[data-admin-only]').forEach(el=>{
     el.style.display=user.role==='admin'?'':'none';
@@ -1954,6 +1958,8 @@ async function initApp(){
       if(sbCases){
         CASES.length=0;
         sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
+        applyOverrides();
+        loadNewCases();
       }
     sbSubscribeCases(reRenderAll);
   }
@@ -1977,4 +1983,9 @@ async function initApp(){
   // Re-render table/pipeline after Supabase data loaded (table.js may have rendered with empty data)
   if(SUPABASE_CONFIGURED&&typeof setMainView==='function')setMainView(localStorage.getItem('dental-lab-view')||'table');
 }
-document.addEventListener('DOMContentLoaded',initApp);
+document.addEventListener('DOMContentLoaded',()=>{
+  // Apply sidebar immediately from localStorage cache so there is no flicker
+  // while waiting for Supabase auth to resolve
+  applySidebarRoles();
+  initApp();
+});
