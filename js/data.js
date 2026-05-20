@@ -197,8 +197,10 @@ function completeLabStage(c, stageId) {
     if (!stageAssignees(c,next).length && STAGE_ASSIGNEE_DEFAULTS[next]) addStageAssignee(c,next,STAGE_ASSIGNEE_DEFAULTS[next]);
     c.assignee = primaryStageAssignee(c,next);
   } else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) {
-    c.stage = 'proba';
-    c.assignee = null;
+    if (c.stage !== 'terminat' && c.stage !== 'trimis' && c.stage !== 'proba') {
+      c.stage = 'proba';
+      c.assignee = null;
+    }
   }
 }
 function labStageRequiresProbe(stageId) {

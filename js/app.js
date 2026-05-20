@@ -1139,7 +1139,7 @@ function _initials(name){const p=name.trim().split(/\s+/);return((p[0]?.[0]||'')
 function openAddClinicModal(){
   const user=getCurrentUser();
   if(!user||user.role!=='admin'){alert('Doar administratorul poate adăuga clinici.');return;}
-  openModal(`<div class="modal-header"><div class="modal-title">Clinică nouă</div><button class="modal-close" type="button">✕</button></div>
+  openModal(`<div class="modal-head"><div class="modal-title">Clinică nouă</div><button class="modal-close" type="button">×</button></div>
   <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
     <div class="field"><label>Nume clinică *</label><input id="addCl_name" placeholder="ex: DENT SMILE" autocomplete="off"></div>
     <div class="field"><label>Doctor (opțional)</label><input id="addCl_doctor" placeholder="Dr. Nume"></div>
@@ -1199,7 +1199,7 @@ function openAddClinicModal(){
 function openAddEmployeeModal(){
   const user=getCurrentUser();
   if(!user||user.role!=='admin'){alert('Doar administratorul poate adăuga angajați.');return;}
-  openModal(`<div class="modal-header"><div class="modal-title">Angajat nou</div><button class="modal-close" type="button">✕</button></div>
+  openModal(`<div class="modal-head"><div class="modal-title">Angajat nou</div><button class="modal-close" type="button">×</button></div>
   <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
     <div class="field"><label>Nume complet *</label><input id="addEmp_name" placeholder="ex: Ion Popescu" autocomplete="off"></div>
     <div class="field"><label>Secție *</label><select id="addEmp_stage"><option value="design">Design CAD</option><option value="cam">CAM</option><option value="ceramica">Ceramică</option><option value="prelucrare">Prelucrare</option></select></div>
