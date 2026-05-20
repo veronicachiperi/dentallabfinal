@@ -57,7 +57,7 @@ function renderTable() {
 }
 
 function renderTableRow(c) {
-  const clinic = getClinic(c.clinic);
+  const clinic = getClinic(c.clinic) || { name: c.clinic || '—', doctor: '' };
   const stage = getStage(c.stage) || STAGES[0];
   const stageColor = publicStageColor(c);
   const stageLabel = publicStageName(c);
@@ -195,7 +195,7 @@ function handleStageClick(caseId, stageId) {
 function exportCSV() {
   const cases = applyFilter(CASES);
   const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Intrată','Probă','Finală','Prioritate','Dinți','Implant','Amprentă','Note'];
-  const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');return [c.id, c.name, getClinic(c.clinic).name, c.doctor || getClinic(c.clinic).doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), c.implantType || '', c.amprentaType || '', notes]});
+  const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');const cl=getClinic(c.clinic)||{name:c.clinic||'—',doctor:''};return [c.id, c.name, cl.name, c.doctor || cl.doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), c.implantType || '', c.amprentaType || '', notes]});
   const csv = [headers, ...rows].map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);

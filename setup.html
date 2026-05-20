@@ -22,28 +22,32 @@
     .pass-row{display:flex;gap:10px;align-items:flex-end;margin-bottom:20px}
     .pass-row .field{flex:1;margin:0}
     .warn-box{background:#FAEEDA;border:0.5px solid #BA7517;border-radius:6px;padding:12px;font-size:12px;color:#7A4D0A;margin-bottom:20px}
+    #authGuard{text-align:center;padding:60px 20px;color:var(--text-muted);font-size:14px}
   </style>
 </head>
 <body>
 <div class="setup-box">
-  <div class="setup-title">Creare conturi utilizatori</div>
-  <div class="setup-sub">Rulează o singură dată pentru a crea toate conturile în Supabase.</div>
+  <div id="authGuard">Se verifică autentificarea...</div>
+  <div id="setupContent" style="display:none">
+    <div class="setup-title">Creare conturi utilizatori</div>
+    <div class="setup-sub">Rulează o singură dată pentru a crea toate conturile în Supabase.</div>
 
-  <div class="warn-box">
-    ⚠ Setează o parolă temporară. Toți utilizatorii vor folosi această parolă la prima autentificare.
-  </div>
-
-  <div class="pass-row">
-    <div class="field">
-      <label>Parolă temporară (min. 8 caractere)</label>
-      <input type="password" id="defaultPass" value="Dental2024!" autocomplete="new-password">
+    <div class="warn-box">
+      ⚠ Setează o parolă temporară. Utilizatorii vor schimba parola la prima autentificare.
     </div>
-    <button class="btn primary" id="startBtn" type="button">Creează toate conturile</button>
-  </div>
 
-  <div id="userList"></div>
-  <div id="doneMsg" style="display:none;margin-top:20px;padding:14px;background:#EAF3DE;border-radius:6px;font-size:13px;color:#27500A;font-weight:500">
-    ✓ Toate conturile au fost create. <a href="login.html" style="color:#1D9E75">Mergi la autentificare →</a>
+    <div class="pass-row">
+      <div class="field">
+        <label>Parolă temporară (min. 8 caractere)</label>
+        <input type="password" id="defaultPass" placeholder="Introduceți parola temporară" autocomplete="new-password">
+      </div>
+      <button class="btn primary" id="startBtn" type="button">Creează toate conturile</button>
+    </div>
+
+    <div id="userList"></div>
+    <div id="doneMsg" style="display:none;margin-top:20px;padding:14px;background:#EAF3DE;border-radius:6px;font-size:13px;color:#27500A;font-weight:500">
+      ✓ Toate conturile au fost create. <a href="login.html" style="color:#1D9E75">Mergi la autentificare →</a>
+    </div>
   </div>
 </div>
 
@@ -52,19 +56,14 @@
 <script src="js/supabase.js"></script>
 <script>
 const USERS = [
-  // Admin
   { username: 'VeronicaChiperi',    role: 'admin',      section: 'Admin' },
-  // Design
   { username: 'TimofeiChiochiu',    role: 'technician', employeeId: 'tchi', section: 'Design' },
   { username: 'VadimCelac',         role: 'technician', employeeId: 'vcel', section: 'Design' },
   { username: 'IvanKara',           role: 'technician', employeeId: 'ikar', section: 'Design' },
-  // Ceramică
-  { username: 'AlinaCurtis',        role: 'technician', employeeId: 'acur', section: 'Ceramică' },
+  { username: 'AlinaCurtis',        role: 'clinic',     clinicId: 'acur', section: 'Ceramică' },
   { username: 'ValentinGrajdianu',  role: 'technician', employeeId: 'vgra', section: 'Ceramică' },
-  // Composite / Prelucrare
   { username: 'AlexandruMoisei',    role: 'technician', employeeId: 'amoi', section: 'Composite' },
   { username: 'AlexandruVarzari',   role: 'technician', employeeId: 'avar', section: 'Composite' },
-  // Clinici
   { username: 'CRISDENT',           role: 'clinic',     clinicId: 'crisdent', section: 'Clinici' },
   { username: 'FAVDENTAL',          role: 'clinic',     clinicId: 'fav',      section: 'Clinici' },
   { username: 'MELIANCLINIC',       role: 'clinic',     clinicId: 'melian',   section: 'Clinici' },
@@ -72,6 +71,27 @@ const USERS = [
   { username: 'ELITEMED',           role: 'clinic',     clinicId: 'elite',    section: 'Clinici' },
   { username: 'PANADENT',           role: 'clinic',     clinicId: 'pana',     section: 'Clinici' },
 ];
+
+async function checkAdminAuth() {
+  const guard = document.getElementById('authGuard');
+  const content = document.getElementById('setupContent');
+  if (!SUPABASE_CONFIGURED) {
+    guard.innerHTML = 'Supabase nu este configurat.';
+    return;
+  }
+  const prof = await sbRequireAuth();
+  if (!prof) {
+    guard.innerHTML = '<p>Trebuie să fii autentificat.</p><a class="btn primary" href="login.html">Autentificare</a>';
+    return;
+  }
+  if (prof.role !== 'admin') {
+    guard.innerHTML = '<p>Acces permis doar administratorilor.</p><a class="btn" href="index.html">Înapoi</a>';
+    return;
+  }
+  guard.style.display = 'none';
+  content.style.display = 'block';
+  renderList([]);
+}
 
 function renderList(statuses) {
   const root = document.getElementById('userList');
@@ -93,8 +113,6 @@ function renderList(statuses) {
   });
   root.innerHTML = html;
 }
-
-renderList([]);
 
 document.getElementById('startBtn').addEventListener('click', async () => {
   const pass = document.getElementById('defaultPass').value.trim();
@@ -122,13 +140,16 @@ document.getElementById('startBtn').addEventListener('click', async () => {
       }
     }
     renderList(statuses);
-    await new Promise(r => setTimeout(r, 300)); // small delay between requests
+    await new Promise(r => setTimeout(r, 300));
   }
 
   document.getElementById('startBtn').textContent = 'Gata';
+  document.getElementById('startBtn').disabled = false;
   const allOk = statuses.every(s => s.cls === 'status-ok');
   if (allOk) document.getElementById('doneMsg').style.display = 'block';
 });
+
+checkAdminAuth();
 </script>
 </body>
 </html>
