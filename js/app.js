@@ -115,7 +115,16 @@ async function deleteCase(id){
 async function moveCaseToStage(id,stageId){
   const c=getCase(id);if(!c)return;
   const labStages=getEtapeLabStages(c.type);
-  if(labStages.includes(stageId)){
+  if(stageId==='proba'){
+    const activeLabStage=labStages.includes(c.stage)?c.stage:(probaLabStage(c)||probaApprovedStage(c)||labStages[0]);
+    c.stageStatuses=c.stageStatuses||{};
+    c.assignees=c.assignees||{};
+    c.stageStatuses[activeLabStage]='la_proba';
+    if(!stageAssignees(c,activeLabStage).length)addStageAssignee(c,activeLabStage,STAGE_ASSIGNEE_DEFAULTS[activeLabStage]);
+    c.stage='proba';
+    c.notStarted=false;
+    c.assignee=primaryStageAssignee(c,activeLabStage)||c.assignee||null;
+  }else if(labStages.includes(stageId)){
     activateLabStage(c,stageId,primaryStageAssignee(c,stageId)||STAGE_ASSIGNEE_DEFAULTS[stageId]);
   }else{
     c.stage=stageId;c.notStarted=false;
@@ -550,7 +559,7 @@ function renderKanbanCard(c){
   const cardAssignees=stageAssignees(c,c.stage);
   const tech=getEmployee(cardAssignees[0]||c.assignee);
   const extraTechs=cardAssignees.slice(1).map(id=>getEmployee(id)).filter(Boolean);
-  const ss=c.notStarted?'neincepute':(c.stageStatuses?.[c.stage]||'in_lucru');
+  const ss=c.notStarted?'neincepute':(isCaseAtProba(c)?'la_proba':(c.stageStatuses?.[c.stage]||'in_lucru'));
   const badge=ss==='finalizat'?`<span class="substate-badge final">✓</span>`:ss==='asteptare_bari'?`<span class="substate-badge bars">B</span>`:ss==='proba_aprobata'?`<span class="substate-badge approved">A</span>`:ss==='la_proba'?`<span class="substate-badge proba">P</span>`:`<span class="substate-badge lucru">●</span>`;
   const ft=c.late?'restant':c.stage==='terminat'?'gata':c.finala;
   const fc=(c.late||deadlineUrgent)?'late':c.stage==='terminat'?'ready':'';
@@ -653,20 +662,12 @@ function openCollaboratorEditor(c,stageId,onDone){
 
 function attachDropZone(col,stageId){
   col.addEventListener('dragover',e=>e.preventDefault());
-  col.addEventListener('drop',e=>{
+  col.addEventListener('drop',async e=>{
     e.preventDefault();
     const id=Number(e.dataTransfer.getData('text/plain'));
     const c=getCase(id);
     if(c&&(c.stage!==stageId||c.notStarted)){
-      c.stage=stageId;
-      c.notStarted=false;
-      overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;
-      overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted};
-      saveOverrides(overrides);
-      _syncCase(c);
-      renderPipeline();
-      updateMainSummary();
-      if(typeof renderTable==='function')renderTable();
+      await moveCaseToStage(id,stageId);
     }
   });
 }
@@ -906,7 +907,7 @@ function renderCaseDetail(){
           if(sel.value==='finalizat')completeLabStage(c,sId);
           else if(sel.value==='in_lucru')activateLabStage(c,sId,primaryStageAssignee(c,sId)||user.id);
           else{
-            c.stage=sId;
+            c.stage=sel.value==='la_proba'?'proba':sId;
             c.notStarted=false;
             c.stageStatuses[sId]=sel.value;
             c.assignee=primaryStageAssignee(c,sId)||c.assignee||null;
@@ -1070,7 +1071,7 @@ function renderTechnicianPortal(){
       const c=getCase(id);if(!c)return;
       c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
       if(act==='claim'){c.stageStatuses[sid]='in_lucru';addStageAssignee(c,sid,user.id);c.notStarted=false;if(!c.assignee)c.assignee=primaryStageAssignee(c,sid)||user.id}
-      else if(act==='proba'){c.stageStatuses[sid]='la_proba'}
+      else if(act==='proba'){c.stageStatuses[sid]='la_proba';c.stage='proba';c.notStarted=false}
       else if(act==='wait-bars'){c.stageStatuses[sid]='asteptare_bari'}
       else if(act==='bars-done'){c.stageStatuses[sid]='bari_finalizate'}
       else if(act==='finalize')completeLabStage(c,sid)

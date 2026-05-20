@@ -20,7 +20,7 @@ function getEtapeLabStages(type) {
   return TYPES_SKIP_CERAMICA.some(t => workType.includes(normTerm(t))) ? ETAPE_LAB_NO_CERAMIC : ETAPE_LAB_FULL;
 }
 
-const PIPELINE_STAGES = ['design', 'cam', 'prelucrare', 'ceramica', 'proba', 'terminat']; // No Trimis
+const PIPELINE_STAGES = ['design', 'cam', 'ceramica', 'prelucrare', 'proba', 'terminat']; // No Trimis
 const PIPELINE_STAGES_NO_CERAMIC = ['design', 'cam', 'prelucrare', 'proba', 'terminat'];
 
 const STAGE_ICONS = {
@@ -194,9 +194,11 @@ function completeLabStage(c, stageId) {
     const next = stages[nextIdx];
     c.stage = next;
     if (!c.stageStatuses[next]) c.stageStatuses[next] = 'neincepute';
+    if (!stageAssignees(c,next).length && STAGE_ASSIGNEE_DEFAULTS[next]) addStageAssignee(c,next,STAGE_ASSIGNEE_DEFAULTS[next]);
     c.assignee = primaryStageAssignee(c,next);
   } else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) {
-    c.stage = 'proba';
+    c.stage = 'terminat';
+    c.assignee = null;
   }
 }
 function labStageRequiresProbe(stageId) {

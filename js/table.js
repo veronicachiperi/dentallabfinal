@@ -175,7 +175,7 @@ function handleStageClick(caseId, stageId) {
     }
   } else if (status === 'in_lucru' && typeof labStageRequiresProbe==='function' && labStageRequiresProbe(stageId)) {
     c.stageStatuses[stageId] = 'la_proba';
-    c.stage = stageId;
+    c.stage = 'proba';
     c.notStarted = false;
   } else if (status === 'in_lucru') {
     completeLabStage(c, stageId);
