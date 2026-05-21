@@ -2088,8 +2088,8 @@ async function initApp(){
       location.href='clinic.html?id='+prof.clinic_id;return;
     }
     const [sbCases,sbClinics,sbEmps]=await Promise.all([sbLoadCases(),sbLoadClinics(),sbLoadEmployees()]);
-    if(sbClinics){CLINICS.length=0;sbClinics.forEach(c=>CLINICS.push(c));}
-    if(sbEmps){EMPLOYEES.length=0;sbEmps.forEach(e=>EMPLOYEES.push(e));}
+    if(sbClinics&&sbClinics.length>0){CLINICS.length=0;sbClinics.forEach(c=>CLINICS.push(c));}
+    if(sbEmps&&sbEmps.length>0){EMPLOYEES.length=0;sbEmps.forEach(e=>EMPLOYEES.push(e));}
     if(sbCases){
       CASES.length=0;
       sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
