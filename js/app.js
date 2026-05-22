@@ -21,6 +21,12 @@ function allWorkTypes(){return [...new Set([...COMMON_TYPES,...customWorkTypes].
 function rememberWorkType(type){const t=String(type||'').trim();if(!t||allWorkTypes().includes(t))return;if(!COMMON_TYPES.includes(t)&&!customWorkTypes.includes(t)){customWorkTypes.push(t);saveCustomWorkTypes()}}
 function escHTML(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function escAttr(v){return escHTML(v).replace(/"/g,'&quot;')}
+function withTimeout(promise,ms,label){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(`${label||'Operațiunea'} a durat prea mult`)),ms))
+  ]);
+}
 function formatBytes(bytes){
   if(!bytes)return'0 KB';
   const units=['B','KB','MB','GB'];
@@ -695,6 +701,7 @@ function renderClinic(){
   const clinicId=(_cu&&_cu.role==='clinic'&&_cu.clinic)?_cu.clinic:(new URLSearchParams(location.search).get('id')||'crisdent');
   const clinic=getClinic(clinicId);
   if(!clinic){root.innerHTML='<p>Clinică inexistentă</p>';return}
+  const clinicName=String(clinic.name||clinic.id||'Clinică');
   const cases=casesForClinic(clinicId);
   const active=cases.filter(c=>c.stage!=='trimis');
   const notStarted=cases.filter(isCaseNotStarted);
@@ -742,14 +749,15 @@ function renderClinic(){
   const isClinicUser=currentUser&&currentUser.role==='clinic';
   const isAdminOrTech=!isClinicUser&&(!currentUser||currentUser.role==='admin'||currentUser.role==='tech'||currentUser.role==='technician');
   const clinicTabs=isAdminOrTech
-    ? CLINICS.map(cl=>`<button class="pc-clinic-tab ${cl.id===clinicId?'on':''}" data-clinic-id="${cl.id}">${cl.name}</button>`).join('')
+    ? CLINICS.map(cl=>{const clName=String(cl.name||cl.id||'Clinică');return `<button class="pc-clinic-tab ${cl.id===clinicId?'on':''}" data-clinic-id="${cl.id}">${escHTML(clName)}</button>`}).join('')
     : '';
+  const dataWarning=(typeof window!=='undefined'&&window.APP_LOAD_ERROR)?`<div class="deadline-strip" style="margin:0 0 18px"><span class="dot-pulse"></span><b>Date live neîncărcate</b><span style="opacity:.85"> — afișez datele locale până se repară conexiunea.</span></div>`:'';
 
   root.innerHTML=`<div class="pc-topbar-wrap">
     <div class="pc-topbar">
-      <div class="pc-logo">${clinic.name.slice(0,2)}</div>
+      <div class="pc-logo">${escHTML(clinicName.slice(0,2).toUpperCase())}</div>
       <div>
-        <div class="pc-clinic-name">${clinic.name}</div>
+        <div class="pc-clinic-name">${escHTML(clinicName)}</div>
         <div class="pc-clinic-sub">Portalul clinicii · ${active.length} lucrări active</div>
       </div>
       <div class="spacer"></div>
@@ -760,6 +768,7 @@ function renderClinic(){
     </div>
   </div>
   <div class="pc-shell">
+    ${dataWarning}
     <div class="pc-quick-row">
       <a class="pc-quick-card" href="${termsPageUrl(clinicId)}"><b>Termenii laboratorului</b><span>Consultați timpii de execuție înainte de a seta data finală.</span></a>
     </div>
@@ -2084,13 +2093,13 @@ async function initApp(){
   const hasSupabase=typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED;
   if(hasSupabase){
     try{
-      const prof=await sbRequireAuth();
+      const prof=await withTimeout(sbRequireAuth(),8000,'Autentificarea Supabase');
       if(!prof)return;
       // Clinic users go straight to their own portal
       if(prof.role==='clinic'&&prof.clinic_id&&!location.pathname.includes('clinic.html')&&!location.pathname.includes('case.html')&&!location.pathname.includes('termeni.html')){
         location.href='clinic.html?id='+prof.clinic_id;return;
       }
-      const [sbCases,sbClinics,sbEmps]=await Promise.all([sbLoadCases(),sbLoadClinics(),sbLoadEmployees()]);
+      const [sbCases,sbClinics,sbEmps]=await withTimeout(Promise.all([sbLoadCases(),sbLoadClinics(),sbLoadEmployees()]),10000,'Încărcarea datelor Supabase');
       if(sbClinics&&sbClinics.length>0){CLINICS.length=0;sbClinics.forEach(c=>CLINICS.push(c));}
       if(sbEmps&&sbEmps.length>0){EMPLOYEES.length=0;sbEmps.forEach(e=>EMPLOYEES.push(e));}
       if(sbCases){
