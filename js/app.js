@@ -155,7 +155,8 @@ async function moveCaseToStage(id,stageId){
 function reRenderAll(){
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
-  renderPipeline();renderClinic();
+  renderPipeline();renderClinic();renderTechnicianPortal();
+  attachNotifications();
 }
 async function refreshCasesFromServer(){
   if(typeof sbLoadCases!=='function'||!SUPABASE_CONFIGURED)return;
@@ -323,11 +324,18 @@ function updateMainSummary(){
     if(label)label.textContent=`${late} ${late===1?'lucrare':'lucrări'} în întârziere`;
     banner.style.display=late?'flex':'none';
   }
-  const currentUser=getCurrentUser();
-  const visibleNotifications=NOTIFICATIONS.filter(n=>!n.targetUserId||!currentUser||currentUser.role==='admin'||n.targetUserId===currentUser.id);
-  const dot=document.querySelector('#bellBtn .bell-dot');
-  if(dot)dot.style.display=visibleNotifications.some(n=>n.unread)?'block':'none';
+  updateNotificationDot();
   renderActionDashboard();
+}
+
+function visibleNotificationsForCurrentUser(){
+  const currentUser=getCurrentUser();
+  return NOTIFICATIONS.filter(n=>!n.targetUserId||!currentUser||currentUser.role==='admin'||n.targetUserId===currentUser.id||n.targetUserId===currentUser.clinic);
+}
+
+function updateNotificationDot(){
+  const dot=document.querySelector('#bellBtn .bell-dot');
+  if(dot)dot.style.display=visibleNotificationsForCurrentUser().some(n=>n.unread)?'block':'none';
 }
 
 function caseDueInfo(c){
@@ -344,8 +352,8 @@ function caseDueInfo(c){
 function publicStageName(c){
   // Final states must be checked first — stageStatuses retains historical values
   // (e.g. proba_aprobata) even after a case advances to trimis/terminat
-  if(c?.stage==='trimis')return 'Trimisă';
-  if(c?.stage==='terminat')return 'Gata';
+  if(c?.stage==='trimis')return 'Expediată';
+  if(c?.stage==='terminat')return 'Terminat';
   if(isCaseNotStarted(c))return 'Neînceput';
   if(barsReadyStage(c))return 'Bare finalizate';
   if(barsWaitingStage(c))return 'În așteptarea barelor';
@@ -389,20 +397,76 @@ function isCaseProbaApproved(c){
   return Boolean(probaApprovedStage(c));
 }
 function refreshDerivedNotifications(){
+  const readIds=new Set((overrides.read||[]).map(String));
+  const pushNotification=n=>{
+    const id=String(n.id);
+    NOTIFICATIONS.push({
+      ...n,
+      id,
+      unread:!readIds.has(id)
+    });
+  };
   NOTIFICATIONS.length=0;
   CASES.forEach(c=>{
-    const stage=probaApprovedStage(c);
-    if(!stage)return;
-    const tech=getEmployee(primaryStageAssignee(c,stage));
-    NOTIFICATIONS.push({
-      id:Number(`${c.id}${getStage(stage)?.order||0}`),
-      caseId:c.id,
-      targetUserId:tech?.id||null,
-      kind:'Probă aprobată',
-      text:`${c.name} · ${getStage(stage)?.name||stage} poate fi finalizat`,
-      time:'acum',
-      unread:!(overrides.read||[]).includes(Number(`${c.id}${getStage(stage)?.order||0}`))
-    });
+    if(c.stage==='trimis')return;
+    const due=caseDueInfo(c);
+    if(c.late||due.days<=1){
+      pushNotification({
+        id:`deadline-${c.id}`,
+        caseId:c.id,
+        targetUserId:null,
+        kind:c.late?'Lucrare restantă':'Termen apropiat',
+        text:`${c.name} · finală ${c.late?'restantă':due.label}`,
+        time:'azi'
+      });
+    }
+    const probaStage=probaLabStage(c);
+    if(probaStage){
+      pushNotification({
+        id:`proba-${c.id}-${probaStage}`,
+        caseId:c.id,
+        targetUserId:c.clinic,
+        kind:'Probă de aprobat',
+        text:`${c.name} a fost trimisă la probă`,
+        time:'acum'
+      });
+    }
+    const approvedStage=probaApprovedStage(c);
+    if(approvedStage){
+      const assignees=stageAssignees(c,approvedStage);
+      (assignees.length?assignees:[primaryStageAssignee(c,approvedStage)||null]).forEach((techId,i)=>{
+        pushNotification({
+          id:`approved-${c.id}-${approvedStage}-${techId||i}`,
+          caseId:c.id,
+          targetUserId:techId||null,
+          kind:'Probă aprobată',
+          text:`${c.name} · ${getStage(approvedStage)?.name||approvedStage} poate fi finalizat`,
+          time:'acum'
+        });
+      });
+    }
+    const waitingStage=barsWaitingStage(c);
+    if(waitingStage){
+      stageAssignees(c,waitingStage).forEach((techId,i)=>pushNotification({
+        id:`bars-wait-${c.id}-${waitingStage}-${techId||i}`,
+        caseId:c.id,
+        targetUserId:techId||null,
+        kind:'În așteptarea barelor',
+        text:`${c.name} așteaptă barele înainte de finalizarea designului`,
+        time:'acum'
+      }));
+    }
+    const readyStage=barsReadyStage(c);
+    if(readyStage){
+      stageAssignees(c,readyStage).forEach((techId,i)=>pushNotification({
+        id:`bars-ready-${c.id}-${readyStage}-${techId||i}`,
+        caseId:c.id,
+        targetUserId:techId||null,
+        kind:'Bare finalizate',
+        text:`${c.name} poate continua cu finalizarea designului`,
+        time:'acum'
+      }));
+    }
   });
 }
 
@@ -505,8 +569,7 @@ function closeNotificationDrawer(){
 function openNotificationDrawer(){
   closeNotificationDrawer();
   refreshDerivedNotifications();
-  const currentUser=getCurrentUser();
-  const visibleNotifications=NOTIFICATIONS.filter(n=>!n.targetUserId||!currentUser||currentUser.role==='admin'||n.targetUserId===currentUser.id);
+  const visibleNotifications=visibleNotificationsForCurrentUser();
   const scrim=document.createElement('div');
   scrim.className='notif-scrim';
   const drawer=document.createElement('aside');
@@ -522,7 +585,7 @@ function openNotificationDrawer(){
   scrim.addEventListener('click',closeNotificationDrawer);
   drawer.querySelector('.notif-close')?.addEventListener('click',closeNotificationDrawer);
   drawer.querySelectorAll('.notif-item').forEach(item=>item.addEventListener('click',()=>{
-    const id=Number(item.dataset.notifId);
+    const id=String(item.dataset.notifId);
     const n=NOTIFICATIONS.find(x=>x.id===id);
     if(n)n.unread=false;
     overrides.read=[...new Set([...(overrides.read||[]),id])];
@@ -540,7 +603,12 @@ function openNotificationDrawer(){
 
 function attachNotifications(){
   refreshDerivedNotifications();
-  document.getElementById('bellBtn')?.addEventListener('click',openNotificationDrawer);
+  updateNotificationDot();
+  const btn=document.getElementById('bellBtn');
+  if(btn&&!btn.dataset.notifAttached){
+    btn.dataset.notifAttached='1';
+    btn.addEventListener('click',openNotificationDrawer);
+  }
 }
 
 // === PIPELINE KANBAN ===
@@ -721,7 +789,8 @@ function renderClinic(){
   const active=cases.filter(c=>c.stage!=='trimis');
   const notStarted=cases.filter(isCaseNotStarted);
   const proba=cases.filter(isCaseAtProba);
-  const ready=cases.filter(c=>c.stage==='terminat');
+  const finished=cases.filter(c=>c.stage==='terminat');
+  const shipped=cases.filter(c=>c.stage==='trimis');
   const late=cases.filter(c=>c.late);
 
   function clinicFlowFor(c){
@@ -749,13 +818,13 @@ function renderClinic(){
   function clinicFlowHTML(c){
     const flow=clinicFlowFor(c);
     const idx=clinicProgressIndex(c);
-    const labels={design:'Design',proba_aprobata:'Probă aprobată',cam:'CAM',ceramica:'Ceramică',prelucrare:'Prelucrare',terminat:'Gata'};
+    const labels={design:'Design',proba_aprobata:'Probă aprobată',cam:'CAM',ceramica:'Ceramică',prelucrare:'Prelucrare',terminat:'Terminat'};
     return `<div class="pc-stage-trail">${flow.map((s,i)=>`<span class="${i<idx?'done':i===idx?'current':''}">${labels[s]}</span>`).join('<b>›</b>')}</div>`;
   }
 
   function ra(c){
     if(isCaseAtProba(c))return{cls:'primary',label:'Aprobă probă',action:'approve'};
-    if(c.stage==='terminat')return{cls:'primary',label:'Confirmă ridicare',action:'pickup'};
+    if(c.stage==='terminat')return{cls:'primary',label:'Confirmă expediere',action:'pickup'};
     return{cls:'note',label:'Adaugă notă',action:'note'};
   }
 
@@ -792,7 +861,8 @@ function renderClinic(){
       <div class="pc-stat"><div class="pc-stat-num">${active.length}</div><div class="pc-stat-lbl">Active</div></div>
       <div class="pc-stat"><div class="pc-stat-num">${notStarted.length}</div><div class="pc-stat-lbl">Neîncepute</div></div>
       <div class="pc-stat"><div class="pc-stat-num proba">${proba.length}</div><div class="pc-stat-lbl">La probă</div></div>
-      <div class="pc-stat"><div class="pc-stat-num ready">${ready.length}</div><div class="pc-stat-lbl">Gata de ridicat</div></div>
+      <div class="pc-stat"><div class="pc-stat-num ready">${finished.length}</div><div class="pc-stat-lbl">Terminate</div></div>
+      <div class="pc-stat"><div class="pc-stat-num shipped">${shipped.length}</div><div class="pc-stat-lbl">Expediate</div></div>
     </div>
     <div class="pc-table">
       <div class="pc-row-grid head">
@@ -870,7 +940,7 @@ async function handleClinicAction(action,caseId){
     saveOverrides(overrides);
     try{await syncCaseNow(c)}
     catch(e){alert('Ridicarea a fost marcată local, dar nu s-a transmis către server: '+e.message);return}
-    alert('Ridicare confirmată — lucrarea a fost arhivată');renderClinic();
+    alert('Expediere confirmată — lucrarea a fost arhivată');renderClinic();
   } else if(action==='note'){
     openModal(`<div class="modal-head"><div class="modal-title">Notă · ${escHTML(c.name)}</div><button class="modal-close" type="button">×</button></div>
       <div class="modal-body">
@@ -1208,6 +1278,11 @@ function renderTechnicianPortal(){
   root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-name">PRIVATE CAD</div></div><div class="nav-section">Workflow</div><a class="nav-item active" href="tehnician.html"><span class="nav-icon round"></span>Acasă</a><a class="nav-item" href="index.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><div class="nav-section">Setări</div><a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a></aside><main class="main"><div class="tp-shell"><div class="tp-topbar"><div class="tp-tech-av" style="background:${stageColors[myStage]||'#1D9E75'}">${user.initials}</div><div><div class="tp-tech-name">${user.name}</div><div class="tp-tech-role">Tehnician ${stageName.toLowerCase()}</div></div><div class="spacer"></div><a href="login.html" class="btn">Schimbă rol</a></div><div class="tp-greet"><h1 class="tp-greet-title">Bună, ${user.name.split(' ')[0]}</h1><div class="tp-greet-sub">${myInProgress.length} lucrări în curs · ${sentToProbe.length} trimise la probă · ${waitingBars.length} în așteptarea barelor · ${claimable.length} de revendicat</div></div><div class="tp-stats"><div class="tp-stat"><div class="tp-stat-num warn">${myInProgress.length}</div><div class="tp-stat-lbl">În lucru</div></div><div class="tp-stat"><div class="tp-stat-num">${sentToProbe.length}</div><div class="tp-stat-lbl">Trimise la probă</div></div><div class="tp-stat"><div class="tp-stat-num good">${approvedCount}</div><div class="tp-stat-lbl">Probă aprobată</div></div><div class="tp-stat"><div class="tp-stat-num late">${lateCount}</div><div class="tp-stat-lbl">În întârziere</div></div></div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În lucru la tine</span><span class="tp-section-count">${myInProgress.length} lucrări</span></div>${myInProgress.length?myInProgress.map(c=>{const cl=getClinic(c.clinic);const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card ${c.late||deadlineUrgent?'late':c.warn?'warn':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':c.finala}</div><div>finală</div></div><span class="tp-task-status in-lucru">În lucru</span><div class="tp-task-actions">${labStageRequiresProbe(myStage)?`<button class="tp-task-btn" data-action="proba" data-case-id="${c.id}" data-stage="${myStage}">La probă</button><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Design finalizat</button>`:`<button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează</button>`}</div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare activă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Trimise la probă</span><span class="tp-section-count">${sentToProbe.length} lucrări</span></div>${sentToProbe.length?sentToProbe.map(c=>{const cl=getClinic(c.clinic);const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card ${c.late||deadlineUrgent?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info">Trimisă la probă. Așteaptă răspunsul clinicii.</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':c.probaDate||c.finala}</div><div>probă</div></div><span class="tp-task-status la-proba">La probă</span></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare trimisă la probă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Probe aprobate</span><span class="tp-section-count">${approvedCases.length} lucrări</span></div>${approvedCases.length||barsReady.length?[...approvedCases.map(c=>`<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${getClinic(c.clinic).name}</div><div class="tp-task-info">Clinica a aprobat proba. Alege dacă lucrarea are nevoie de bare.</div></div><span class="tp-task-status proba-approved">Probă aprobată</span><div class="tp-task-actions"><button class="tp-task-btn" data-action="wait-bars" data-case-id="${c.id}" data-stage="${myStage}">În așteptarea barelor</button><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Design finalizat</button></div></div>`),...barsReady.map(c=>`<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${getClinic(c.clinic).name}</div><div class="tp-task-info">Barele sunt finalizate. Designul poate fi finalizat.</div></div><span class="tp-task-status proba-approved">Bare finalizate</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează design</button></div></div>`)].join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio probă aprobată</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În așteptarea barelor</span><span class="tp-section-count">${waitingBars.length} lucrări</span></div>${waitingBars.length?waitingBars.map(c=>`<div class="tp-task-card warn" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:#854F0B">B</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${getClinic(c.clinic).name}</div><div class="tp-task-info">Designul așteaptă finalizarea barelor.</div></div><span class="tp-task-status asteptare-bari">În așteptarea barelor</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="bars-done" data-case-id="${c.id}" data-stage="${myStage}">Bare finalizate</button></div></div>`).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare în așteptarea barelor</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Așteaptă să fie revendicate</span><span class="tp-section-count">${claimable.length} lucrări</span></div>${claimable.length?claimable.map(c=>{const cl=getClinic(c.clinic);const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card tp-claimable ${c.late||deadlineUrgent?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':c.finala}</div><div>finală</div></div><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="claim" data-case-id="${c.id}" data-stage="${myStage}">Pun în proces</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare de revendicat</div>'}</div></div></main></div>`;
   root.querySelector('.sidebar')?.replaceWith(Object.assign(document.createElement('div'),{innerHTML:adminSidebarHTML('tehnician')}).firstElementChild);
   applySidebarRoles();
+  const topbarSpacer=root.querySelector('.tp-topbar .spacer');
+  if(topbarSpacer&&!root.querySelector('#bellBtn')){
+    topbarSpacer.insertAdjacentHTML('afterend','<button class="icon-btn" id="bellBtn" type="button" title="Notificări">N<span class="bell-dot"></span></button>');
+  }
+  attachNotifications();
   const greetSub=root.querySelector('.tp-greet-sub');
   if(greetSub)greetSub.textContent=`${myInProgress.length} lucrări în curs · ${sentToProbe.length} trimise la probă · ${approvedCount} probe aprobate · ${waitingBars.length} în așteptarea barelor · ${claimable.length} de revendicat`;
   root.querySelectorAll('.tp-task-card[data-case-id]').forEach(card=>{
@@ -1523,6 +1598,7 @@ function openNewCaseModal(defClinic){
           <div class="wizard-step"><span>4</span><div><b>Fișiere</b><small>atașări și note</small></div></div>
         </aside>
         <div class="wizard-content">
+          <button class="mobile-upload-shortcut" id="ncMobileUploadBtn" type="button"><span>PDF / STL</span><b>Adaugă fișa sau scanarea</b></button>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Pacient & clinică</div>
             <div class="field-row"><div class="field"><label>Nume</label><input id="ncLast" placeholder="Nume pacient" autofocus></div><div class="field"><label>Prenume</label><input id="ncFirst" placeholder="Prenume"></div></div>
@@ -1549,7 +1625,7 @@ function openNewCaseModal(defClinic){
           <section class="wizard-panel">
             <div class="wizard-panel-title">Fișiere & note</div>
             <button class="upload-well" id="ncUploadBtn" type="button"><span>PDF / STL</span><b>Adaugă fișiere</b></button>
-            <input id="ncFileInput" type="file" multiple hidden>
+            <input id="ncFileInput" type="file" multiple accept=".pdf,.stl,.ply,.obj,.zip,image/*" hidden>
             <div class="upload-file-list" id="ncFileList"></div>
             <div class="field"><label>Note</label><textarea id="ncNotes"></textarea></div>
           </section>
@@ -1565,6 +1641,7 @@ function openNewCaseModal(defClinic){
       : '';
   };
   document.getElementById('ncUploadBtn')?.addEventListener('click',()=>document.getElementById('ncFileInput')?.click());
+  document.getElementById('ncMobileUploadBtn')?.addEventListener('click',()=>document.getElementById('ncFileInput')?.click());
   document.getElementById('ncFileInput')?.addEventListener('change',e=>{Array.from(e.target.files||[]).forEach(f=>newCaseFiles.push(f));updateNewCaseFiles();e.target.value=''});
   const updateDeadlineAdvisor=()=>{
     const probe={type:document.getElementById('ncType')?.value||'',intrata:document.getElementById('ncIntrata')?.value||'',finala:document.getElementById('ncFinala')?.value||''};

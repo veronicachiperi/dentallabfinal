@@ -89,10 +89,20 @@ function renderTableRow(c) {
 function renderFlowIndicator(c) {
   const stages = getEtapeLabStages(c.type); // 4 sau 3 etape (skip Ceramică)
   const labels = { design: '1', cam: '2', ceramica: '3', prelucrare: stages.length === 4 ? '4' : '3' };
+  const activeStage = probaLabStage(c) || probaApprovedStage(c) || barsWaitingStage(c) || barsReadyStage(c) || (stages.includes(c.stage) ? c.stage : null);
+  const activeIndex = c.stage === 'terminat' || c.stage === 'trimis'
+    ? stages.length
+    : activeStage
+      ? stages.indexOf(activeStage)
+      : -1;
   let html = '<span class="flow">';
   stages.forEach((sId, i) => {
-    const status = c.stageStatuses?.[sId] || 'neincepute';
-    const techIds = stageAssignees(c,sId);
+    let status = c.stageStatuses?.[sId] || 'neincepute';
+    let techIds = stageAssignees(c,sId);
+    if(!c.notStarted && activeIndex > -1 && i > activeIndex && c.stage !== 'terminat' && c.stage !== 'trimis'){
+      status = 'neincepute';
+      techIds = [];
+    }
     const techs = techIds.map(id=>getEmployee(id)).filter(Boolean);
     const tech = techs[0] || null;
     if ((status === 'finalizat' || status === 'in_lucru' || status === 'la_proba' || status === 'proba_aprobata' || status === 'asteptare_bari' || status === 'bari_finalizate') && tech) {
