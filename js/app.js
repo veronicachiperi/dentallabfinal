@@ -153,10 +153,20 @@ async function moveCaseToStage(id,stageId){
 }
 
 function reRenderAll(){
-  applyOverrides();
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
   renderPipeline();renderClinic();
+}
+async function refreshCasesFromServer(){
+  if(typeof sbLoadCases!=='function'||!SUPABASE_CONFIGURED)return;
+  const sbCases=await sbLoadCases();
+  if(!sbCases)return;
+  CASES.length=0;
+  sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
+  reRenderAll();
+  renderTechnicianPortal();
+  renderEchipa();
+  renderStats();
 }
 function activateLabStage(c,stageId,assigneeId){
   c.stageStatuses=c.stageStatuses||{};
@@ -169,6 +179,9 @@ function activateLabStage(c,stageId,assigneeId){
 }
 function _syncCase(c){
   if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED)sbSaveCase(c).catch(e=>console.warn('[sb sync]',e.message));
+}
+async function syncCaseNow(c){
+  if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED)await sbSaveCase(c);
 }
 
 // === AVATAR COLOR PICKER ===
@@ -818,9 +831,11 @@ function renderClinic(){
     });
   });
   document.querySelectorAll('.pc-action[data-action]').forEach(b=>{
-    b.addEventListener('click',e=>{
+    b.addEventListener('click',async e=>{
       e.stopPropagation();
-      handleClinicAction(b.dataset.action,Number(b.dataset.caseId));
+      b.disabled=true;
+      try{await handleClinicAction(b.dataset.action,Number(b.dataset.caseId))}
+      finally{b.disabled=false}
     });
   });
   document.querySelectorAll('.pc-clinic-tab[data-clinic-id]').forEach(t=>{
@@ -829,9 +844,11 @@ function renderClinic(){
   document.getElementById('clinicLogoutBtn')?.addEventListener('click',()=>sbSignOut&&sbSignOut());
 }
 
-function handleClinicAction(action,caseId){
+async function handleClinicAction(action,caseId){
   const c=getCase(caseId);if(!c)return;
   if(action==='approve'){
+    c.stageStatuses=c.stageStatuses||{};
+    c.assignees=c.assignees||{};
     const labStage=probaLabStage(c);
     if(labStage){
       c.stage=labStage;
@@ -842,13 +859,17 @@ function handleClinicAction(action,caseId){
     else c.stage='terminat';
     overrides.stages=overrides.stages||{};overrides.stages[c.id]=c.stage;
     overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,notStarted:c.notStarted};
-    saveOverrides(overrides);_syncCase(c);
+    saveOverrides(overrides);
+    try{await syncCaseNow(c)}
+    catch(e){alert('Proba a fost aprobată local, dar nu s-a transmis către server: '+e.message);return}
     alert(labStage?'Probă aprobată — designerul a fost notificat':'Probă aprobată — lucrarea a trecut la finalizare');renderClinic();updateMainSummary();
   } else if(action==='pickup'){
     c.stage='trimis';c.sentDate=fmtShortDate(todayLabDate());
     overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';
     overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],sentDate:c.sentDate};
-    saveOverrides(overrides);_syncCase(c);
+    saveOverrides(overrides);
+    try{await syncCaseNow(c)}
+    catch(e){alert('Ridicarea a fost marcată local, dar nu s-a transmis către server: '+e.message);return}
     alert('Ridicare confirmată — lucrarea a fost arhivată');renderClinic();
   } else if(action==='note'){
     openModal(`<div class="modal-head"><div class="modal-title">Notă · ${escHTML(c.name)}</div><button class="modal-close" type="button">×</button></div>
@@ -2221,14 +2242,19 @@ async function initApp(){
       if(sbCases){
         CASES.length=0;
         sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
-        applyOverrides();
-        loadNewCases();
       }
       sbSubscribeCases(reRenderAll);
+      setInterval(()=>refreshCasesFromServer().catch(e=>console.warn('[sb refresh]',e.message)),20000);
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCasesFromServer().catch(e=>console.warn('[sb refresh]',e.message))});
     }catch(e){
       console.error('[initApp] Supabase load failed:',e);
       if(typeof window!=='undefined')window.APP_LOAD_ERROR=e?.message||'Supabase load failed';
+      applyOverrides();
+      loadNewCases();
     }
+  }else{
+    applyOverrides();
+    loadNewCases();
   }
   applySidebarRoles();
   updateMainSummary();
