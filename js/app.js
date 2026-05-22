@@ -27,6 +27,8 @@ function withTimeout(promise,ms,label){
     new Promise((_,reject)=>setTimeout(()=>reject(new Error(`${label||'Operațiunea'} a durat prea mult`)),ms))
   ]);
 }
+function dateInputValue(v){const d=parseShortDate(v);return d?fmtShortDate(d):''}
+function readDateInput(id){const v=document.getElementById(id)?.value||'';return v?fmtShortDate(parseShortDate(v)||new Date(v)):''}
 function formatBytes(bytes){
   if(!bytes)return'0 KB';
   const units=['B','KB','MB','GB'];
@@ -797,7 +799,11 @@ function renderClinic(){
             ${clinicFlowHTML(c)}
           </div>
           <div class="tbl-due-bold ${c.late||labDeadlineStatus(c).urgent?'late':''}">${c.late?'restant':c.finala}</div>
-          <div><button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button></div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+            ${a.action!=='note'?`<button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button>`:''}
+            <button class="pc-action note" data-action="edit" data-case-id="${c.id}">Editează</button>
+            <button class="pc-action note" data-action="note" data-case-id="${c.id}">Notă</button>
+          </div>
         </div>`;
       }).join('')}
     </div>
@@ -861,7 +867,112 @@ function handleClinicAction(action,caseId){
       overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};
       saveOverrides(overrides);_syncCase(c);closeModal();
     });
+  } else if(action==='edit'){
+    openClinicCaseEdit(caseId);
   }
+}
+
+function openClinicCaseEdit(caseId){
+  const c=getCase(caseId);if(!c)return;
+  const user=getCurrentUser();
+  if(user&&user.role==='clinic'&&user.clinic&&user.clinic!==c.clinic){alert('Nu poți edita cazurile altei clinici.');return}
+  const clinic=getClinic(c.clinic)||{name:c.clinic||'Clinică'};
+  const safeVal=v=>String(v||'').replace(/"/g,'&quot;');
+  const typeOptions=allWorkTypes().map(t=>`<option value="${escAttr(t)}" ${t===c.type?'selected':''}>${escHTML(t)}</option>`).join('');
+  const colorOptions=COLORS_VITA.map(x=>`<option ${x===c.color?'selected':''}>${x}</option>`).join('');
+  const amprentaOptions=['Silicon','Polieter','Alginat','Digital','STL'].map(x=>`<option ${x===c.amprentaType?'selected':''}>${x}</option>`).join('');
+  const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+  const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+  const toothType=n=>((c.teeth||[]).find(t=>Number(t.n)===Number(n))||{}).type||'';
+  const tooth=n=>`<button type="button" class="tooth-cell ${toothType(n)}" data-tooth="${n}">${n}</button>`;
+  const renderRow=arr=>arr.slice(0,8).map(tooth).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tooth).join('');
+  const notesText=_parseNotes(c.notes).map(n=>n.text).join('\n');
+  openModal(`<div class="modal-head"><div><div class="modal-kicker">Portal clinică</div><div class="modal-title">Editează documentația · #${c.id}</div></div><button class="modal-close" type="button">×</button></div>
+    <div class="modal-body modal-body-compact">
+      <div class="field-row"><div class="field"><label>Pacient</label><input id="ceName" value="${safeVal(c.name)}" autofocus></div><div class="field"><label>Clinică</label><input value="${escAttr(clinic.name)}" disabled></div></div>
+      <div class="field-row"><div class="field"><label>Medic</label><input id="ceDoctor" value="${safeVal(c.doctor)}"></div><div class="field"><label>Tip lucrare</label><select id="ceType">${typeOptions}</select></div></div>
+      <div class="field-row three"><div class="field"><label>Culoare</label><select id="ceColor">${colorOptions}</select></div><div class="field"><label>Tip implant</label><input id="ceImplant" value="${safeVal(c.implantType)}"></div><div class="field"><label>Tip amprentă</label><select id="ceAmprenta">${amprentaOptions}</select></div></div>
+      <div class="field-row three"><div class="field"><label>Intrată</label><input id="ceIntrata" type="date" value="${escAttr(dateInputValue(c.intrata))}"></div><div class="field"><label>Probă</label><input id="ceProba" type="date" value="${escAttr(dateInputValue(c.probaDate))}"></div><div class="field"><label>Finală</label><input id="ceFinala" type="date" value="${escAttr(dateInputValue(c.finala))}"></div></div>
+      <div id="clinicEditDeadline"></div>
+      <div class="field"><label>Schema dentară (FDI)</label>
+        <div class="tc-jaw-controls">
+          <button type="button" class="tc-jaw-btn" data-jaw="upper">Maxilar complet</button>
+          <button type="button" class="tc-jaw-btn" data-jaw="lower">Mandibulă completă</button>
+          <button type="button" class="tc-jaw-btn tc-jaw-clear" data-jaw="clear">Șterge tot</button>
+        </div>
+        <div class="tc-form-wrap" id="clinicEditToothChart"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div>
+        <div class="tc-summary" id="clinicEditToothSummary"></div>
+      </div>
+      <div class="field"><label>Note / indicații speciale</label><textarea id="ceNotes" rows="4">${escHTML(notesText)}</textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="ceSave" type="button">Salvează modificările</button></div>`, 'modal-wide');
+
+  const tMap=new Map();
+  (c.teeth||[]).forEach(t=>{if(t&&t.n&&t.type)tMap.set(String(t.n),t.type)});
+  const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
+  function updateSum(){
+    const s=document.getElementById('clinicEditToothSummary');if(!s)return;
+    if(!tMap.size){s.innerHTML='<div style="color:var(--text-dim)">Niciun dinte selectat</div>';return}
+    const bt={};tMap.forEach((t,n)=>{(bt[t]=bt[t]||[]).push(Number(n))});
+    s.innerHTML=Object.entries(bt).map(([t,ns])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]||t}:</span><b>${ns.sort((a,b)=>a-b).join(', ')}</b></div>`).join('');
+  }
+  function setTooth(n,type){
+    const tb=document.querySelector(`#clinicEditToothChart [data-tooth="${n}"]`);
+    if(type){tMap.set(String(n),type);if(tb)tb.className='tooth-cell '+type}
+    else{tMap.delete(String(n));if(tb)tb.className='tooth-cell'}
+    updateSum();
+  }
+  function openToothPop(tb){
+    document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
+    const n=tb.dataset.tooth;
+    const p=document.createElement('div');p.className='tooth-popover';
+    p.innerHTML=`<div class="tooth-popover-arrow"></div><div class="tp-header">Dinte ${n}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button><div class="tp-btn-divider"></div><button class="tp-btn danger" data-type=""><span class="tp-swatch eraser">×</span>Șterge</button>`;
+    p.style.top=(tb.offsetTop+tb.offsetHeight+6)+'px';p.style.left=Math.max(0,tb.offsetLeft-16)+'px';
+    document.getElementById('clinicEditToothChart').appendChild(p);
+    p.querySelectorAll('.tp-btn').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setTooth(n,b.dataset.type);p.remove()}));
+    setTimeout(()=>{const cl=ev=>{if(!p.contains(ev.target)&&ev.target!==tb){p.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
+  }
+  document.querySelectorAll('#clinicEditToothChart .tooth-cell').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openToothPop(b)}));
+  document.querySelectorAll('.tc-jaw-btn').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const jaw=btn.dataset.jaw;
+    if(jaw==='clear'){Array.from(tMap.keys()).forEach(n=>setTooth(n,''));return}
+    const jawTeeth=jaw==='upper'?upper:lower;
+    document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
+    const p=document.createElement('div');p.className='tooth-popover';p.style.cssText='position:absolute;top:34px;left:0;z-index:100';
+    p.innerHTML=`<div class="tp-header">${jaw==='upper'?'Maxilar complet':'Mandibulă completă'}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button>`;
+    btn.style.position='relative';btn.appendChild(p);
+    p.querySelectorAll('.tp-btn').forEach(pb=>pb.addEventListener('click',ev=>{ev.stopPropagation();jawTeeth.forEach(n=>setTooth(n,pb.dataset.type));p.remove()}));
+    setTimeout(()=>{const cl=ev=>{if(!p.contains(ev.target)){p.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
+  }));
+  const updateAdvisor=()=>{
+    const probe={type:document.getElementById('ceType')?.value||'',intrata:document.getElementById('ceIntrata')?.value||'',finala:document.getElementById('ceFinala')?.value||''};
+    const status=labDeadlineStatus(probe);
+    const box=document.getElementById('clinicEditDeadline');
+    if(box)box.innerHTML=deadlineHintHTML(status);
+  };
+  ['ceType','ceIntrata','ceFinala'].forEach(id=>document.getElementById(id)?.addEventListener('change',updateAdvisor));
+  updateSum();updateAdvisor();
+  document.getElementById('ceSave')?.addEventListener('click',()=>{
+    c.name=document.getElementById('ceName').value.trim()||c.name;
+    const parts=c.name.split(/\s+/);c.lastName=parts[0]||c.name;c.firstName=parts.slice(1).join(' ');
+    c.doctor=document.getElementById('ceDoctor').value.trim();
+    c.type=document.getElementById('ceType').value.trim()||c.type;rememberWorkType(c.type);
+    c.color=document.getElementById('ceColor').value;
+    c.implantType=document.getElementById('ceImplant').value.trim();
+    c.amprentaType=document.getElementById('ceAmprenta').value;
+    c.intrata=readDateInput('ceIntrata');
+    c.probaDate=readDateInput('ceProba');
+    c.finala=readDateInput('ceFinala');
+    c.teeth=Array.from(tMap.entries()).map(([n,type])=>({n:Number(n),type})).sort((a,b)=>a.n-b.n);
+    c.notes=document.getElementById('ceNotes').value.trim();
+    c.deadlineUrgent=labDeadlineStatus(c).urgent;
+    c.priority=computePriority(c);
+    overrides.edits=overrides.edits||{};
+    overrides.edits[c.id]={...overrides.edits[c.id],name:c.name,lastName:c.lastName,firstName:c.firstName,doctor:c.doctor,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,finala:c.finala,teeth:c.teeth,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority};
+    saveOverrides(overrides);_syncCase(c);closeModal();renderClinic();updateMainSummary();
+    if(typeof renderTable==='function')renderTable();renderPipeline();
+  });
 }
 
 // === CASE DETAIL ===
@@ -1369,7 +1480,11 @@ function closeModal(){document.querySelector('.modal-overlay')?.remove();documen
 function escClose(e){if(e.key==='Escape')closeModal()}
 
 function openNewCaseModal(defClinic){
-  const cOpts=CLINICS.map(c=>`<option value="${c.id}" ${c.id===defClinic?'selected':''}>${c.name}</option>`).join('');
+  const user=getCurrentUser();
+  const lockedClinicId=(user&&user.role==='clinic'&&user.clinic)?user.clinic:null;
+  const selectedClinicId=lockedClinicId||defClinic||CLINICS[0]?.id||'';
+  const visibleClinics=lockedClinicId?(CLINICS.filter(c=>c.id===lockedClinicId).length?CLINICS.filter(c=>c.id===lockedClinicId):[{id:lockedClinicId,name:user.name||lockedClinicId}]):CLINICS;
+  const cOpts=visibleClinics.map(c=>`<option value="${escAttr(c.id)}" ${c.id===selectedClinicId?'selected':''}>${escHTML(c.name||c.id||'Clinică')}</option>`).join('');
   const tOpts=allWorkTypes().map(t=>`<option value="${escAttr(t)}">${escHTML(t)}</option>`).join('');
   const colOpts=COLORS_VITA.map(c=>`<option>${c}</option>`).join('');
   const today=new Date();const pD=new Date(today);pD.setDate(today.getDate()+5);const fD=new Date(today);fD.setDate(today.getDate()+7);
@@ -1390,7 +1505,7 @@ function openNewCaseModal(defClinic){
           <section class="wizard-panel">
             <div class="wizard-panel-title">Pacient & clinică</div>
             <div class="field-row"><div class="field"><label>Nume</label><input id="ncLast" placeholder="Nume pacient" autofocus></div><div class="field"><label>Prenume</label><input id="ncFirst" placeholder="Prenume"></div></div>
-            <div class="field-row"><div class="field"><label>Clinică</label><select id="ncClinic">${cOpts}</select></div><div class="field"><label>Medic</label><input id="ncDoctor"></div></div>
+            <div class="field-row"><div class="field"><label>Clinică</label><select id="ncClinic" ${lockedClinicId?'disabled':''}>${cOpts}</select>${lockedClinicId?`<input type="hidden" id="ncClinicLocked" value="${escAttr(lockedClinicId)}">`:''}</div><div class="field"><label>Medic</label><input id="ncDoctor"></div></div>
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Lucrare</div>
@@ -1406,7 +1521,7 @@ function openNewCaseModal(defClinic){
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Planificare</div>
-            <div class="field-row three"><div class="field"><label>Intrată</label><input id="ncIntrata" value="${fmtShortDate(today)}"></div><div class="field"><label>Probă</label><input id="ncProba" value="${fmtShortDate(pD)}"></div><div class="field"><label>Finală</label><input id="ncFinala" value="${fmtShortDate(fD)}"></div></div>
+            <div class="field-row three"><div class="field"><label>Intrată</label><input id="ncIntrata" type="date" value="${fmtShortDate(today)}"></div><div class="field"><label>Probă</label><input id="ncProba" type="date" value="${fmtShortDate(pD)}"></div><div class="field"><label>Finală</label><input id="ncFinala" type="date" value="${fmtShortDate(fD)}"></div></div>
             <div id="deadlineAdvisor"></div>
           </section>
           <section class="wizard-panel"><div class="wizard-panel-title">Termeni laborator</div><a class="btn" href="termeni.html" target="_blank" rel="noreferrer">Deschide tabelul complet</a></section>
@@ -1501,7 +1616,8 @@ function openNewCaseModal(defClinic){
     const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
     const type=document.getElementById('ncType').value.trim()||allWorkTypes()[0]||'Lucrare';
     rememberWorkType(type);
-    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:document.getElementById('ncClinic').value,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:document.getElementById('ncIntrata').value,probaDate:document.getElementById('ncProba').value,finala:document.getElementById('ncFinala').value,teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
+    const caseClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
+    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateInput('ncIntrata'),probaDate:readDateInput('ncProba'),finala:readDateInput('ncFinala'),teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
     if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
     nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
     nc.priority=computePriority(nc);
@@ -1521,11 +1637,11 @@ function openQuickEdit(id){
   const safeVal=v=>String(v||'').replace(/"/g,'&quot;');
   const existingNotes=_parseNotes(c.notes);
   const notesText=existingNotes.map(n=>n.text).join('\n');
-  openModal(`<div class="modal-head"><div class="modal-title">Editare rapidă · ${c.name}</div><button class="modal-close" type="button">×</button></div><div class="modal-body"><div class="field-row"><div class="field"><label>Pacient</label><input id="qeName" value="${safeVal(c.name)}"></div><div class="field"><label>Etapă</label><select id="qeStage">${stOpts}</select></div></div><div class="field-row three"><div class="field"><label>Tip</label><input id="qeType" value="${safeVal(c.type)}"></div><div class="field"><label>Culoare</label><select id="qeColor">${colOpts}</select></div><div class="field"><label>Tip implant</label><input id="qeImplant" value="${safeVal(c.implantType)}"></div></div><div class="field-row three"><div class="field"><label>Intrată</label><input id="qeI" value="${safeVal(c.intrata)}"></div><div class="field"><label>Probă</label><input id="qeP" value="${safeVal(c.probaDate)}"></div><div class="field"><label>Finală</label><input id="qeF" value="${safeVal(c.finala)}"></div></div><div class="field-row"><div class="field"><label>Amprentă</label><input id="qeAmprenta" value="${safeVal(c.amprentaType)}"></div><div class="field"><label>Indicații speciale</label><textarea id="qeN" placeholder="Note sau indicații...">${escHTML(notesText)}</textarea></div></div></div><div class="modal-foot"><button class="btn modal-close">Anulează</button><button class="btn primary" id="qeSave">Salvează</button></div>`);
+  openModal(`<div class="modal-head"><div class="modal-title">Editare rapidă · ${c.name}</div><button class="modal-close" type="button">×</button></div><div class="modal-body"><div class="field-row"><div class="field"><label>Pacient</label><input id="qeName" value="${safeVal(c.name)}"></div><div class="field"><label>Etapă</label><select id="qeStage">${stOpts}</select></div></div><div class="field-row three"><div class="field"><label>Tip</label><input id="qeType" value="${safeVal(c.type)}"></div><div class="field"><label>Culoare</label><select id="qeColor">${colOpts}</select></div><div class="field"><label>Tip implant</label><input id="qeImplant" value="${safeVal(c.implantType)}"></div></div><div class="field-row three"><div class="field"><label>Intrată</label><input id="qeI" type="date" value="${escAttr(dateInputValue(c.intrata))}"></div><div class="field"><label>Probă</label><input id="qeP" type="date" value="${escAttr(dateInputValue(c.probaDate))}"></div><div class="field"><label>Finală</label><input id="qeF" type="date" value="${escAttr(dateInputValue(c.finala))}"></div></div><div class="field-row"><div class="field"><label>Amprentă</label><input id="qeAmprenta" value="${safeVal(c.amprentaType)}"></div><div class="field"><label>Indicații speciale</label><textarea id="qeN" placeholder="Note sau indicații...">${escHTML(notesText)}</textarea></div></div></div><div class="modal-foot"><button class="btn modal-close">Anulează</button><button class="btn primary" id="qeSave">Salvează</button></div>`);
   document.getElementById('qeSave').addEventListener('click',()=>{
     c.name=document.getElementById('qeName').value.trim()||c.name;c.stage=document.getElementById('qeStage').value;c.type=document.getElementById('qeType').value.trim()||c.type;rememberWorkType(c.type);
     c.color=document.getElementById('qeColor').value;c.implantType=document.getElementById('qeImplant').value;c.amprentaType=document.getElementById('qeAmprenta').value;
-    c.intrata=document.getElementById('qeI').value;c.probaDate=document.getElementById('qeP').value;c.finala=document.getElementById('qeF').value;
+    c.intrata=readDateInput('qeI');c.probaDate=readDateInput('qeP');c.finala=readDateInput('qeF');
     const qeNewText=document.getElementById('qeN').value.trim();
     if(qeNewText!==notesText){
       const user=getCurrentUser()||{name:'Utilizator',initials:'?'};
