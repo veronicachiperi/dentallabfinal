@@ -1296,7 +1296,8 @@ function renderStats(){
 function renderClinici(){
   const root=document.getElementById('cliniciShell');if(!root)return;
   const isAdmin=(getCurrentUser()||{}).role==='admin';
-  root.innerHTML=`<div class="app">${adminSidebarHTML('clinici')}<main class="main"><div style="padding:24px;max-width:1100px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Clinici</h1>${isAdmin?'<button class="btn primary" id="addClinicBtn" type="button">+ Clinică nouă</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${CLINICS.length} clinici · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${CLINICS.map(cl=>{const cases=casesForClinic(cl.id);const active=cases.filter(c=>c.stage!=='trimis').length;const late=cases.filter(c=>c.late).length;const ready=cases.filter(c=>c.stage==='terminat').length;const proba=cases.filter(c=>c.stage==='proba').length;return `<a href="clinic.html?id=${cl.id}" style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:18px;text-decoration:none;color:var(--text);display:block"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:42px;height:42px;border-radius:8px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--text-muted)">${escHTML(cl.name.slice(0,2))}</div><div><div style="font-size:15px;font-weight:500">${escHTML(cl.name)}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:12px;border-top:0.5px solid var(--border)"><div><div style="font-size:18px;font-weight:500">${active}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Active</div></div><div><div style="font-size:18px;font-weight:500;color:#BA7517">${proba}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Probă</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${ready}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Gata</div></div><div><div style="font-size:18px;font-weight:500;color:${late?'#A32D2D':'var(--text-dim)'}">${late}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Restant</div></div></div></a>`}).join('')}</div></div></main></div>`;
+  const dataWarning=(typeof window!=='undefined'&&window.APP_LOAD_ERROR)?`<div class="deadline-strip" style="margin:0 0 18px"><span class="dot-pulse"></span><b>Date live neîncărcate</b><span style="opacity:.85"> — afișez datele locale până se repară conexiunea.</span></div>`:'';
+  root.innerHTML=`<div class="app">${adminSidebarHTML('clinici')}<main class="main"><div style="padding:24px;max-width:1100px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Clinici</h1>${isAdmin?'<button class="btn primary" id="addClinicBtn" type="button">+ Clinică nouă</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${CLINICS.length} clinici · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div>${dataWarning}<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${CLINICS.map(cl=>{const clId=String(cl.id||'');const clName=String(cl.name||clId||'Clinică');const cases=casesForClinic(clId);const active=cases.filter(c=>c.stage!=='trimis').length;const late=cases.filter(c=>c.late).length;const ready=cases.filter(c=>c.stage==='terminat').length;const proba=cases.filter(c=>c.stage==='proba').length;return `<a href="clinic.html?id=${encodeURIComponent(clId)}" style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:18px;text-decoration:none;color:var(--text);display:block"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:42px;height:42px;border-radius:8px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--text-muted)">${escHTML(clName.slice(0,2).toUpperCase())}</div><div><div style="font-size:15px;font-weight:500">${escHTML(clName)}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:12px;border-top:0.5px solid var(--border)"><div><div style="font-size:18px;font-weight:500">${active}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Active</div></div><div><div style="font-size:18px;font-weight:500;color:#BA7517">${proba}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Probă</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${ready}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Gata</div></div><div><div style="font-size:18px;font-weight:500;color:${late?'#A32D2D':'var(--text-dim)'}">${late}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Restant</div></div></div></a>`}).join('')}</div></div></main></div>`;
   document.getElementById('addClinicBtn')?.addEventListener('click',openAddClinicModal);
 }
 
@@ -2080,23 +2081,29 @@ async function initApp(){
   // Login page — just render login form, no auth needed
   if(document.getElementById('loginShell')){renderLogin();return}
   // Auth + data loading
-  if(SUPABASE_CONFIGURED){
-    const prof=await sbRequireAuth();
-    if(!prof)return;
-    // Clinic users go straight to their own portal
-    if(prof.role==='clinic'&&prof.clinic_id&&!location.pathname.includes('clinic.html')&&!location.pathname.includes('case.html')&&!location.pathname.includes('termeni.html')){
-      location.href='clinic.html?id='+prof.clinic_id;return;
+  const hasSupabase=typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED;
+  if(hasSupabase){
+    try{
+      const prof=await sbRequireAuth();
+      if(!prof)return;
+      // Clinic users go straight to their own portal
+      if(prof.role==='clinic'&&prof.clinic_id&&!location.pathname.includes('clinic.html')&&!location.pathname.includes('case.html')&&!location.pathname.includes('termeni.html')){
+        location.href='clinic.html?id='+prof.clinic_id;return;
+      }
+      const [sbCases,sbClinics,sbEmps]=await Promise.all([sbLoadCases(),sbLoadClinics(),sbLoadEmployees()]);
+      if(sbClinics&&sbClinics.length>0){CLINICS.length=0;sbClinics.forEach(c=>CLINICS.push(c));}
+      if(sbEmps&&sbEmps.length>0){EMPLOYEES.length=0;sbEmps.forEach(e=>EMPLOYEES.push(e));}
+      if(sbCases){
+        CASES.length=0;
+        sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
+        applyOverrides();
+        loadNewCases();
+      }
+      sbSubscribeCases(reRenderAll);
+    }catch(e){
+      console.error('[initApp] Supabase load failed:',e);
+      if(typeof window!=='undefined')window.APP_LOAD_ERROR=e?.message||'Supabase load failed';
     }
-    const [sbCases,sbClinics,sbEmps]=await Promise.all([sbLoadCases(),sbLoadClinics(),sbLoadEmployees()]);
-    if(sbClinics&&sbClinics.length>0){CLINICS.length=0;sbClinics.forEach(c=>CLINICS.push(c));}
-    if(sbEmps&&sbEmps.length>0){EMPLOYEES.length=0;sbEmps.forEach(e=>EMPLOYEES.push(e));}
-    if(sbCases){
-      CASES.length=0;
-      sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
-      applyOverrides();
-      loadNewCases();
-    }
-    sbSubscribeCases(reRenderAll);
   }
   applySidebarRoles();
   updateMainSummary();
@@ -2116,7 +2123,7 @@ async function initApp(){
   document.getElementById('newCaseBtnGlobal')?.addEventListener('click',()=>openNewCaseModal());
   if(document.getElementById('activityShell'))await renderActivityLog();
   // Re-render table/pipeline after Supabase data loaded (table.js may have rendered with empty data)
-  if(SUPABASE_CONFIGURED&&typeof setMainView==='function')setMainView(localStorage.getItem('dental-lab-view')||'table');
+  if(hasSupabase&&typeof setMainView==='function')setMainView(localStorage.getItem('dental-lab-view')||'table');
 }
 document.addEventListener('DOMContentLoaded',()=>{
   // Apply sidebar immediately from localStorage cache so there is no flicker
