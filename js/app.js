@@ -471,14 +471,44 @@ function refreshDerivedNotifications(){
 }
 
 function labTermsTableHTML(compact=false){
-  return `<div class="lab-terms ${compact?'compact':''}">
-    <div class="lab-terms-title">Termenii laboratorului</div>
-    <div class="lab-terms-grid">
-      <div class="lab-terms-head">Categorie</div><div class="lab-terms-head">Serviciu</div><div class="lab-terms-head">Timp executare (Luni-Vineri)</div>
-      ${LAB_TERMS.map(t=>`<div class="lab-term-cat">${escHTML(t.category)}</div><div>${escHTML(t.service)}</div><div>${escHTML(t.time)}</div>`).join('')}
+  const groups={};
+  LAB_TERMS.forEach(t=>{(groups[t.category]=groups[t.category]||[]).push(t)});
+  const categoryOrder=['DESIGN','PROVIZORII','ZIRCONIU','EMAX','DEFINITIVE','ALTE TIPURI'];
+  const keys=[...categoryOrder.filter(k=>groups[k]),...Object.keys(groups).filter(k=>!categoryOrder.includes(k))];
+  const categoryHint={
+    DESIGN:'Planificare și modelare digitală',
+    PROVIZORII:'Lucrări temporare și all-on-x',
+    ZIRCONIU:'Coroane, punți și structuri zirconiu',
+    EMAX:'Estetică presată / frezată',
+    DEFINITIVE:'Lucrări finale complexe',
+    'ALTE TIPURI':'Gutiere, ghiduri și lucrări speciale'
+  };
+  return `<div class="lab-terms-friendly ${compact?'compact':''}">
+    <div class="lab-terms-hero">
+      <div>
+        <div class="dash-eyebrow">Luni - Vineri</div>
+        <h2>Termenii laboratorului</h2>
+      </div>
+      <div class="lab-terms-hero-note">Consultați termenii înainte de a seta data finală.</div>
     </div>
-    <div class="lab-terms-note good">Pentru probe printate lucrări All on X: minim 24 ore de la primirea scanurilor.</div>
-    <div class="lab-terms-note warn">* În lipsa informațiilor sau a răspunsurilor primite în timp util, termenele pot fi ajustate.</div>
+    <div class="lab-terms-cards">
+      ${keys.map(cat=>`<section class="lab-term-group">
+        <div class="lab-term-group-head">
+          <div><h3>${escHTML(cat)}</h3><p>${escHTML(categoryHint[cat]||'Termeni de execuție')}</p></div>
+          <span>${groups[cat].length}</span>
+        </div>
+        <div class="lab-term-items">
+          ${groups[cat].map(t=>`<article class="lab-term-card">
+            <div class="lab-term-service">${escHTML(t.service)}</div>
+            <div class="lab-term-time">${escHTML(t.time)}</div>
+          </article>`).join('')}
+        </div>
+      </section>`).join('')}
+    </div>
+    <div class="lab-terms-notes">
+      <div class="lab-terms-note good">Pentru probe printate lucrări All on X: minim 24 ore de la primirea scanurilor.</div>
+      <div class="lab-terms-note warn">În lipsa informațiilor sau a răspunsurilor primite la timp, termenele pot fi ajustate.</div>
+    </div>
   </div>`;
 }
 
