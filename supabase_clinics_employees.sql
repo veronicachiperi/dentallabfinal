@@ -5,6 +5,21 @@
 -- ============================================================
 
 -- ── Clinics ──────────────────────────────────────────────────
+-- Allow admins to remove clinic/employee login profiles from the app.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'profiles' AND policyname = 'profiles_admin_delete'
+  ) THEN
+    CREATE POLICY "profiles_admin_delete" ON profiles
+      FOR DELETE TO authenticated
+      USING (EXISTS (
+        SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin'
+      ));
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS clinics (
   id        text PRIMARY KEY,
   name      text NOT NULL,

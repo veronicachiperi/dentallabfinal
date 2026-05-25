@@ -257,6 +257,8 @@ async function sbSaveClinic(clinic) {
 
 async function sbDeleteClinic(id) {
   if (!SUPABASE_CONFIGURED) return;
+  const { error: pe } = await _client().from('profiles').delete().eq('clinic_id', id);
+  if (pe) throw pe;
   const { error } = await _client().from('clinics').delete().eq('id', id);
   if (error) throw error;
   await _sbLog('delete_clinic', 'clinic', id, {});
@@ -281,6 +283,8 @@ async function sbSaveEmployee(emp) {
 
 async function sbDeleteEmployee(id) {
   if (!SUPABASE_CONFIGURED) return;
+  const { error: pe } = await _client().from('profiles').delete().eq('employee_id', id);
+  if (pe) throw pe;
   const { error } = await _client().from('employees').delete().eq('id', id);
   if (error) throw error;
   await _sbLog('delete_employee', 'employee', id, {});

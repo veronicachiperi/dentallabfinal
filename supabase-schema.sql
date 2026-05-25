@@ -26,6 +26,9 @@ CREATE POLICY "profiles_admin_update" ON public.profiles FOR UPDATE USING (
 ) WITH CHECK (
   EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
 );
+CREATE POLICY "profiles_admin_delete" ON public.profiles FOR DELETE USING (
+  EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+);
 
 -- 2. Cases
 CREATE TABLE IF NOT EXISTS public.cases (

@@ -818,6 +818,48 @@ button{font-family:inherit;cursor:pointer}
   outline: none;
   background: var(--bg-soft);
 }
+.date-popover {
+  position: fixed;
+  z-index: 1002;
+  width: 238px;
+  background: var(--bg);
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.16), 0 2px 6px rgba(0,0,0,0.08);
+  padding: 4px;
+}
+.date-pop-input {
+  width: 100%;
+  height: 38px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  outline: none;
+}
+.date-pop-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(26,26,26,0.08);
+}
+.date-pop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+.editable-date {
+  cursor: pointer;
+  display: inline-flex;
+  width: fit-content;
+  border-radius: var(--radius-sm);
+}
+.editable-date:hover {
+  outline: 1px dashed var(--border-strong);
+  outline-offset: 2px;
+}
 .inline-note-editor {
   position: fixed;
   z-index: 1001;
