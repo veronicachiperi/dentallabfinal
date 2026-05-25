@@ -127,6 +127,10 @@ function _dbToCase(row) {
     color:        row.color          || '',
     stage:        row.stage          || 'design',
     notStarted:   row.not_started === true,
+    noProba:      row.no_proba === true,
+    completedDate:row.completed_date || '',
+    finalTech:    row.final_tech     || '',
+    durationDays: row.duration_days  || '',
     assignee:     row.assignee       || null,
     assignees:    row.assignees      || {},
     stageStatuses:row.stage_statuses || {},
@@ -169,6 +173,10 @@ function _caseToDb(c) {
     notes:          c.notes        || '',
     priority:       c.priority     || 'mediu',
     sent_date:      c.sentDate     || null,
+    no_proba:       Boolean(c.noProba),
+    completed_date: c.completedDate || null,
+    final_tech:     c.finalTech    || null,
+    duration_days:  c.durationDays || null,
   };
 }
 
@@ -208,6 +216,8 @@ async function sbUpdateField(c, field, value) {
     priority: 'priority', implantType: 'implant_type', amprentaType: 'amprenta_type',
     sentDate: 'sent_date',
     teeth: 'teeth', doctor: 'doctor', clinic: 'clinic_id',
+    noProba: 'no_proba', completedDate: 'completed_date',
+    finalTech: 'final_tech', durationDays: 'duration_days',
   };
   const col = colMap[field];
   if (!col) return;

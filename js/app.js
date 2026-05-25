@@ -3,8 +3,16 @@ function loadOverrides(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)
 function saveOverrides(o){localStorage.setItem(STORAGE_KEY,JSON.stringify(o))}
 const overrides=loadOverrides();
 function applyOverrides(){
-  if(overrides.stages)Object.entries(overrides.stages).forEach(([id,s])=>{const c=getCase(id);if(c)c.stage=s});
-  if(overrides.edits)Object.entries(overrides.edits).forEach(([id,e])=>{const c=getCase(id);if(c)Object.assign(c,e)});
+  // When Supabase is the backend, the database is the single source of truth.
+  // Re-applying the local edit cache on top of fresh server data would let one
+  // user's stale local changes overwrite another user's newer changes, so we
+  // skip edits/stages in that mode (every edit is already persisted server-side).
+  const sb=typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED;
+  if(!sb){
+    if(overrides.stages)Object.entries(overrides.stages).forEach(([id,s])=>{const c=getCase(id);if(c)c.stage=s});
+    if(overrides.edits)Object.entries(overrides.edits).forEach(([id,e])=>{const c=getCase(id);if(c)Object.assign(c,e)});
+  }
+  // Notification read-state stays local to each device.
   if(overrides.read)overrides.read.forEach(id=>{const n=NOTIFICATIONS.find(x=>x.id===id);if(n)n.unread=false});
 }
 applyOverrides();
@@ -204,9 +212,9 @@ async function moveCaseToStage(id,stageId){
   overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;
   overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:stageId,notStarted:false,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee};
   saveOverrides(overrides);
-  if(typeof sbUpdateField==='function'&&SUPABASE_CONFIGURED){
-    await sbUpdateField(c,'stage',stageId);
-    await sbUpdateField(c,'notStarted',false);
+  if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED){
+    // Full save so stage + substates + assignees all reach the server.
+    try{await sbSaveCase(c)}catch(e){console.warn('[sb sync]',e.message)}
   }
   reRenderAll();
 }
@@ -950,6 +958,7 @@ function attachDropZone(col,stageId){
 // === CLINIC PORTAL ===
 function renderClinic(){
   const root=document.getElementById('clinicShell');
+  if(typeof assignCaseNumbers==='function')assignCaseNumbers();
   if(!root)return;
   const _cu=getCurrentUser();
   const clinicId=(_cu&&_cu.role==='clinic'&&_cu.clinic)?_cu.clinic:(new URLSearchParams(location.search).get('id')||'crisdent');
@@ -1046,7 +1055,7 @@ function renderClinic(){
         const pct=progressPct(c);
         const stageName=publicStageName(c);
         return `<div class="pc-row-grid ${isCaseNotStarted(c)?'not-started':''} ${isCaseAtProba(c)?'proba-row':''}" data-case-id="${c.id}">
-          <div class="tbl-num">#${c.id}</div>
+          <div class="tbl-num">#${c.seq||c.id}</div>
           <div class="tbl-name">${c.name}</div>
           <div><span class="tag">${c.type}</span></div>
           <div class="pc-progress-cell">
@@ -1160,7 +1169,7 @@ function openClinicCaseEdit(caseId){
       <div class="field-row ${canEditWorkflow?'three':''}"><div class="field"><label>Pacient</label><input id="ceName" value="${safeVal(c.name)}" autofocus></div><div class="field"><label>Clinică</label><input value="${escAttr(clinic.name)}" disabled></div>${stageField}</div>
       <div class="field-row"><div class="field"><label>Medic</label><input id="ceDoctor" value="${safeVal(c.doctor)}"></div><div class="field"><label>Tip lucrare</label><select id="ceType">${typeOptions}</select></div></div>
       <div class="field-row three"><div class="field"><label>Culoare</label><select id="ceColor">${colorOptions}</select></div><div class="field"><label>Tip implant</label><input id="ceImplant" value="${safeVal(c.implantType)}"></div><div class="field"><label>Tip amprentă</label><select id="ceAmprenta">${amprentaOptions}</select></div></div>
-      <div class="field-row three"><div class="field"><label>Intrată</label><div class="date-edit-btn${c.intrata?'':' is-empty'}" id="ceIntrata" data-val="${escAttr((c.intrata||'').split(' ')[0])}"><span>${(c.intrata||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="time" class="time-input" id="ceIntrataTime" value="${escAttr(extractTime(c.intrata||''))}" placeholder="--:--"></div><div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:4px">Probă<label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:11px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ceNoProba"${c.noProba?' checked':''}> Fără probă</label></label><div class="date-edit-btn${c.noProba?' disabled':(c.probaDate?'':' is-empty')}" id="ceProba" data-val="${escAttr(c.noProba?'':(c.probaDate||'').split(' ')[0])}"><span>${c.noProba?'Fără probă':((c.probaDate||'').split(' ')[0]||'Alege data')}</span><span class="cal-ico">&#128197;</span></div><input type="time" class="time-input" id="ceProbaTime" value="${escAttr(extractTime(c.probaDate||''))}" placeholder="--:--"></div><div class="field"><label>Finală</label><div class="date-edit-btn${c.finala?'':' is-empty'}" id="ceFinala" data-val="${escAttr((c.finala||'').split(' ')[0])}"><span>${(c.finala||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="time" class="time-input" id="ceFinalaTime" value="${escAttr(extractTime(c.finala||''))}" placeholder="--:--"></div></div>
+      <div class="field-row three"><div class="field"><label>Intrată</label><div class="date-edit-btn${c.intrata?'':' is-empty'}" id="ceIntrata" data-val="${escAttr((c.intrata||'').split(' ')[0])}"><span>${(c.intrata||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="time" lang="en-GB" step="60" class="time-input" id="ceIntrataTime" value="${escAttr(extractTime(c.intrata||''))}" placeholder="--:--"></div><div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:4px">Probă<label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:11px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ceNoProba"${c.noProba?' checked':''}> Fără probă</label></label><div class="date-edit-btn${c.noProba?' disabled':(c.probaDate?'':' is-empty')}" id="ceProba" data-val="${escAttr(c.noProba?'':(c.probaDate||'').split(' ')[0])}"><span>${c.noProba?'Fără probă':((c.probaDate||'').split(' ')[0]||'Alege data')}</span><span class="cal-ico">&#128197;</span></div><input type="time" lang="en-GB" step="60" class="time-input" id="ceProbaTime" value="${escAttr(extractTime(c.probaDate||''))}" placeholder="--:--"></div><div class="field"><label>Finală</label><div class="date-edit-btn${c.finala?'':' is-empty'}" id="ceFinala" data-val="${escAttr((c.finala||'').split(' ')[0])}"><span>${(c.finala||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="time" lang="en-GB" step="60" class="time-input" id="ceFinalaTime" value="${escAttr(extractTime(c.finala||''))}" placeholder="--:--"></div></div>
       <div id="clinicEditDeadline"></div>
       <div class="field"><label>Schema dentară (FDI)</label>
         <div class="tc-jaw-controls">
@@ -1538,6 +1547,7 @@ function renderTechnicianPortal(){
 let archiveFilter={year:String(new Date().getFullYear()),month:'all',clinic:'all',tech:'all',type:'all',q:''};
 function renderArchive(){
   const root=document.getElementById('archiveShell');if(!root)return;
+  if(typeof assignCaseNumbers==='function')assignCaseNumbers();
   const archiveUser=getCurrentUser()||{role:'admin'};
   const clinicArchiveId=archiveUser.role==='clinic'&&archiveUser.clinic?archiveUser.clinic:null;
   if(clinicArchiveId)archiveFilter.clinic=clinicArchiveId;
@@ -1571,7 +1581,7 @@ function renderArchive(){
     const cs=groups[k];
     let lbl='Necunoscută';
     if(k!=='unknown'){const[y,m]=k.split('-').map(Number);lbl=`${MONTH_NAMES_RO[m]} ${y}`}
-    h+=`<div class="ar-month-section">${lbl} · ${cs.length} lucrări</div><div class="ar-tbl-wrap"><table class="ar-tbl"><thead><tr><th>#</th><th>Pacient</th><th>Clinică</th><th>Tip</th><th>Status</th><th>Tehnician</th><th>Intrată</th><th>Data arhivă</th><th>Durată</th><th>Acțiuni</th></tr></thead><tbody>${cs.map(c=>{const t=getEmployee(archiveTech(c));return `<tr data-case-id="${c.id}"><td><span class="tbl-num">#${c.id}</span></td><td><span class="tbl-name">${c.name}</span></td><td><span class="tbl-clinic">${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</span></td><td><span class="tag">${c.type}</span></td><td><span class="tbl-pill" style="background:${c.stage==='trimis'?'rgba(39,80,10,.15)':'rgba(29,158,117,.15)'};color:${c.stage==='trimis'?'#27500A':'#1D9E75'}">${statusLabel(c)}</span></td><td>${t?`<span class="ar-tech-av-mini"><span class="ar-tech-av-circle-mini ${t.id}">${t.initials}</span>${t.name}</span>`:'—'}</td><td><span class="tbl-due">${c.intrata}</span></td><td><span class="tbl-due-bold">${c.sentDate||c.completedDate||c.finala}</span></td><td><span class="tbl-due">${c.durationDays||'—'} zile</span></td><td><button class="ar-action-icon" data-pdf="${c.id}">PDF</button> <button class="ar-action-icon" data-view="${c.id}">Vezi</button></td></tr>`}).join('')}</tbody></table></div>`;
+    h+=`<div class="ar-month-section">${lbl} · ${cs.length} lucrări</div><div class="ar-tbl-wrap"><table class="ar-tbl"><thead><tr><th>#</th><th>Pacient</th><th>Clinică</th><th>Tip</th><th>Status</th><th>Tehnician</th><th>Intrată</th><th>Data arhivă</th><th>Durată</th><th>Acțiuni</th></tr></thead><tbody>${cs.map(c=>{const t=getEmployee(archiveTech(c));return `<tr data-case-id="${c.id}"><td><span class="tbl-num">#${c.seq||c.id}</span></td><td><span class="tbl-name">${c.name}</span></td><td><span class="tbl-clinic">${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</span></td><td><span class="tag">${c.type}</span></td><td><span class="tbl-pill" style="background:${c.stage==='trimis'?'rgba(39,80,10,.15)':'rgba(29,158,117,.15)'};color:${c.stage==='trimis'?'#27500A':'#1D9E75'}">${statusLabel(c)}</span></td><td>${t?`<span class="ar-tech-av-mini"><span class="ar-tech-av-circle-mini ${t.id}">${t.initials}</span>${t.name}</span>`:'—'}</td><td><span class="tbl-due">${c.intrata}</span></td><td><span class="tbl-due-bold">${c.sentDate||c.completedDate||c.finala}</span></td><td><span class="tbl-due">${c.durationDays||'—'} zile</span></td><td><button class="ar-action-icon" data-pdf="${c.id}">PDF</button> <button class="ar-action-icon" data-view="${c.id}">Vezi</button></td></tr>`}).join('')}</tbody></table></div>`;
   });
   h+=`</div></main></div>`;
   root.innerHTML=h;
@@ -1948,7 +1958,7 @@ function openNewCaseModal(defClinic){
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Planificare</div>
-            <div class="field-row three"><div class="field"><label>Intrată</label><div class="date-edit-btn" id="ncIntrata" data-val="${fmtShortDate(today)}"><span>${fmtShortDate(today)}</span><span class="cal-ico">&#128197;</span></div><input type="time" class="time-input" id="ncIntrataTime" placeholder="--:--"></div><div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:4px">Probă<label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:11px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ncNoProba"> Fără probă</label></label><div class="date-edit-btn" id="ncProba" data-val="${fmtShortDate(pD)}"><span>${fmtShortDate(pD)}</span><span class="cal-ico">&#128197;</span></div><input type="time" class="time-input" id="ncProbaTime" placeholder="--:--"></div><div class="field"><label>Finală</label><div class="date-edit-btn" id="ncFinala" data-val="${fmtShortDate(fD)}"><span>${fmtShortDate(fD)}</span><span class="cal-ico">&#128197;</span></div><input type="time" class="time-input" id="ncFinalaTime" placeholder="--:--"></div></div>
+            <div class="field-row three"><div class="field"><label>Intrată</label><div class="date-edit-btn" id="ncIntrata" data-val="${fmtShortDate(today)}"><span>${fmtShortDate(today)}</span><span class="cal-ico">&#128197;</span></div><input type="time" lang="en-GB" step="60" class="time-input" id="ncIntrataTime" placeholder="--:--"></div><div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:4px">Probă<label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:11px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ncNoProba"> Fără probă</label></label><div class="date-edit-btn" id="ncProba" data-val="${fmtShortDate(pD)}"><span>${fmtShortDate(pD)}</span><span class="cal-ico">&#128197;</span></div><input type="time" lang="en-GB" step="60" class="time-input" id="ncProbaTime" placeholder="--:--"></div><div class="field"><label>Finală</label><div class="date-edit-btn" id="ncFinala" data-val="${fmtShortDate(fD)}"><span>${fmtShortDate(fD)}</span><span class="cal-ico">&#128197;</span></div><input type="time" lang="en-GB" step="60" class="time-input" id="ncFinalaTime" placeholder="--:--"></div></div>
             <div id="deadlineAdvisor"></div>
           </section>
           <section class="wizard-panel"><div class="wizard-panel-title">Termeni laborator</div><a class="btn" href="termeni.html" target="_blank" rel="noreferrer">Deschide tabelul complet</a></section>
@@ -2453,7 +2463,7 @@ function openDatePopover(anchor, c, field, onSaved){
       <div class="date-cal-grid">${cells}</div>
       <div class="date-cal-time-row" style="display:flex;align-items:center;gap:8px;padding:10px 4px 2px">
         <label style="font-size:11px;color:var(--text-muted);white-space:nowrap">Oră</label>
-        <input type="time" class="time-input date-cal-time-input" style="margin-top:0" value="${escAttr(extractTime(c[field]||''))}">
+        <input type="time" lang="en-GB" step="60" class="time-input date-cal-time-input" style="margin-top:0" value="${escAttr(extractTime(c[field]||''))}">
       </div>
       <div class="date-cal-footer">
         <button class="btn date-cal-clear-btn" type="button">Șterge</button>

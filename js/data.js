@@ -281,6 +281,24 @@ function todayLabDate() {
   return d;
 }
 
+// Global, continuous numbering across ALL cases by entry order:
+// #1 = first case entered (oldest "Intrată" date), #N = newest. The same
+// c.seq is used everywhere a case number is shown (table, clinic portal,
+// archive, case detail, lab fișă). Defined here in data.js so it is available
+// on every page, not only on pages that load table.js.
+function assignCaseNumbers() {
+  const entryDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala)
+    || (c.createdAt ? new Date(c.createdAt) : null);
+  const sorted = CASES.slice().sort((a, b) => {
+    const da = entryDate(a), db = entryDate(b);
+    if (da && db && da - db !== 0) return da - db;
+    if (da && !db) return -1;
+    if (!da && db) return 1;
+    return (a.id || 0) - (b.id || 0);
+  });
+  sorted.forEach((c, i) => c.seq = i + 1);
+}
+
 const STAGE_ASSIGNEE_DEFAULTS = { design:'tchi', cam:'tchi', la_print:'tchi', prelucrare:'amoi', ceramica:'acur', proba:'acur', terminat:'acur', trimis:'acur' };
 
 CASES.forEach(c => {

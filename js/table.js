@@ -11,22 +11,6 @@ function shortDayMon(str) {
   return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
 }
 
-// Global, continuous numbering across ALL cases by entry order:
-// #1 = first case entered (oldest), #N = last case entered (newest).
-// The same c.seq is used in the table, case detail and the lab fișă (PDF).
-function assignCaseNumbers() {
-  const entryDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala)
-    || (c.createdAt ? new Date(c.createdAt) : null);
-  const sorted = CASES.slice().sort((a, b) => {
-    const da = entryDate(a), db = entryDate(b);
-    if (da && db && da - db !== 0) return da - db;
-    if (da && !db) return -1;
-    if (!da && db) return 1;
-    return (a.id || 0) - (b.id || 0);
-  });
-  sorted.forEach((c, i) => c.seq = i + 1);
-}
-
 function renderTable() {
   const root = document.getElementById('tableView');
   if (!root) return;
@@ -235,6 +219,8 @@ function handleStageClick(caseId, stageId) {
   overrides.edits = overrides.edits || {}; overrides.edits[c.id] = overrides.edits[c.id] || {};
   Object.assign(overrides.edits[c.id], { stageStatuses: c.stageStatuses, assignees: c.assignees, stage: c.stage, notStarted: c.notStarted, assignee: c.assignee, finalTech: c.finalTech, completedDate: c.completedDate });
   saveOverrides(overrides);
+  // Persist the full case to Supabase so the change reaches every other user.
+  if (typeof _syncCase === 'function') _syncCase(c);
   renderTable();
   if (typeof renderPipeline === 'function') renderPipeline();
 }
