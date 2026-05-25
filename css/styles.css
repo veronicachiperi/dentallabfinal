@@ -344,6 +344,9 @@ button{font-family:inherit;cursor:pointer}
 .t-display.veneer{background:transparent;color:#1a1a1a;border:1.5px dashed #1a1a1a;font-weight:500}
 
 .fisa-attached{display:flex;align-items:center;gap:14px;padding:14px}
+.fisa-uploaded-list{border-top:0.5px solid var(--border)}
+.fisa-uploaded{border-top:0.5px solid var(--border);background:var(--bg-soft)}
+.fisa-uploaded:first-child{border-top:none}
 .fisa-icon-pdf{width:38px;height:46px;background:var(--bg);border:0.5px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:var(--late);font-family:var(--font-mono);flex-shrink:0}
 .fisa-fname{font-size:13px;font-weight:500}
 .fisa-fmeta{font-size:11px;color:var(--text-dim);margin-top:2px}
@@ -379,6 +382,10 @@ button{font-family:inherit;cursor:pointer}
 .file-icon-mini{width:22px;height:26px;background:var(--bg-soft);border:0.5px solid var(--border);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:600;color:var(--text-dim);font-family:var(--font-mono)}
 .file-name{flex:1;font-weight:500;font-size:12px}
 .file-size{font-size:10px;color:var(--text-dim)}
+.file-mini-btn{border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:10px;padding:3px 6px;color:var(--text-muted);font-family:inherit}
+.file-mini-btn:hover{border-color:var(--border-strong);color:var(--text);background:var(--bg-soft)}
+.file-mini-btn.danger,.btn.danger{color:var(--late);border-color:rgba(163,45,45,.35)}
+.file-mini-btn.danger:hover,.btn.danger:hover{background:var(--late-bg);border-color:var(--late)}
 .file-storage-note{font-size:10px;color:var(--text-dim);line-height:1.4;margin-top:8px}
 .upload-file-list{display:flex;flex-direction:column;gap:6px;margin:8px 0 12px}
 .upload-file-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--bg-soft);font-size:11px}
