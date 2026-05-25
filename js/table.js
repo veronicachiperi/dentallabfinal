@@ -11,24 +11,26 @@ function shortDayMon(str) {
   return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
 }
 
-function assignMonthlyNumbers() {
-  const groupDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala);
-  const groups = {};
-  CASES.forEach(c => {
-    const d = groupDate(c);
-    const key = d ? `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}` : 'unknown';
-    (groups[key] = groups[key] || []).push(c);
+// Global, continuous numbering across ALL cases by entry order:
+// #1 = first case entered (oldest), #N = last case entered (newest).
+// The same c.seq is used in the table, case detail and the lab fișă (PDF).
+function assignCaseNumbers() {
+  const entryDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala)
+    || (c.createdAt ? new Date(c.createdAt) : null);
+  const sorted = CASES.slice().sort((a, b) => {
+    const da = entryDate(a), db = entryDate(b);
+    if (da && db && da - db !== 0) return da - db;
+    if (da && !db) return -1;
+    if (!da && db) return 1;
+    return (a.id || 0) - (b.id || 0);
   });
-  Object.keys(groups).forEach(k => {
-    groups[k].sort((a,b) => (groupDate(a) || 0) - (groupDate(b) || 0));
-    groups[k].forEach((c, i) => c._monthlyNum = i + 1);
-  });
+  sorted.forEach((c, i) => c.seq = i + 1);
 }
 
 function renderTable() {
   const root = document.getElementById('tableView');
   if (!root) return;
-  assignMonthlyNumbers();
+  assignCaseNumbers();
   const filtered = applyFilter(CASES);
 
   const groupDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala);
@@ -38,10 +40,11 @@ function renderTable() {
     const key = d ? `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}` : 'unknown';
     (groups[key] = groups[key] || []).push(c);
   });
-  const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+  // Oldest month first so the list reads #1 (first entered) at the top
+  // down to the most recent case at the bottom.
+  const sortedKeys = Object.keys(groups).sort((a,b) => a.localeCompare(b));
   sortedKeys.forEach(k => {
     groups[k].sort((a,b) => (groupDate(a) || 0) - (groupDate(b) || 0));
-    groups[k].forEach((c, i) => c._monthlyNum = i + 1);
   });
 
   let html = '';
@@ -94,7 +97,7 @@ function renderTableRow(c) {
   const noteEsc=noteText.replace(/</g,'&lt;');
   const hasNote=parsedNotes.length>0;
  return `<tr data-case-id="${c.id}" class="${c.notStarted?'tbl-row-faded':''}">
-    <td><span class="tbl-num">#${c._monthlyNum || c.id}</span></td>
+    <td><span class="tbl-num">#${c.seq || c.id}</span></td>
     <td><span class="tbl-name">${c.name}</span></td>
     <td><span class="tbl-clinic">${clinic.name}</span></td>
     <td><span class="tag">${c.type}</span></td>

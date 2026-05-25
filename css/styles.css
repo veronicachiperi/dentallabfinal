@@ -251,6 +251,9 @@ button{font-family:inherit;cursor:pointer}
 .date-edit-btn.is-empty{color:var(--text-dim)}
 .date-edit-btn.disabled{opacity:0.4;pointer-events:none}
 .date-edit-btn .cal-ico{opacity:0.4;font-size:13px;flex-shrink:0}
+.time-input{width:100%;margin-top:6px;padding:7px 10px;border:0.5px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;background:var(--bg);color:var(--text);min-height:32px;box-sizing:border-box;transition:border-color .15s}
+.time-input:hover{border-color:var(--border-strong)}
+.cal-pill-time{letter-spacing:.3px}
 
 .btn{font-size:13px;padding:7px 14px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--bg);color:var(--text);cursor:pointer}
 .btn:hover{background:var(--bg-soft)}
