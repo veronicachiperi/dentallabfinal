@@ -2125,10 +2125,10 @@ function renderLogin(){
   root.innerHTML=`<div class="login-shell"><div class="login-box">
     <div class="login-brand"><div class="login-brand-name">PRIVATE CAD</div><div class="login-brand-sub">Sistem privat · acces numai prin invitație</div></div>
     <div class="login-prompt">Autentificare</div>
-    <div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="utilizator" autocomplete="username" spellcheck="false"></div>
+    <div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="utilizator" autocomplete="username" spellcheck="false" autocapitalize="none" autocorrect="off" inputmode="email"></div>
     <div class="field" style="margin-bottom:16px"><label>Parolă</label><input id="lPass" type="password" autocomplete="current-password"></div>
     <div id="loginErr" class="login-err" style="display:none"></div>
-    <button class="btn primary" id="lSubmit" style="width:100%">Intră în cont</button>
+    <button class="btn primary" id="lSubmit" style="width:100%;min-height:44px;font-size:15px">Intră în cont</button>
     <div class="login-invite-note">Nu ai cont? Contactează administratorul laboratorului.</div>
   </div></div>`;
 
@@ -2170,6 +2170,8 @@ function renderLogin(){
   btn.addEventListener('click',doLogin);
   root.querySelector('#lPass')?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
   root.querySelector('#lUser')?.addEventListener('keydown',e=>{if(e.key==='Enter')root.querySelector('#lPass')?.focus()});
+  // On mobile, scroll the box into view when keyboard opens so the button stays visible
+  root.querySelector('#lPass')?.addEventListener('focus',()=>setTimeout(()=>btn.scrollIntoView({block:'nearest',behavior:'smooth'}),320));
 
   // Check lockout on render
   const lu=_lockedUntil();
@@ -2178,8 +2180,10 @@ function renderLogin(){
 function _loginErr(id,msg){const el=document.getElementById(id);if(el){el.textContent=msg;el.style.display='block'}}
 function _redirectAfterLogin(prof){
   if(!prof)return;
-  if(prof.role==='clinic')location.href=`clinic.html?id=${prof.clinic_id}`;
-  else if(prof.role==='technician')location.href='tehnician.html';
+  if(prof.role==='clinic'){
+    const cid=prof.clinic_id||getCurrentUser()?.clinic||'';
+    location.href=cid?`clinic.html?id=${cid}`:'clinic.html';
+  }else if(prof.role==='technician')location.href='tehnician.html';
   else location.href='index.html';
 }
 
@@ -2750,6 +2754,18 @@ async function initApp(){
     }catch(e){
       console.error('[initApp] Supabase load failed:',e);
       if(typeof window!=='undefined')window.APP_LOAD_ERROR=e?.message||'Supabase load failed';
+      // On clinic portal, replace the spinner with a clear error + retry
+      const cl=document.getElementById('clinicShell');
+      if(cl&&cl.querySelector('.page-loader')){
+        const isAuthErr=!e.message||e.message.includes('auth')||e.message.includes('session')||e.message.includes('token');
+        cl.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:24px;text-align:center;gap:14px">
+          <div style="font-size:14px;color:var(--text-muted)">${isAuthErr?'Sesiunea a expirat. Vă rugăm să vă autentificați din nou.':'Eroare la încărcarea portalului. Verificați conexiunea.'}</div>
+          <button class="btn primary" style="min-height:44px;padding:10px 28px" onclick="${isAuthErr?'location.href=\'login.html\'':'location.reload()'}">
+            ${isAuthErr?'Autentificare':'Reîncearcă'}
+          </button>
+        </div>`;
+        return;
+      }
       applyOverrides();
       loadNewCases();
     }

@@ -21,9 +21,12 @@ function _client() {
   return _sb;
 }
 
-// Converts any username to a valid email local part
+// Converts any username to a valid email local part.
+// If autofill pastes a full email (contains @), use it as-is.
 function _toEmail(username) {
-  return username.toLowerCase().trim().replace(/[^a-z0-9._+-]/g, '_') + '@gmail.com';
+  const u = username.toLowerCase().trim();
+  if (u.includes('@')) return u;
+  return u.replace(/[^a-z0-9._+-]/g, '_') + '@gmail.com';
 }
 
 // ── Auth ─────────────────────────────────────────────────────
