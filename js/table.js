@@ -98,7 +98,7 @@ function renderTableRow(c) {
 
 function renderFlowIndicator(c) {
   const stages = getEtapeLabStages(c.type); // 4 sau 3 etape (skip Ceramică)
-  const labels = { design: '1', cam: '2', ceramica: '3', prelucrare: stages.length === 4 ? '4' : '3' };
+  const labels = { design: '1', cam: '2', prelucrare: '3', ceramica: '4' };
   const activeStage = probaLabStage(c) || probaApprovedStage(c) || barsWaitingStage(c) || barsReadyStage(c) || (stages.includes(c.stage) ? c.stage : null);
   const activeIndex = c.stage === 'terminat' || c.stage === 'trimis'
     ? stages.length

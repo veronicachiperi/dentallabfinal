@@ -9,8 +9,9 @@ const STAGES = [
   { id: 'trimis',     name: 'Trimis',     color: '#27500A', order: 8 }
 ];
 
-// Etape lab arătate în coloana "Etape lab" — 4 max (Design, CAM, Ceramică, Prelucrare)
-const ETAPE_LAB_FULL = ['design', 'cam', 'ceramica', 'prelucrare'];
+// Etape lab arătate în coloana "Etape lab" — 4 max (Design, CAM, Prelucrare, Ceramică)
+// Ordinea fluxului: Design → CAM → Prelucrare → Ceramică → Terminat.
+const ETAPE_LAB_FULL = ['design', 'cam', 'prelucrare', 'ceramica'];
 const ETAPE_LAB_NO_CERAMIC = ['design', 'cam', 'prelucrare'];
 // Tipuri de lucrări care NU includ Ceramică
 const TYPES_SKIP_CERAMICA = ['PROVIZORIE', 'STANDART', 'PMMA DINTI', 'PMMA IMPL', 'PMMA DINTI/IMPL'];
@@ -20,7 +21,7 @@ function getEtapeLabStages(type) {
   return TYPES_SKIP_CERAMICA.some(t => workType.includes(normTerm(t))) ? ETAPE_LAB_NO_CERAMIC : ETAPE_LAB_FULL;
 }
 
-const PIPELINE_STAGES = ['design', 'cam', 'ceramica', 'prelucrare', 'proba', 'terminat']; // No Trimis
+const PIPELINE_STAGES = ['design', 'cam', 'prelucrare', 'ceramica', 'proba', 'terminat']; // No Trimis
 const PIPELINE_STAGES_NO_CERAMIC = ['design', 'cam', 'prelucrare', 'proba', 'terminat'];
 
 const STAGE_ICONS = {
