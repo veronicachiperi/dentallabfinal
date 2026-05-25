@@ -38,11 +38,29 @@ function formatBytes(bytes){
 }
 function fileExt(name){const p=String(name||'').split('.').pop();return p&&p!==name?p.toUpperCase().slice(0,4):'FILE'}
 function filesForCase(caseId){return attachments[caseId]||[]}
-function deleteAttachment(c,index){
+async function deleteAttachment(c,index){
   const files=filesForCase(c.id).slice();
   const f=files[index];
   if(!f)return;
   if(!confirm(`Ștergi fișierul "${f.name}"?`))return;
+  if(UPLOAD_SERVER_AVAILABLE&&(f.path||f.fileId)){
+    try{
+      const res=await fetch(UPLOAD_SERVER+'/api/delete-file',{
+        method:'DELETE',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({path:f.path||'',fileId:f.fileId||''})
+      });
+      if(!res.ok){
+        let msg='Nu am putut șterge fișierul din storage.';
+        try{const json=await res.json();if(json.error)msg=json.error}catch{}
+        alert(msg);
+        return;
+      }
+    }catch(e){
+      alert('Serverul local de fișiere nu răspunde. Pornește server.py și încearcă din nou.');
+      return;
+    }
+  }
   files.splice(index,1);
   attachments[c.id]=files;
   saveAttachments(attachments);
@@ -581,29 +599,46 @@ function renderAttachedFiles(c){
     <div class="file-icon-mini">${fileExt(f.name)}</div>
     <span class="file-name">${f.name}</span>
     ${f.folderUrl?`<a class="file-size" href="${escAttr(f.folderUrl)}" target="_blank" rel="noreferrer">WorkDrive</a>`:`<span class="file-size" title="${escAttr(f.folder||f.path||'')}">${formatBytes(f.size)}</span>`}
-    ${isPrintableAttachment(f)?`<button class="file-mini-btn" data-file-print="${i}" type="button">Print</button><button class="file-mini-btn" data-file-download="${i}" type="button">Descarcă</button>`:''}
+    ${isPrintableAttachment(f)?`<button class="file-mini-btn" data-file-preview="${i}" type="button">Preview</button><button class="file-mini-btn" data-file-print="${i}" type="button">Print</button><button class="file-mini-btn" data-file-download="${i}" type="button">Descarcă</button>`:''}
     <button class="file-mini-btn danger" data-file-delete="${i}" type="button">Șterge</button>
   </div>`).join('');
 }
 
 function isPdfAttachment(f){return /\.pdf$/i.test(f?.name||'')||(f?.type||'').includes('pdf')}
-function isPrintableAttachment(f){return Boolean(f?.dataUrl&&(isPdfAttachment(f)||String(f.type||'').startsWith('image/')))}
+function attachmentUrl(f,download=false){
+  if(!f)return'';
+  if(f.dataUrl)return f.dataUrl;
+  if(UPLOAD_SERVER_AVAILABLE&&f.path&&!String(f.path).startsWith('zoho://')){
+    return `${UPLOAD_SERVER}/api/file?path=${encodeURIComponent(f.path)}&download=${download?'1':'0'}`;
+  }
+  return '';
+}
+function isPrintableAttachment(f){return Boolean(attachmentUrl(f)&&(isPdfAttachment(f)||String(f.type||'').startsWith('image/')))}
 function fisaUploadedPDFs(c){return filesForCase(c.id).map((file,index)=>({file,index})).filter(x=>isPdfAttachment(x.file))}
 function renderUploadedFisaPDFs(c){
   const pdfs=fisaUploadedPDFs(c);
   if(!pdfs.length)return '';
-  return `<div class="fisa-uploaded-list">${pdfs.map(({file,index})=>`<div class="fisa-attached fisa-uploaded">
+  return `<div class="fisa-uploaded-list">${pdfs.map(({file,index})=>{const canOpen=Boolean(attachmentUrl(file));return `<div class="fisa-attached fisa-uploaded">
     <div class="fisa-icon-pdf">PDF</div>
-    <div style="flex:1;min-width:0"><div class="fisa-fname">${escHTML(file.name)}</div><div class="fisa-fmeta">${file.dataUrl?'Fișă încărcată · '+formatBytes(file.size):'Fișă încărcată · reîncarcă PDF-ul pentru print/descărcare directă'}</div></div>
-    ${file.dataUrl?`<button class="btn" data-uploaded-pdf-print="${index}" type="button">Printează</button><button class="btn primary" data-uploaded-pdf-download="${index}" type="button">Descarcă</button>`:file.folderUrl?`<a class="btn" href="${escAttr(file.folderUrl)}" target="_blank" rel="noreferrer">WorkDrive</a>`:'<button class="btn" disabled>Indisponibil</button>'}
+    <div style="flex:1;min-width:0"><div class="fisa-fname">${escHTML(file.name)}</div><div class="fisa-fmeta">${canOpen?'Fișă încărcată · '+formatBytes(file.size):'Fișă încărcată · pornește serverul sau reîncarcă PDF-ul pentru acțiuni directe'}</div></div>
+    ${canOpen?`<button class="btn" data-uploaded-pdf-preview="${index}" type="button">Previzualizează</button><button class="btn" data-uploaded-pdf-print="${index}" type="button">Printează</button><button class="btn primary" data-uploaded-pdf-download="${index}" type="button">Descarcă</button>`:file.folderUrl?`<a class="btn" href="${escAttr(file.folderUrl)}" target="_blank" rel="noreferrer">WorkDrive</a>`:'<button class="btn" disabled>Indisponibil</button>'}
     <button class="btn danger" data-uploaded-pdf-delete="${index}" type="button">Șterge</button>
-  </div>`).join('')}</div>`;
+  </div>`}).join('')}</div>`;
+}
+function previewAttachment(c,index){
+  const f=filesForCase(c.id)[index];
+  const url=attachmentUrl(f);
+  if(!url){alert('PDF-ul nu poate fi previzualizat direct. Pornește server.py sau reîncarcă PDF-ul în program.');return}
+  openModal(`<div class="modal-head"><div class="modal-title">${escHTML(f.name||'Fișă PDF')}</div><button class="modal-close" type="button">×</button></div><div class="modal-body" style="padding:0;height:78vh"><iframe src="${escAttr(url)}" style="width:100%;height:100%;border:0"></iframe></div><div class="modal-foot"><button class="btn" data-preview-print="${index}" type="button">Printează</button><button class="btn primary" data-preview-download="${index}" type="button">Descarcă</button></div>`,'modal-wide');
+  document.querySelector('[data-preview-print]')?.addEventListener('click',()=>printAttachment(c,index));
+  document.querySelector('[data-preview-download]')?.addEventListener('click',()=>downloadAttachment(c,index));
 }
 function downloadAttachment(c,index){
   const f=filesForCase(c.id)[index];
   if(!f)return;
-  if(f.dataUrl){
-    const a=document.createElement('a');a.href=f.dataUrl;a.download=f.name||`fisier-${c.id}`;document.body.appendChild(a);a.click();document.body.removeChild(a);return;
+  const url=attachmentUrl(f,true);
+  if(url){
+    const a=document.createElement('a');a.href=url;a.download=f.name||`fisier-${c.id}`;document.body.appendChild(a);a.click();document.body.removeChild(a);return;
   }
   if(f.folderUrl){window.open(f.folderUrl,'_blank');return}
   alert('Fișierul vechi are doar numele salvat. Reîncarcă PDF-ul ca să îl putem descărca direct din program.');
@@ -611,7 +646,8 @@ function downloadAttachment(c,index){
 function printAttachment(c,index){
   const f=filesForCase(c.id)[index];
   if(!f)return;
-  if(!f.dataUrl){alert('Fișierul vechi are doar numele salvat. Reîncarcă PDF-ul ca să îl putem printa direct din program.');return}
+  const url=attachmentUrl(f);
+  if(!url){alert('PDF-ul nu poate fi printat direct. Pornește server.py sau reîncarcă PDF-ul în program.');return}
   const frame=document.createElement('iframe');
   frame.style.position='fixed';frame.style.right='0';frame.style.bottom='0';frame.style.width='0';frame.style.height='0';frame.style.border='0';
   frame.setAttribute('aria-hidden','true');
@@ -619,10 +655,10 @@ function printAttachment(c,index){
   if(String(f.type||'').startsWith('image/')){
     const doc=frame.contentWindow.document;
     doc.open();
-    doc.write(`<!doctype html><html><head><title>${escHTML(f.name)}</title><style>@page{margin:8mm}body{margin:0;display:flex;align-items:flex-start;justify-content:center}img{max-width:100%;height:auto}</style></head><body><img src="${f.dataUrl}"></body></html>`);
+    doc.write(`<!doctype html><html><head><title>${escHTML(f.name)}</title><style>@page{margin:8mm}body{margin:0;display:flex;align-items:flex-start;justify-content:center}img{max-width:100%;height:auto}</style></head><body><img src="${url}"></body></html>`);
     doc.close();
   }else{
-    frame.src=f.dataUrl;
+    frame.src=url;
   }
   setTimeout(()=>{frame.contentWindow.focus();frame.contentWindow.print();setTimeout(()=>frame.remove(),1000)},250);
 }
@@ -1220,6 +1256,10 @@ function renderCaseDetail(){
   document.querySelector('.fisa-fmeta')?.replaceChildren(document.createTextNode('A5 · alb-negru'));
   document.getElementById('dlFisaBtn')?.insertAdjacentHTML('beforebegin','<button class="btn" id="previewFisaBtn">Previzualizează</button>');
   document.getElementById('previewFisaBtn')?.addEventListener('click',()=>previewFisaPDF(c));
+  root.querySelectorAll('[data-uploaded-pdf-preview],[data-file-preview]').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    previewAttachment(c,Number(b.dataset.uploadedPdfPreview||b.dataset.filePreview));
+  }));
   root.querySelectorAll('[data-uploaded-pdf-download],[data-file-download]').forEach(b=>b.addEventListener('click',e=>{
     e.stopPropagation();
     downloadAttachment(c,Number(b.dataset.uploadedPdfDownload||b.dataset.fileDownload));
@@ -1228,9 +1268,9 @@ function renderCaseDetail(){
     e.stopPropagation();
     printAttachment(c,Number(b.dataset.uploadedPdfPrint||b.dataset.filePrint));
   }));
-  root.querySelectorAll('[data-uploaded-pdf-delete],[data-file-delete]').forEach(b=>b.addEventListener('click',e=>{
+  root.querySelectorAll('[data-uploaded-pdf-delete],[data-file-delete]').forEach(b=>b.addEventListener('click',async e=>{
     e.stopPropagation();
-    deleteAttachment(c,Number(b.dataset.uploadedPdfDelete||b.dataset.fileDelete));
+    await deleteAttachment(c,Number(b.dataset.uploadedPdfDelete||b.dataset.fileDelete));
   }));
   // Etape lab timeline — click to change stage status
   root.querySelectorAll('[data-tl-stage]').forEach(item=>{

@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 ROOT = Path(__file__).resolve().parent
@@ -165,6 +165,16 @@ def zoho_upload(folder_id: str, filename: str, file_obj, mime: str = None) -> di
         raise RuntimeError(f"Zoho upload '{filename}' → HTTP {e.code}: {e.read()[:300]}")
 
 
+def zoho_delete_file(file_id: str) -> None:
+    if not file_id:
+        raise RuntimeError("Missing Zoho file id")
+    url = (
+        f"https://www.zohoapis.{ZOHO_REGION}/workdrive/api/v1/files/"
+        f"{urllib.parse.quote(file_id)}"
+    )
+    _zoho_req("DELETE", url)
+
+
 # ── Utility ──────────────────────────────────────────────────
 def safe_name(value, fallback="untitled"):
     value = re.sub(r"[^\w .#()-]+", "-", str(value or "").strip(), flags=re.UNICODE)
@@ -182,6 +192,28 @@ def unique_path(path):
         if not candidate.exists():
             return candidate
         i += 1
+
+
+def path_is_inside(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def managed_file_path(raw_path: str) -> Path:
+    path = Path(str(raw_path or "")).expanduser()
+    allowed_roots = [UPLOAD_ROOT, root_folder_config()["path"]]
+    mapping = load_workdrive_map()
+    for value in mapping.values():
+        if isinstance(value, str):
+            allowed_roots.append(Path(value).expanduser())
+        elif isinstance(value, dict) and value.get("path"):
+            allowed_roots.append(Path(value["path"]).expanduser())
+    if not path.is_file() or not any(path_is_inside(path, root) for root in allowed_roots):
+        raise PermissionError("File is outside the managed upload folders")
+    return path
 
 
 def load_workdrive_map():
@@ -244,7 +276,7 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def do_OPTIONS(self):
@@ -262,7 +294,8 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if urlparse(self.path).path == "/api/health":
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/health":
             root = root_folder_config()
             self.send_json(200, {
                 "ok":             True,
@@ -273,7 +306,34 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
                 "zohoRegion":     ZOHO_REGION if zoho_configured() else None,
             })
             return
+        if parsed.path == "/api/file":
+            self._handle_file(parsed)
+            return
         super().do_GET()
+
+    def _handle_file(self, parsed):
+        params = parse_qs(parsed.query)
+        raw_path = (params.get("path") or [""])[0]
+        download = (params.get("download") or [""])[0] in ("1", "true", "yes")
+        try:
+            path = managed_file_path(raw_path)
+        except PermissionError as e:
+            self.send_json(403, {"ok": False, "error": str(e)})
+            return
+        except Exception as e:
+            self.send_json(404, {"ok": False, "error": str(e)})
+            return
+
+        mime = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+        self.send_response(200)
+        self._cors()
+        self.send_header("Content-Type", mime)
+        self.send_header("Content-Length", str(path.stat().st_size))
+        disposition = "attachment" if download else "inline"
+        self.send_header("Content-Disposition", f'{disposition}; filename="{path.name}"')
+        self.end_headers()
+        with path.open("rb") as f:
+            shutil.copyfileobj(f, self.wfile)
 
     def do_HEAD(self):
         if urlparse(self.path).path == "/api/health":
@@ -288,6 +348,55 @@ class DentalLabHandler(SimpleHTTPRequestHandler):
             self._handle_upload()
         else:
             self.send_error(404, "Not found")
+
+    def do_DELETE(self):
+        if urlparse(self.path).path == "/api/delete-file":
+            self._handle_delete_file()
+        else:
+            self.send_error(404, "Not found")
+
+    def _read_json_body(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length <= 0:
+            return {}
+        raw = self.rfile.read(length).decode("utf-8")
+        try:
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+
+    def _handle_delete_file(self):
+        data = self._read_json_body()
+        file_id = str(data.get("fileId") or "").strip()
+        raw_path = str(data.get("path") or "").strip()
+
+        if file_id and zoho_configured():
+            try:
+                zoho_delete_file(file_id)
+                self.send_json(200, {"ok": True, "backend": "zoho"})
+            except Exception as e:
+                self.send_json(500, {"ok": False, "error": f"Zoho delete failed: {e}"})
+            return
+
+        if not raw_path:
+            self.send_json(400, {"ok": False, "error": "Missing file path"})
+            return
+
+        try:
+            path = managed_file_path(raw_path)
+        except PermissionError as e:
+            self.send_json(403, {"ok": False, "error": str(e)})
+            return
+        except Exception as e:
+            self.send_json(404, {"ok": False, "error": str(e)})
+            return
+
+        try:
+            path.unlink()
+            self.send_json(200, {"ok": True, "backend": "local"})
+        except Exception as e:
+            self.send_json(500, {"ok": False, "error": f"Delete failed: {e}"})
 
     def _handle_upload(self):
         form = cgi.FieldStorage(
