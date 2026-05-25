@@ -2125,7 +2125,7 @@ function renderLogin(){
   root.innerHTML=`<div class="login-shell"><div class="login-box">
     <div class="login-brand"><div class="login-brand-name">PRIVATE CAD</div><div class="login-brand-sub">Sistem privat · acces numai prin invitație</div></div>
     <div class="login-prompt">Autentificare</div>
-    <div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="utilizator" autocomplete="username" spellcheck="false" autocapitalize="none" autocorrect="off" inputmode="email"></div>
+    <div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="utilizator" autocomplete="username" spellcheck="false" autocapitalize="none" autocorrect="off"></div>
     <div class="field" style="margin-bottom:16px"><label>Parolă</label><input id="lPass" type="password" autocomplete="current-password"></div>
     <div id="loginErr" class="login-err" style="display:none"></div>
     <button class="btn primary" id="lSubmit" style="width:100%;min-height:44px;font-size:15px">Intră în cont</button>
@@ -2794,8 +2794,9 @@ async function initApp(){
   if(hasSupabase&&typeof setMainView==='function')setMainView(localStorage.getItem('dental-lab-view')||'table');
 }
 document.addEventListener('DOMContentLoaded',()=>{
-  // Apply sidebar immediately from localStorage cache so there is no flicker
-  // while waiting for Supabase auth to resolve
   applySidebarRoles();
-  initApp();
+  // On mobile Safari, localStorage session token may not be readable immediately
+  // after a cross-page redirect from login.html. A 50ms yield lets Supabase finish
+  // writing the token before getSession() is called.
+  setTimeout(initApp, document.referrer.includes('login.html') ? 80 : 0);
 });
