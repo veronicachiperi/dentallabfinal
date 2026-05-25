@@ -197,11 +197,29 @@ function completeLabStage(c, stageId) {
     if (!stageAssignees(c,next).length && STAGE_ASSIGNEE_DEFAULTS[next]) addStageAssignee(c,next,STAGE_ASSIGNEE_DEFAULTS[next]);
     c.assignee = primaryStageAssignee(c,next);
   } else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) {
-    if (c.stage !== 'terminat' && c.stage !== 'trimis' && c.stage !== 'proba') {
-      c.stage = 'proba';
+    if (c.stage !== 'terminat' && c.stage !== 'trimis') {
+      c.stage = 'terminat';
+      c.finalTech = primaryStageAssignee(c, stageId) || c.assignee || c.finalTech || null;
+      c.completedDate = typeof fmtShortDate === 'function' ? fmtShortDate(todayLabDate()) : c.completedDate;
       c.assignee = null;
     }
   }
+}
+function syncCaseStageFromLabStatus(c, preferredStage) {
+  if (!c || c.stage === 'trimis' || c.stage === 'terminat') return;
+  const stages = getEtapeLabStages(c.type);
+  c.stageStatuses = c.stageStatuses || {};
+  const active = preferredStage && stages.includes(preferredStage)
+    ? preferredStage
+    : stages.find(s => ['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate'].includes(c.stageStatuses[s]))
+      || stages.find(s => c.stageStatuses[s] !== 'finalizat')
+      || stages[0];
+  if (!active) return;
+  const status = c.stageStatuses[active] || 'neincepute';
+  if (status === 'la_proba') c.stage = 'proba';
+  else c.stage = active;
+  c.notStarted = stages.every(s => (c.stageStatuses[s] || 'neincepute') === 'neincepute');
+  if (!c.notStarted) c.assignee = primaryStageAssignee(c, active) || c.assignee || null;
 }
 function labStageRequiresProbe(stageId) {
   return stageId === 'design';

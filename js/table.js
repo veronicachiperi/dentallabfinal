@@ -171,6 +171,7 @@ function handleStageClick(caseId, stageId) {
   const user = getCurrentUser() || { id: 'admin', name: 'Admin', initials: 'AD' };
   c.stageStatuses = c.stageStatuses || {}; c.assignees = c.assignees || {};
   const status = c.stageStatuses[stageId] || 'neincepute';
+  let completedStage=false;
 
   // Design: neincepute → in_lucru → la_proba → finalizat.
   // Restul etapelor: neincepute → in_lucru → finalizat.
@@ -189,14 +190,17 @@ function handleStageClick(caseId, stageId) {
     c.notStarted = false;
   } else if (status === 'in_lucru') {
     completeLabStage(c, stageId);
+    completedStage=true;
   } else if (status === 'la_proba') {
     completeLabStage(c, stageId);
+    completedStage=true;
   } else if (status === 'finalizat') {
     if (confirm('Reîncepe această etapă?')) c.stageStatuses[stageId] = 'in_lucru';
     else return;
   }
+  if(typeof syncCaseStageFromLabStatus==='function'&&!completedStage)syncCaseStageFromLabStatus(c,stageId);
   overrides.edits = overrides.edits || {}; overrides.edits[c.id] = overrides.edits[c.id] || {};
-  Object.assign(overrides.edits[c.id], { stageStatuses: c.stageStatuses, assignees: c.assignees, stage: c.stage, notStarted: c.notStarted, assignee: c.assignee });
+  Object.assign(overrides.edits[c.id], { stageStatuses: c.stageStatuses, assignees: c.assignees, stage: c.stage, notStarted: c.notStarted, assignee: c.assignee, finalTech: c.finalTech, completedDate: c.completedDate });
   saveOverrides(overrides);
   renderTable();
   if (typeof renderPipeline === 'function') renderPipeline();

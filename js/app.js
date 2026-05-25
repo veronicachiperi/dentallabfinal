@@ -1169,7 +1169,7 @@ function renderCaseDetail(){
           }
         }
         overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
-        Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,assignee:c.assignee,notStarted:c.notStarted});
+        Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,assignee:c.assignee,notStarted:c.notStarted,finalTech:c.finalTech,completedDate:c.completedDate});
         saveOverrides(overrides);_syncCase(c);renderCaseDetail();
       },'Etapă: '+(getStage(sId)?.name||sId),{positionAnchor:item});
     });
@@ -1336,7 +1336,7 @@ function renderTechnicianPortal(){
       else if(act==='bars-done'){c.stageStatuses[sid]='bari_finalizate'}
       else if(act==='finalize')completeLabStage(c,sid)
       overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
-      Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,notStarted:c.notStarted,assignee:c.assignee});
+      Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,notStarted:c.notStarted,assignee:c.assignee,finalTech:c.finalTech,completedDate:c.completedDate});
       saveOverrides(overrides);_syncCase(c);renderTechnicianPortal();
     });
   });
@@ -1346,26 +1346,31 @@ function renderTechnicianPortal(){
 let archiveFilter={year:String(new Date().getFullYear()),month:'all',clinic:'all',tech:'all',type:'all',q:''};
 function renderArchive(){
   const root=document.getElementById('archiveShell');if(!root)return;
-  let trimise=CASES.filter(c=>c.stage==='trimis');
-  if(archiveFilter.clinic!=='all')trimise=trimise.filter(c=>c.clinic===archiveFilter.clinic);
-  if(archiveFilter.tech!=='all')trimise=trimise.filter(c=>c.finalTech===archiveFilter.tech||c.assignee===archiveFilter.tech||Object.keys(c.assignees||{}).some(s=>stageAssignees(c,s).includes(archiveFilter.tech)));
-  if(archiveFilter.type!=='all')trimise=trimise.filter(c=>c.type===archiveFilter.type);
-  if(archiveFilter.q){const q=archiveFilter.q.toLowerCase();trimise=trimise.filter(c=>c.name.toLowerCase().includes(q)||String(c.id).includes(q))}
-  if(archiveFilter.month!=='all')trimise=trimise.filter(c=>{const d=parseShortDate(c.sentDate||c.finala);return d&&d.getMonth()===Number(archiveFilter.month)});
-  const total=trimise.length;
-  const avgDays=total?Math.round(trimise.reduce((s,c)=>s+(c.durationDays||5),0)/total*10)/10:0;
-  const onTime=total?Math.round(trimise.filter(c=>!c.late).length/total*100):100;
-  const clCounts={};trimise.forEach(c=>{clCounts[c.clinic]=(clCounts[c.clinic]||0)+1});
+  let archived=CASES.filter(c=>c.stage==='terminat'||c.stage==='trimis');
+  const archiveDate=c=>parseShortDate(c.sentDate||c.completedDate||c.finala);
+  const archiveTech=c=>c.finalTech||c.assignee||primaryStageAssignee(c,getEtapeLabStages(c.type).slice(-1)[0]);
+  const statusLabel=c=>c.stage==='trimis'?'Expediată':'Terminat';
+  if(archiveFilter.clinic!=='all')archived=archived.filter(c=>c.clinic===archiveFilter.clinic);
+  if(archiveFilter.tech!=='all')archived=archived.filter(c=>archiveTech(c)===archiveFilter.tech||Object.keys(c.assignees||{}).some(s=>stageAssignees(c,s).includes(archiveFilter.tech)));
+  if(archiveFilter.type!=='all')archived=archived.filter(c=>c.type===archiveFilter.type);
+  if(archiveFilter.q){const q=archiveFilter.q.toLowerCase();archived=archived.filter(c=>c.name.toLowerCase().includes(q)||String(c.id).includes(q))}
+  if(archiveFilter.month!=='all')archived=archived.filter(c=>{const d=archiveDate(c);return d&&d.getMonth()===Number(archiveFilter.month)});
+  const total=archived.length;
+  const finished=archived.filter(c=>c.stage==='terminat').length;
+  const shipped=archived.filter(c=>c.stage==='trimis').length;
+  const avgDays=total?Math.round(archived.reduce((s,c)=>s+(c.durationDays||5),0)/total*10)/10:0;
+  const onTime=total?Math.round(archived.filter(c=>!c.late).length/total*100):100;
+  const clCounts={};archived.forEach(c=>{clCounts[c.clinic]=(clCounts[c.clinic]||0)+1});
   const topCl=Object.entries(clCounts).sort((a,b)=>b[1]-a[1])[0];
-  const groups={};trimise.forEach(c=>{const d=parseShortDate(c.sentDate||c.finala);const k=d?`${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`:'unknown';(groups[k]=groups[k]||[]).push(c)});
+  const groups={};archived.forEach(c=>{const d=archiveDate(c);const k=d?`${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`:'unknown';(groups[k]=groups[k]||[]).push(c)});
   const sortedKeys=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
-  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">Arhivă lucrări</div><div class="ar-subtitle">${total} lucrări trimise · istoric filtrabil</div></div><div class="spacer"></div><button class="ar-btn" id="arExport">Export CSV</button></div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Lucrări trimise</div></div><div class="ar-kpi"><div class="ar-kpi-num">${avgDays} zile</div><div class="ar-kpi-lbl">Timp mediu</div></div><div class="ar-kpi"><div class="ar-kpi-num">${onTime}%</div><div class="ar-kpi-lbl">La timp</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">Clinică top</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY">${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${CLINICS.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div></div>`;
-  if(!sortedKeys.length){h+='<div style="padding:60px;text-align:center;color:var(--text-dim)">Nicio lucrare trimisă în filtrul curent.</div>'}
+  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">Arhivă lucrări</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div><button class="ar-btn" id="arExport">Export CSV</button></div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">Clinică top</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY">${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${CLINICS.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div></div>`;
+  if(!sortedKeys.length){h+='<div style="padding:60px;text-align:center;color:var(--text-dim)">Nicio lucrare terminată sau expediată în filtrul curent.</div>'}
   sortedKeys.forEach(k=>{
     const cs=groups[k];
     let lbl='Necunoscută';
     if(k!=='unknown'){const[y,m]=k.split('-').map(Number);lbl=`${MONTH_NAMES_RO[m]} ${y}`}
-    h+=`<div class="ar-month-section">${lbl} · ${cs.length} lucrări</div><div class="ar-tbl-wrap"><table class="ar-tbl"><thead><tr><th>#</th><th>Pacient</th><th>Clinică</th><th>Tip</th><th>Tehnician</th><th>Intrată</th><th>Trimis</th><th>Durată</th><th>Acțiuni</th></tr></thead><tbody>${cs.map(c=>{const t=getEmployee(c.finalTech||c.assignee);return `<tr data-case-id="${c.id}"><td><span class="tbl-num">#${c.id}</span></td><td><span class="tbl-name">${c.name}</span></td><td><span class="tbl-clinic">${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</span></td><td><span class="tag">${c.type}</span></td><td>${t?`<span class="ar-tech-av-mini"><span class="ar-tech-av-circle-mini ${t.id}">${t.initials}</span>${t.name}</span>`:'—'}</td><td><span class="tbl-due">${c.intrata}</span></td><td><span class="tbl-due-bold">${c.sentDate||c.finala}</span></td><td><span class="tbl-due">${c.durationDays||'—'} zile</span></td><td><button class="ar-action-icon" data-pdf="${c.id}">PDF</button> <button class="ar-action-icon" data-view="${c.id}">Vezi</button></td></tr>`}).join('')}</tbody></table></div>`;
+    h+=`<div class="ar-month-section">${lbl} · ${cs.length} lucrări</div><div class="ar-tbl-wrap"><table class="ar-tbl"><thead><tr><th>#</th><th>Pacient</th><th>Clinică</th><th>Tip</th><th>Status</th><th>Tehnician</th><th>Intrată</th><th>Data arhivă</th><th>Durată</th><th>Acțiuni</th></tr></thead><tbody>${cs.map(c=>{const t=getEmployee(archiveTech(c));return `<tr data-case-id="${c.id}"><td><span class="tbl-num">#${c.id}</span></td><td><span class="tbl-name">${c.name}</span></td><td><span class="tbl-clinic">${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</span></td><td><span class="tag">${c.type}</span></td><td><span class="tbl-pill" style="background:${c.stage==='trimis'?'rgba(39,80,10,.15)':'rgba(29,158,117,.15)'};color:${c.stage==='trimis'?'#27500A':'#1D9E75'}">${statusLabel(c)}</span></td><td>${t?`<span class="ar-tech-av-mini"><span class="ar-tech-av-circle-mini ${t.id}">${t.initials}</span>${t.name}</span>`:'—'}</td><td><span class="tbl-due">${c.intrata}</span></td><td><span class="tbl-due-bold">${c.sentDate||c.completedDate||c.finala}</span></td><td><span class="tbl-due">${c.durationDays||'—'} zile</span></td><td><button class="ar-action-icon" data-pdf="${c.id}">PDF</button> <button class="ar-action-icon" data-view="${c.id}">Vezi</button></td></tr>`}).join('')}</tbody></table></div>`;
   });
   h+=`</div></main></div>`;
   root.innerHTML=h;
@@ -1618,9 +1623,11 @@ function openNewCaseModal(defClinic){
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
   const tooth=n=>`<button type="button" class="tooth-cell" data-tooth="${n}">${n}</button>`;
   const renderRow=arr=>arr.slice(0,8).map(tooth).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tooth).join('');
+  const clinicWizardClass=lockedClinicId?' clinic-case-wizard':'';
+  const toothDetailsOpen=lockedClinicId?'':' open';
   openModal(`<div class="modal-head"><div><div class="modal-kicker">Flux organizat</div><div class="modal-title">Caz nou</div></div><button class="modal-close" type="button">×</button></div>
     <div class="modal-body modal-body-compact">
-      <div class="case-wizard">
+      <div class="case-wizard${clinicWizardClass}">
         <aside class="wizard-steps">
           <div class="wizard-step on"><span>1</span><div><b>Pacient</b><small>clinică și medic</small></div></div>
           <div class="wizard-step"><span>2</span><div><b>Lucrare</b><small>tip, culoare, dinți</small></div></div>
@@ -1637,13 +1644,18 @@ function openNewCaseModal(defClinic){
           <section class="wizard-panel">
             <div class="wizard-panel-title">Lucrare</div>
             <div class="field-row"><div class="field"><label>Tip</label><select id="ncType">${tOpts}</select></div><div class="field"><label>Culoare</label><select id="ncColor">${colOpts}</select></div></div>
-            <div class="field"><label>Schema dentară (FDI)</label>
-              <div class="tc-jaw-controls">
-                <button type="button" class="tc-jaw-btn" data-jaw="upper">Maxilar complet</button>
-                <button type="button" class="tc-jaw-btn" data-jaw="lower">Mandibulă completă</button>
-                <button type="button" class="tc-jaw-btn tc-jaw-clear" data-jaw="clear">Șterge tot</button>
+            <details class="tooth-details"${toothDetailsOpen}>
+              <summary>Schema dentară <span>opțional</span></summary>
+              <div class="tooth-details-body">
+                <div class="tc-jaw-controls">
+                  <button type="button" class="tc-jaw-btn" data-jaw="upper">Maxilar complet</button>
+                  <button type="button" class="tc-jaw-btn" data-jaw="lower">Mandibulă completă</button>
+                  <button type="button" class="tc-jaw-btn tc-jaw-clear" data-jaw="clear">Șterge tot</button>
+                </div>
+                <div class="tc-form-wrap" id="toothChartWrap"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div>
+                <div class="tc-summary" id="toothSummary"><div style="color:var(--text-dim)">Niciun dinte selectat</div></div>
               </div>
-              <div class="tc-form-wrap" id="toothChartWrap"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div><div class="tc-summary" id="toothSummary"><div style="color:var(--text-dim)">Niciun dinte selectat</div></div></div>
+            </details>
             <div class="field-row"><div class="field"><label>Tip implant</label><input id="ncImplant"></div><div class="field"><label>Tip amprentă</label><select id="ncAmprenta"><option>Silicon</option><option>Polieter</option><option>Alginat</option><option>Digital</option><option>STL</option></select></div></div>
           </section>
           <section class="wizard-panel">
@@ -1669,6 +1681,11 @@ function openNewCaseModal(defClinic){
     list.innerHTML=newCaseFiles.length
       ? newCaseFiles.map(f=>`<div class="upload-file-item"><span>${fileExt(f.name)}</span><b>${f.name}</b><em>${formatBytes(f.size)}</em></div>`).join('')
       : '';
+    const uploadLabel=document.querySelector('#ncUploadBtn b');
+    const mobileLabel=document.querySelector('#ncMobileUploadBtn b');
+    const text=newCaseFiles.length?`${newCaseFiles.length} fișier${newCaseFiles.length===1?'':'e'} adăugate`:'Adaugă fișiere';
+    if(uploadLabel)uploadLabel.textContent=text;
+    if(mobileLabel)mobileLabel.textContent=newCaseFiles.length?text:'Adaugă fișa sau scanarea';
   };
   document.getElementById('ncUploadBtn')?.addEventListener('click',()=>document.getElementById('ncFileInput')?.click());
   document.getElementById('ncMobileUploadBtn')?.addEventListener('click',()=>document.getElementById('ncFileInput')?.click());
@@ -2157,6 +2174,7 @@ function attachInlineEditors(root) {
       openInlinePopover(el, items, sel => {
         c.stageStatuses = c.stageStatuses || {};
         c.assignees = c.assignees || {};
+        let shouldSyncStage=true;
         if (sel.value === 'claim') {
           activateLabStage(c,stage,user.id);
         } else if (sel.value === 'collaborators') {
@@ -2168,16 +2186,18 @@ function attachInlineEditors(root) {
         } else if (sel.value.startsWith('tech:')) {
           addStageAssignee(c,stage,sel.value.slice(5));
           if(c.stage===stage)c.assignee=primaryStageAssignee(c,stage);
+          shouldSyncStage=false;
         } else {
-          if (sel.value === 'finalizat') completeLabStage(c, stage);
+          if (sel.value === 'finalizat') {completeLabStage(c, stage);shouldSyncStage=false;}
           else if(sel.value==='in_lucru') activateLabStage(c,stage,primaryStageAssignee(c,stage)||user.id);
           else {
-            c.stage=stage;
+            c.stage=sel.value==='la_proba'?'proba':stage;
             c.notStarted=false;
             c.stageStatuses[stage]=sel.value;
             c.assignee=primaryStageAssignee(c,stage)||c.assignee||null;
           }
         }
+        if(typeof syncCaseStageFromLabStatus==='function'&&shouldSyncStage)syncCaseStageFromLabStatus(c,stage);
         overrides.edits = overrides.edits || {};
         overrides.edits[c.id] = overrides.edits[c.id] || {};
         Object.assign(overrides.edits[c.id], {
@@ -2185,7 +2205,9 @@ function attachInlineEditors(root) {
           assignees: c.assignees,
           stage: c.stage,
           assignee: c.assignee,
-          notStarted: c.notStarted
+          notStarted: c.notStarted,
+          finalTech: c.finalTech,
+          completedDate: c.completedDate
         });
         saveOverrides(overrides);
         _syncCase(c);
