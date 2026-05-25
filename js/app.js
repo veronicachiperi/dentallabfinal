@@ -136,6 +136,9 @@ function applyFilter(cases){
   // Clinic users see only their own clinic's cases
   let src=cases;
   if(user?.role==='clinic'&&user?.clinic){src=cases.filter(c=>c.clinic===user.clinic)}
+  // Skip completely-empty/junk records (no name, no clinic and no type).
+  // A real case always has at least a patient name, so these are invalid rows.
+  src=src.filter(c=>(c.name||'').trim()||(c.clinic||'').trim()||(c.type||'').trim());
   return src.filter(c=>{
     const isTrimis=c.stage==='trimis';
     if(activeFilter.tab==='trimise')return isTrimis;
@@ -2029,7 +2032,11 @@ function openNewCaseModal(defClinic){
     nc.priority=computePriority(nc);
     if(SUPABASE_CONFIGURED){try{await sbSaveCase(nc)}catch(e){alert('Eroare la salvare: '+e.message);return}}
     else{persistNewCase(nc)}
-    CASES.unshift(nc);
+    // Guard against the realtime INSERT event adding the same row first
+    // (race condition that produced a duplicate row with default values).
+    const existing=CASES.find(x=>x.id===nc.id);
+    if(existing){const i=CASES.indexOf(existing);CASES[i]=nc;}
+    else CASES.unshift(nc);
     if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
     updateMainSummary();
     if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
