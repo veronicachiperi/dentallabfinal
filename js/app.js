@@ -158,6 +158,17 @@ function applyFilter(cases){
   });
 }
 
+// Removes every local trace of a case: localStorage new-cases cache + overrides.
+// Shared by manual delete and the realtime DELETE event so a deletion on one
+// device clears the case everywhere, without needing a manual refresh.
+function purgeCaseFromLocalCache(id){
+  const nid=Number(id);
+  overrides.edits=overrides.edits||{};delete overrides.edits[id];delete overrides.edits[nid];
+  overrides.stages=overrides.stages||{};delete overrides.stages[id];delete overrides.stages[nid];
+  saveOverrides(overrides);
+  try{const stored=JSON.parse(localStorage.getItem(NEW_CASES_KEY)||'[]');localStorage.setItem(NEW_CASES_KEY,JSON.stringify(stored.filter(c=>c.id!==id&&c.id!==nid)));}catch{}
+}
+
 // Delete case (admin + owning clinic)
 async function deleteCase(id){
   const c=getCase(id);if(!c)return;
@@ -167,10 +178,7 @@ async function deleteCase(id){
   }
   const i=CASES.findIndex(x=>x.id===id);
   if(i>=0)CASES.splice(i,1);
-  overrides.edits=overrides.edits||{};delete overrides.edits[id];
-  overrides.stages=overrides.stages||{};delete overrides.stages[id];
-  saveOverrides(overrides);
-  try{const stored=JSON.parse(localStorage.getItem(NEW_CASES_KEY)||'[]');localStorage.setItem(NEW_CASES_KEY,JSON.stringify(stored.filter(c=>c.id!==id)));}catch{}
+  purgeCaseFromLocalCache(id);
   reRenderAll();
   if(location.pathname.includes('case.html'))location.href='index.html';
 }
@@ -2828,6 +2836,14 @@ async function initApp(){
         // NOTE: when Supabase loads successfully the database is the single
         // source of truth — do NOT re-inject locally cached cases, otherwise
         // cases deleted on the server reappear from this browser's localStorage.
+        // Reconcile: drop any locally cached case the server no longer has,
+        // so cases deleted on another device don't linger in this browser.
+        try{
+          const serverIds=new Set(sbCases.map(c=>c.id));
+          const stored=JSON.parse(localStorage.getItem(NEW_CASES_KEY)||'[]');
+          const pruned=stored.filter(c=>serverIds.has(c.id));
+          if(pruned.length!==stored.length)localStorage.setItem(NEW_CASES_KEY,JSON.stringify(pruned));
+        }catch{}
       }
       sbSubscribeCases(reRenderAll);
       setInterval(()=>refreshCasesFromServer().catch(e=>console.warn('[sb refresh]',e.message)),20000);

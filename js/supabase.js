@@ -334,8 +334,12 @@ function sbSubscribeCases(onRefresh) {
         const i = CASES.findIndex(x => x.id === c.id);
         if (i >= 0) CASES[i] = c; else CASES.unshift(c);
       } else if (evt === 'DELETE') {
-        const i = CASES.findIndex(x => x.id === payload.old.id);
+        const oldId = payload.old.id;
+        const i = CASES.findIndex(x => x.id === oldId);
         if (i >= 0) CASES.splice(i, 1);
+        // Also clear the case from this device's local cache so it can't
+        // reappear from localStorage on the next page load.
+        if (typeof purgeCaseFromLocalCache === 'function') purgeCaseFromLocalCache(oldId);
       }
       if (onRefresh) onRefresh();
     })
