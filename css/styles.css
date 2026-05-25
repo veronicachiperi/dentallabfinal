@@ -113,7 +113,7 @@ button{font-family:inherit;cursor:pointer}
 .row-actions{position:relative;display:inline-block}
 .row-actions-btn{color:var(--text-muted);font-family:inherit;min-width:72px}
 .row-actions-btn:hover{background:var(--bg-soft);border-color:var(--border-strong);color:var(--text)}
-.row-actions-menu{position:absolute;left:0;top:calc(100% + 5px);background:var(--bg);border:0.5px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:0 10px 28px rgba(0,0,0,0.16);padding:4px;min-width:170px;z-index:30;display:none}
+.row-actions-menu{position:fixed;left:0;top:0;background:var(--bg);border:0.5px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:0 14px 36px rgba(0,0,0,0.22);padding:4px;min-width:190px;z-index:1200;display:none}
 .row-actions-menu.open{display:flex;flex-direction:column;gap:1px}
 .row-actions-menu button{border:none;background:transparent;text-align:left;padding:8px 10px;border-radius:var(--radius-sm);font-size:12px;color:var(--text)}
 .row-actions-menu button:hover{background:var(--bg-soft)}
@@ -542,6 +542,7 @@ button{font-family:inherit;cursor:pointer}
 .tp-tech-av{width:40px;height:40px;border-radius:50%;color:white;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500}
 .tp-tech-name{font-size:15px;font-weight:500}
 .tp-tech-role{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px}
+.tp-main-table-btn{font-weight:500}
 .tp-greet{padding:22px 24px 14px}
 .tp-greet-title{font-size:22px;font-weight:500;margin:0}
 .tp-greet-sub{font-size:13px;color:var(--text-muted);margin-top:4px}
@@ -1022,6 +1023,8 @@ button{font-family:inherit;cursor:pointer}
   .tc-display-row{min-width:560px}
 
   .tp-topbar{padding:12px;flex-wrap:wrap}
+  .tp-topbar .mobile-menu-btn{flex:0 0 auto}
+  .tp-main-table-btn{background:var(--accent);color:#fff;border-color:var(--accent)}
   .tp-greet{padding:18px 12px 12px}
   .tp-greet-title{font-size:20px}
   .tp-stats{padding:0 12px 14px;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}

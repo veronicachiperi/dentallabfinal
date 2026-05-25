@@ -142,7 +142,14 @@ function attachTableHandlers(root) {
       e.stopPropagation();
       const menu = root.querySelector(`[data-row-menu="${btn.dataset.rowActions}"]`);
       root.querySelectorAll('.row-actions-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
-      menu?.classList.toggle('open');
+      if(!menu)return;
+      const willOpen=!menu.classList.contains('open');
+      menu.classList.toggle('open',willOpen);
+      if(willOpen){
+        const r=btn.getBoundingClientRect();
+        menu.style.left=`${Math.max(8,Math.min(r.left,window.innerWidth-210))}px`;
+        menu.style.top=`${Math.min(r.bottom+6,window.innerHeight-260)}px`;
+      }
     });
   });
   root.querySelectorAll('[data-row-action]').forEach(btn => {
