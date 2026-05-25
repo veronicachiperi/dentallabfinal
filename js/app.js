@@ -1211,7 +1211,7 @@ function openClinicCaseEdit(caseId){
     const btn=document.getElementById(id);if(!btn||btn.tagName==='INPUT')return;
     btn.addEventListener('click',()=>{
       if(btn.classList.contains('disabled'))return;
-      openDatePopover(btn,{[field]:btn.dataset.val},field,(v)=>{
+      openDatePopover(btn,{[field]:btn.dataset.val},field,(_c,_f,v)=>{
         btn.dataset.val=v||'';const sp=btn.querySelector('span');if(sp)sp.textContent=v||'Alege data';
         btn.classList.toggle('is-empty',!v);updateAdvisor();
       });
@@ -1948,7 +1948,7 @@ function openNewCaseModal(defClinic){
     const btn=document.getElementById(id);if(!btn||btn.tagName==='INPUT')return;
     btn.addEventListener('click',()=>{
       if(btn.classList.contains('disabled'))return;
-      openDatePopover(btn,{[field]:btn.dataset.val},field,(v)=>{
+      openDatePopover(btn,{[field]:btn.dataset.val},field,(_c,_f,v)=>{
         btn.dataset.val=v||'';const sp=btn.querySelector('span');if(sp)sp.textContent=v||'Alege data';
         btn.classList.toggle('is-empty',!v);updateDeadlineAdvisor();
       });
