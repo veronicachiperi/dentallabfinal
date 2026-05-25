@@ -244,14 +244,20 @@ function addStageAssignee(c, stageId, id) {
 }
 function nextCaseId() { return CASES.length ? Math.max(...CASES.map(c => c.id)) + 1 : 1; }
 
+function extractTime(str) {
+  if (!str) return '';
+  const m = str.match(/\s(\d{2}:\d{2})$/);
+  return m ? m[1] : '';
+}
 function parseShortDate(str) {
   if (!str) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-    const [y, m, d] = str.split('-').map(Number);
+  const s = str.split(' ')[0]; // strip HH:MM if present
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split('-').map(Number);
     return new Date(y, m - 1, d);
   }
   const months = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
-  const [m, d, explicitYear] = str.split(' ');
+  const [m, d, explicitYear] = s.split(' ');
   if (months[m] === undefined) return null;
   const month = months[m];
   const today = new Date();
