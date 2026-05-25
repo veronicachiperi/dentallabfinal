@@ -2070,7 +2070,7 @@ function buildFisaHTML(c){
         <div style="font-size:15px;font-weight:700">Fișă de laborator</div>
         <div style="font-size:9px">PRIVATE CAD</div>
       </div>
-      <div style="font-size:16px;font-weight:700">#${c.id}</div>
+      <div style="font-size:16px;font-weight:700">#${c._monthlyNum||c.id}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:10px">
       ${row('Pacient',c.name,'Clinică',cl.name)}
