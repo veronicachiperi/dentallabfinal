@@ -76,9 +76,9 @@ function renderTableRow(c) {
     <td><span class="tbl-clinic">${clinic.name}</span></td>
     <td><span class="tag">${c.type}</span></td>
     <td class="tbl-actions-cell"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare completă</button><button type="button" data-row-action="preview-pdf" data-case-id="${c.id}">Previzualizează PDF</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button><button type="button" data-row-action="delete" data-case-id="${c.id}" class="danger">Șterge cazul</button></div></div></td>
-    <td><span class="tbl-due">${c.intrata}</span></td>
-    <td><span class="tbl-due-bold">${c.probaDate || '—'}</span></td>
-    <td><span class="tbl-due-bold ${dueClass}">${finalText}</span></td>
+    <td><span class="tbl-due" data-date-field="intrata">${c.intrata}</span></td>
+    <td><span class="tbl-due-bold" data-date-field="probaDate">${c.probaDate || '—'}</span></td>
+    <td><span class="tbl-due-bold ${dueClass}" data-date-field="finala">${finalText}</span></td>
     <td><span class="tbl-prio ${c.priority}">${c.priority}</span></td>
     <td>${renderFlowIndicator(c)}</td>
     <td><span class="tbl-pill" style="background:${withAlpha(stageColor,0.15)};color:${stageColor}">${stageIcon}<span style="margin-left:${stageIcon?'4px':'0'}">${stageLabel}</span></span></td>

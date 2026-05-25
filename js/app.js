@@ -2190,6 +2190,66 @@ function openInlinePopover(anchor, items, onSelect, header, options={}) {
   }, 0);
 }
 
+function openDatePopover(anchor, c, field, onSaved){
+  document.querySelectorAll('.date-popover').forEach(p=>p.remove());
+  const labels={intrata:'Data intrării',probaDate:'Data probei',finala:'Data finală',sentDate:'Data expedierii',completedDate:'Data terminării'};
+  const pop=document.createElement('div');
+  pop.className='date-popover';
+  pop.innerHTML=`<div class="inline-pop-header">${labels[field]||'Dată'} · ${escHTML(c.name||'Caz')}</div>
+    <input class="date-pop-input" type="date" value="${escAttr(dateInputValue(c[field]))}">
+    <div class="date-pop-actions">
+      <button class="btn" type="button" data-date-cancel>Anulează</button>
+      <button class="btn primary" type="button" data-date-save>Salvează</button>
+    </div>`;
+  document.body.appendChild(pop);
+  positionFloatingUnder(pop, anchor.closest('td')||anchor);
+  const input=pop.querySelector('.date-pop-input');
+  input.focus();
+  if(typeof input.showPicker==='function'){
+    setTimeout(()=>{try{input.showPicker()}catch{}},30);
+  }
+  const save=()=>{
+    const value=readDateInputFromElement(input);
+    if(!value)return;
+    c[field]=value;
+    c.deadlineUrgent=labDeadlineStatus(c).urgent;
+    c.priority=computePriority(c);
+    overrides.edits=overrides.edits||{};
+    overrides.edits[c.id]=overrides.edits[c.id]||{};
+    overrides.edits[c.id][field]=value;
+    overrides.edits[c.id].deadlineUrgent=c.deadlineUrgent;
+    overrides.edits[c.id].priority=c.priority;
+    saveOverrides(overrides);
+    _syncCase(c);
+    pop.remove();
+    if(typeof onSaved==='function')onSaved(c,field,value);
+    else{
+      if(typeof renderTable==='function')renderTable();
+      if(typeof renderPipeline==='function')renderPipeline();
+      if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();
+      if(typeof renderClinic==='function'&&document.getElementById('clinicShell'))renderClinic();
+    }
+  };
+  pop.querySelector('[data-date-cancel]')?.addEventListener('click',()=>pop.remove());
+  pop.querySelector('[data-date-save]')?.addEventListener('click',save);
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')save();if(e.key==='Escape')pop.remove()});
+  input.addEventListener('change',()=>{});
+  setTimeout(()=>{
+    const close=ev=>{
+      if(!pop.contains(ev.target)&&ev.target!==anchor){
+        pop.remove();
+        document.removeEventListener('click',close);
+      }
+    };
+    document.addEventListener('click',close);
+  },0);
+}
+
+function readDateInputFromElement(input){
+  const v=input?.value||'';
+  return v?fmtShortDate(parseShortDate(v)||new Date(v)):'';
+}
+
 function _parseNotes(raw){if(!raw)return[];try{const p=JSON.parse(raw);return Array.isArray(p)?p:[{text:raw,author:'—',initials:'—',ts:0}]}catch{return raw.trim()?[{text:raw,author:'—',initials:'—',ts:0}]:[]}}
 function _noteItemHTML(n){return`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div class="note-text">${escHTML(n.text)}</div></div></div>`}
 
