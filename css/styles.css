@@ -821,35 +821,92 @@ button{font-family:inherit;cursor:pointer}
 .date-popover {
   position: fixed;
   z-index: 1002;
-  width: 238px;
+  width: 270px;
   background: var(--bg);
   border: 0.5px solid var(--border-strong);
   border-radius: var(--radius-md);
   box-shadow: 0 10px 28px rgba(0,0,0,0.16), 0 2px 6px rgba(0,0,0,0.08);
   padding: 4px;
 }
-.date-pop-input {
-  width: 100%;
-  height: 38px;
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0 10px;
-  font: inherit;
-  font-size: 13px;
-  color: var(--text);
-  background: var(--bg);
-  outline: none;
-}
-.date-pop-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(26,26,26,0.08);
-}
-.date-pop-actions {
+.date-cal-nav {
   display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 4px;
 }
+.date-cal-nav-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  padding: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.date-cal-nav-btn:hover { background: var(--bg-soft); color: var(--text); }
+.date-cal-month-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  flex: 1;
+}
+.date-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 0 2px;
+  margin-bottom: 1px;
+}
+.date-cal-weekdays span {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-dim);
+  padding: 3px 0 2px;
+}
+.date-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 0 2px;
+  gap: 1px;
+}
+.date-cal-day {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text);
+  height: 32px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  padding: 0;
+  transition: background 0.1s;
+  line-height: 1;
+}
+.date-cal-day:hover:not([disabled]):not(.selected) { background: var(--bg-soft); }
+.date-cal-day.today:not(.selected) { color: var(--accent); font-weight: 700; }
+.date-cal-day.today:not(.selected)::after { content:''; display:block; width:3px; height:3px; border-radius:50%; background:var(--accent); margin: -2px auto 0; }
+.date-cal-day.selected { background: var(--accent); color: var(--bg); font-weight: 600; }
+.date-cal-day.selected:hover { background: var(--accent); }
+.date-cal-day.other-month { color: var(--text-dim); opacity: 0.35; cursor: default; }
+.date-cal-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 4px 4px;
+  border-top: 0.5px solid var(--border);
+  margin-top: 4px;
+  gap: 6px;
+}
+.date-cal-footer .btn { font-size: 11px; padding: 5px 10px; height: auto; }
 .editable-date {
   cursor: pointer;
   display: inline-flex;

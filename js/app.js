@@ -2247,24 +2247,18 @@ function openInlinePopover(anchor, items, onSelect, header, options={}) {
 function openDatePopover(anchor, c, field, onSaved){
   document.querySelectorAll('.date-popover').forEach(p=>p.remove());
   const labels={intrata:'Data intrării',probaDate:'Data probei',finala:'Data finală',sentDate:'Data expedierii',completedDate:'Data terminării'};
+  const DAYS_RO=['Lu','Ma','Mi','Jo','Vi','Sâ','Du'];
+  const MONTHS_RO=['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
+  const now=todayLabDate();
+  let selected=c[field]?parseShortDate(c[field]):null;
+  let viewYear=selected?selected.getFullYear():now.getFullYear();
+  let viewMonth=selected?selected.getMonth():now.getMonth();
   const pop=document.createElement('div');
   pop.className='date-popover';
-  pop.innerHTML=`<div class="inline-pop-header">${labels[field]||'Dată'} · ${escHTML(c.name||'Caz')}</div>
-    <input class="date-pop-input" type="date" value="${escAttr(dateInputValue(c[field]))}">
-    <div class="date-pop-actions">
-      <button class="btn" type="button" data-date-cancel>Anulează</button>
-      <button class="btn primary" type="button" data-date-save>Salvează</button>
-    </div>`;
   document.body.appendChild(pop);
-  positionFloatingUnder(pop, anchor.closest('td')||anchor);
-  const input=pop.querySelector('.date-pop-input');
-  input.focus();
-  if(typeof input.showPicker==='function'){
-    setTimeout(()=>{try{input.showPicker()}catch{}},30);
-  }
-  const save=()=>{
-    const value=readDateInputFromElement(input);
-    if(!value)return;
+
+  function saveDate(dateObj){
+    const value=fmtShortDate(dateObj);
     c[field]=value;
     c.deadlineUrgent=labDeadlineStatus(c).urgent;
     c.priority=computePriority(c);
@@ -2276,6 +2270,7 @@ function openDatePopover(anchor, c, field, onSaved){
     saveOverrides(overrides);
     _syncCase(c);
     pop.remove();
+    document.removeEventListener('click',outsideClose);
     if(typeof onSaved==='function')onSaved(c,field,value);
     else{
       if(typeof renderTable==='function')renderTable();
@@ -2283,20 +2278,86 @@ function openDatePopover(anchor, c, field, onSaved){
       if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();
       if(typeof renderClinic==='function'&&document.getElementById('clinicShell'))renderClinic();
     }
+  }
+  function clearDate(){
+    c[field]='';
+    overrides.edits=overrides.edits||{};
+    overrides.edits[c.id]=overrides.edits[c.id]||{};
+    overrides.edits[c.id][field]='';
+    saveOverrides(overrides);
+    _syncCase(c);
+    pop.remove();
+    document.removeEventListener('click',outsideClose);
+    if(typeof onSaved==='function')onSaved(c,field,'');
+    else{
+      if(typeof renderTable==='function')renderTable();
+      if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();
+      if(typeof renderClinic==='function'&&document.getElementById('clinicShell'))renderClinic();
+    }
+  }
+  function render(){
+    const firstDay=new Date(viewYear,viewMonth,1).getDay();
+    const startOffset=(firstDay===0)?6:firstDay-1;
+    const daysInMonth=new Date(viewYear,viewMonth+1,0).getDate();
+    const prevDays=new Date(viewYear,viewMonth,0).getDate();
+    let cells='';
+    for(let i=startOffset-1;i>=0;i--){
+      cells+=`<button class="date-cal-day other-month" disabled tabindex="-1">${prevDays-i}</button>`;
+    }
+    for(let d=1;d<=daysInMonth;d++){
+      const isToday=(viewYear===now.getFullYear()&&viewMonth===now.getMonth()&&d===now.getDate());
+      const isSel=selected&&selected.getFullYear()===viewYear&&selected.getMonth()===viewMonth&&selected.getDate()===d;
+      const cls='date-cal-day'+(isToday?' today':'')+(isSel?' selected':'');
+      const val=`${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells+=`<button class="${cls}" data-val="${val}" type="button">${d}</button>`;
+    }
+    const totalCells=startOffset+daysInMonth;
+    const trail=(Math.ceil(totalCells/7)*7)-totalCells;
+    for(let d=1;d<=trail;d++){
+      cells+=`<button class="date-cal-day other-month" disabled tabindex="-1">${d}</button>`;
+    }
+    pop.innerHTML=`
+      <div class="inline-pop-header">${labels[field]||'Dată'} · ${escHTML(c.name||'Caz')}</div>
+      <div class="date-cal-nav">
+        <button class="date-cal-nav-btn" data-nav="-1" type="button">&#8249;</button>
+        <span class="date-cal-month-label">${MONTHS_RO[viewMonth]} ${viewYear}</span>
+        <button class="date-cal-nav-btn" data-nav="1" type="button">&#8250;</button>
+      </div>
+      <div class="date-cal-weekdays">${DAYS_RO.map(d=>`<span>${d}</span>`).join('')}</div>
+      <div class="date-cal-grid">${cells}</div>
+      <div class="date-cal-footer">
+        <button class="btn date-cal-clear-btn" type="button">Șterge</button>
+        <button class="btn date-cal-today-btn" type="button">Azi</button>
+      </div>`;
+    pop.querySelectorAll('[data-nav]').forEach(btn=>{
+      btn.addEventListener('click',e=>{
+        e.stopPropagation();
+        viewMonth+=Number(btn.dataset.nav);
+        if(viewMonth>11){viewMonth=0;viewYear++;}
+        if(viewMonth<0){viewMonth=11;viewYear--;}
+        render();
+        positionFloatingUnder(pop,anchor.closest('td')||anchor);
+      });
+    });
+    pop.querySelectorAll('.date-cal-day:not([disabled])').forEach(btn=>{
+      btn.addEventListener('click',e=>{
+        e.stopPropagation();
+        const[y,m,d]=btn.dataset.val.split('-').map(Number);
+        saveDate(new Date(y,m-1,d));
+      });
+    });
+    pop.querySelector('.date-cal-clear-btn')?.addEventListener('click',e=>{e.stopPropagation();clearDate();});
+    pop.querySelector('.date-cal-today-btn')?.addEventListener('click',e=>{e.stopPropagation();saveDate(new Date(now));});
+  }
+  render();
+  positionFloatingUnder(pop,anchor.closest('td')||anchor);
+  const outsideClose=ev=>{
+    if(!pop.contains(ev.target)&&ev.target!==anchor){
+      pop.remove();
+      document.removeEventListener('click',outsideClose);
+    }
   };
-  pop.querySelector('[data-date-cancel]')?.addEventListener('click',()=>pop.remove());
-  pop.querySelector('[data-date-save]')?.addEventListener('click',save);
-  input.addEventListener('keydown',e=>{if(e.key==='Enter')save();if(e.key==='Escape')pop.remove()});
-  input.addEventListener('change',()=>{});
-  setTimeout(()=>{
-    const close=ev=>{
-      if(!pop.contains(ev.target)&&ev.target!==anchor){
-        pop.remove();
-        document.removeEventListener('click',close);
-      }
-    };
-    document.addEventListener('click',close);
-  },0);
+  setTimeout(()=>document.addEventListener('click',outsideClose),0);
 }
 
 function readDateInputFromElement(input){
