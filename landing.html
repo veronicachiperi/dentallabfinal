@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRIVATE CAD — Laborator Stomatologic</title>
+  <meta name="description" content="Laborator stomatologic de înaltă performanță. Lucrări CAD/CAM, ceramică, implanturi.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black:   #080808;
+      --dark:    #111111;
+      --card:    #181818;
+      --border:  rgba(255,255,255,0.07);
+      --gold:    #c9a96e;
+      --gold2:   #e2c38a;
+      --white:   #f0ede8;
+      --muted:   rgba(240,237,232,0.5);
+      --dim:     rgba(240,237,232,0.28);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--black);
+      color: var(--white);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 40px;
+      background: linear-gradient(to bottom, rgba(8,8,8,0.95), transparent);
+      backdrop-filter: blur(0px);
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 12px;
+      text-decoration: none;
+    }
+    .nav-logo img {
+      height: 32px; width: auto;
+      filter: brightness(0) invert(1);
+      pointer-events: none; user-select: none;
+    }
+    .nav-brand-text {
+      font-size: 14px; font-weight: 700; letter-spacing: 2px;
+      color: var(--white); text-transform: uppercase;
+    }
+    .nav-cta {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .btn-ghost {
+      padding: 9px 20px; border: 0.5px solid rgba(255,255,255,0.2);
+      border-radius: 4px; font-size: 12px; letter-spacing: 0.8px;
+      text-transform: uppercase; color: var(--white);
+      text-decoration: none; font-family: var(--font);
+      cursor: pointer; background: transparent;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .btn-ghost:hover { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.04); }
+    .btn-gold {
+      padding: 9px 24px;
+      background: var(--gold); color: #000;
+      border: none; border-radius: 4px;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.8px;
+      text-transform: uppercase; font-family: var(--font);
+      cursor: pointer; text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn-gold:hover { background: var(--gold2); }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative; min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 120px 24px 80px;
+      overflow: hidden;
+    }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 40%, rgba(201,169,110,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 20% 80%, rgba(201,169,110,0.04) 0%, transparent 60%);
+    }
+    .hero-logo {
+      width: 72px; height: 72px;
+      margin-bottom: 28px;
+      filter: brightness(0) invert(1);
+      pointer-events: none; user-select: none;
+      opacity: 0.9;
+    }
+    .hero-label {
+      font-size: 11px; letter-spacing: 4px; color: var(--gold);
+      text-transform: uppercase; margin-bottom: 18px; font-weight: 500;
+    }
+    .hero-title {
+      font-size: clamp(36px, 6vw, 72px);
+      font-weight: 700; letter-spacing: -0.5px;
+      line-height: 1.08; margin-bottom: 22px;
+      color: var(--white);
+    }
+    .hero-title span { color: var(--gold); }
+    .hero-sub {
+      font-size: clamp(14px, 2vw, 17px);
+      color: var(--muted); line-height: 1.7;
+      max-width: 520px; margin: 0 auto 40px;
+    }
+    .hero-actions {
+      display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+    }
+    .btn-lg {
+      padding: 14px 32px; font-size: 13px; letter-spacing: 0.8px;
+      border-radius: 4px; text-decoration: none; font-family: var(--font);
+      font-weight: 600; text-transform: uppercase; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-lg.gold { background: var(--gold); color: #000; border: none; }
+    .btn-lg.gold:hover { background: var(--gold2); }
+    .btn-lg.outline { background: transparent; color: var(--white); border: 0.5px solid rgba(255,255,255,0.25); }
+    .btn-lg.outline:hover { border-color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.04); }
+    .hero-scroll {
+      position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      color: var(--dim); font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    }
+    .hero-scroll-line {
+      width: 1px; height: 40px; background: linear-gradient(to bottom, var(--gold), transparent);
+      animation: scrollpulse 2s ease-in-out infinite;
+    }
+    @keyframes scrollpulse { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+    /* ── STATS STRIP ── */
+    .stats-strip {
+      border-top: 0.5px solid var(--border);
+      border-bottom: 0.5px solid var(--border);
+      background: var(--dark);
+      display: grid; grid-template-columns: repeat(4, 1fr);
+    }
+    .stat-cell {
+      padding: 28px 20px; text-align: center;
+      border-right: 0.5px solid var(--border);
+    }
+    .stat-cell:last-child { border-right: none; }
+    .stat-num { font-size: 32px; font-weight: 700; color: var(--gold); line-height: 1; }
+    .stat-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
+
+    /* ── SECTION HEADERS ── */
+    .section { padding: 100px 40px; }
+    .section-label {
+      font-size: 10px; letter-spacing: 4px; color: var(--gold);
+      text-transform: uppercase; margin-bottom: 14px; font-weight: 500;
+    }
+    .section-title {
+      font-size: clamp(26px, 4vw, 42px); font-weight: 700;
+      line-height: 1.15; color: var(--white); margin-bottom: 16px;
+    }
+    .section-sub {
+      font-size: 15px; color: var(--muted); line-height: 1.7;
+      max-width: 480px;
+    }
+    .section-head { margin-bottom: 56px; }
+    .section-head-center { text-align: center; }
+    .section-head-center .section-sub { margin: 0 auto; }
+
+    /* ── GALLERY ── */
+    .gallery-section { background: var(--black); padding: 80px 24px 100px; }
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      grid-template-rows: auto;
+      gap: 10px;
+      max-width: 1300px; margin: 0 auto;
+    }
+    .gp { /* gallery photo */
+      position: relative; overflow: hidden;
+      border-radius: 4px; cursor: default;
+    }
+    /* Layout spans */
+    .gp:nth-child(1) { grid-column: span 5; grid-row: span 2; }
+    .gp:nth-child(2) { grid-column: span 7; grid-row: span 1; }
+    .gp:nth-child(3) { grid-column: span 4; }
+    .gp:nth-child(4) { grid-column: span 3; }
+    .gp:nth-child(5) { grid-column: span 4; grid-row: span 2; }
+    .gp:nth-child(6) { grid-column: span 4; }
+    .gp:nth-child(7) { grid-column: span 4; }
+
+    .gp-inner {
+      width: 100%; height: 100%; min-height: 260px;
+      background-size: cover; background-position: center;
+      background-repeat: no-repeat;
+      transition: transform 0.6s cubic-bezier(0.25,0,0,1);
+      /* Image protection — background makes saving harder */
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    .gp:hover .gp-inner { transform: scale(1.04); }
+
+    /* Transparent protective overlay — blocks right-click on visual */
+    .gp::after {
+      content: '';
+      position: absolute; inset: 0;
+      z-index: 2;
+      background: transparent;
+      pointer-events: all; /* intercepts right-click */
+    }
+    .gp-label {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      z-index: 3; padding: 24px 16px 14px;
+      background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
+      font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+      color: rgba(255,255,255,0.7); font-weight: 500;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .gp:hover .gp-label { opacity: 1; }
+
+    /* ── SERVICES ── */
+    .services-section { background: var(--dark); }
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1px; border: 0.5px solid var(--border);
+      margin-top: 56px;
+    }
+    .service-card {
+      padding: 40px 32px; background: var(--card);
+      border: none; transition: background 0.2s;
+    }
+    .service-card:hover { background: #1f1f1f; }
+    .service-icon {
+      width: 36px; height: 36px; margin-bottom: 20px;
+      opacity: 0.6;
+    }
+    .service-name {
+      font-size: 15px; font-weight: 600; color: var(--white);
+      margin-bottom: 10px; letter-spacing: 0.2px;
+    }
+    .service-desc {
+      font-size: 13px; color: var(--muted); line-height: 1.7;
+    }
+    .service-line {
+      width: 24px; height: 1.5px; background: var(--gold);
+      margin-bottom: 20px;
+    }
+
+    /* ── CTA STRIP ── */
+    .cta-strip {
+      background: linear-gradient(135deg, #1a1400 0%, #0f0c00 40%, #080808 100%);
+      border-top: 0.5px solid rgba(201,169,110,0.15);
+      border-bottom: 0.5px solid rgba(201,169,110,0.15);
+      padding: 80px 40px; text-align: center;
+    }
+    .cta-strip .section-title { font-size: clamp(22px,3.5vw,38px); }
+    .cta-strip .section-sub { margin: 0 auto 36px; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: #050505;
+      border-top: 0.5px solid var(--border);
+      padding: 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-brand {
+      font-size: 12px; font-weight: 700; letter-spacing: 2px;
+      color: var(--muted); text-transform: uppercase;
+    }
+    .footer-note {
+      font-size: 11px; color: var(--dim); letter-spacing: 0.3px;
+    }
+
+    /* ── MOBILE ── */
+    @media (max-width: 900px) {
+      nav { padding: 16px 20px; }
+      .nav-brand-text { display: none; }
+      .section { padding: 70px 20px; }
+      .stats-strip { grid-template-columns: repeat(2, 1fr); }
+      .stat-cell:nth-child(2) { border-right: none; }
+      .gallery-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+      .gp { grid-column: span 1 !important; grid-row: span 1 !important; }
+      .gp-inner { min-height: 200px; }
+      footer { flex-direction: column; padding: 28px 20px; }
+    }
+    @media (max-width: 480px) {
+      .gallery-grid { grid-template-columns: 1fr; }
+      .stats-strip { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="landing.html">
+    <img src="assets/private-cad-logo.png" alt="Private CAD">
+    <span class="nav-brand-text">Private CAD</span>
+  </a>
+  <div class="nav-cta">
+    <a class="btn-ghost" href="#lucrari">Lucrările noastre</a>
+    <a class="btn-gold" href="login.html">Autentificare →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <img src="assets/private-cad-logo.png" alt="Private CAD" class="hero-logo">
+  <div class="hero-label">Laborator Stomatologic · Chișinău</div>
+  <h1 class="hero-title">
+    Precizie la nivel de <span>micron</span>.<br>
+    Estetică fără compromis.
+  </h1>
+  <p class="hero-sub">
+    Lucrări protetice CAD/CAM, ceramică stratificată și soluții pe implanturi,
+    realizate cu tehnologie de ultimă generație pentru clinicile partenere.
+  </p>
+  <div class="hero-actions">
+    <a class="btn-lg gold" href="#lucrari">Descoperă lucrările noastre</a>
+    <a class="btn-lg outline" href="login.html">Portal clinică →</a>
+  </div>
+  <div class="hero-scroll">
+    <div class="hero-scroll-line"></div>
+    Scroll
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats-strip">
+  <div class="stat-cell">
+    <div class="stat-num">500+</div>
+    <div class="stat-lbl">Lucrări anual</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">6</div>
+    <div class="stat-lbl">Clinici partenere</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">CAD/CAM</div>
+    <div class="stat-lbl">Tehnologie digitală</div>
+  </div>
+  <div class="stat-cell">
+    <div class="stat-num">48h</div>
+    <div class="stat-lbl">Timp mediu de execuție</div>
+  </div>
+</div>
+
+<!-- GALLERY -->
+<section class="gallery-section" id="lucrari">
+  <div class="section-head section-head-center" style="max-width:1300px;margin:0 auto 48px">
+    <div class="section-label">Portofoliu</div>
+    <h2 class="section-title">Lucrările noastre</h2>
+    <p class="section-sub">
+      Fiecare lucrare reflectă standarde ridicate de estetică și funcționalitate,
+      realizată cu materiale premium și tehnologie digitală.
+    </p>
+  </div>
+
+  <div class="gallery-grid" id="galleryGrid">
+    <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/g1.jpg')"></div>
+      <div class="gp-label">Prezentare generală</div>
+    </div>
+    <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/g2.jpg')"></div>
+      <div class="gp-label">Zirconiu · arcadă superioară</div>
+    </div>
+    <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/g3.jpg')"></div>
+      <div class="gp-label">Estetică · rezultat clinic</div>
+    </div>
+    <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/g4.jpg')"></div>
+      <div class="gp-label">Punte ceramică</div>
+    </div>
+    <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/g5.jpg')"></div>
+      <div class="gp-label">Proteză totală pe implanturi</div>
+    </div>
+    <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/g6.jpg')"></div>
+      <div class="gp-label">Ceramică posterioară</div>
+    </div>
+    <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/g7.jpg')"></div>
+      <div class="gp-label">Arcadă inferioară</div>
+    </div>
+  </div>
+</section>
+
+<!-- SERVICES -->
+<section class="section services-section">
+  <div style="max-width:1200px;margin:0 auto">
+    <div class="section-head">
+      <div class="section-label">Servicii</div>
+      <h2 class="section-title">Ce realizăm</h2>
+      <p class="section-sub">Acoperim întreg spectrul de lucrări protetice, de la design digital la lucrarea finală.</p>
+    </div>
+    <div class="services-grid">
+      <div class="service-card">
+        <div class="service-line"></div>
+        <div class="service-name">Design CAD</div>
+        <div class="service-desc">Proiectare digitală 3D cu software specializat pentru coroane, punți și proteze totale.</div>
+      </div>
+      <div class="service-card">
+        <div class="service-line"></div>
+        <div class="service-name">Prelucrare CAM</div>
+        <div class="service-desc">Frezare de precizie din blocuri de zirconiu, PMMA și titan pe mașini CNC de ultimă generație.</div>
+      </div>
+      <div class="service-card">
+        <div class="service-line"></div>
+        <div class="service-name">Ceramică stratificată</div>
+        <div class="service-desc">Aplicare manuală de ceramică pentru estetică superioară în zona frontală și laterală.</div>
+      </div>
+      <div class="service-card">
+        <div class="service-line"></div>
+        <div class="service-name">Soluții pe implanturi</div>
+        <div class="service-desc">Suprastructuri pe implanturi: coroane individuale, punți full-arch și proteze hibride.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-strip">
+  <div class="section-label">Acces securizat</div>
+  <h2 class="section-title">Portal dedicat clinicilor partenere</h2>
+  <p class="section-sub" style="max-width:440px;margin:0 auto 36px">
+    Urmăriți stadiul lucrărilor în timp real, comunicați cu laboratorul
+    și accesați istoricul complet al cazurilor.
+  </p>
+  <a class="btn-lg gold" href="login.html">Intră în portal →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-brand">Private CAD · Laborator Stomatologic</div>
+  <div class="footer-note">© 2026 Private CAD. Toate drepturile rezervate.</div>
+</footer>
+
+<script>
+  // Block right-click on entire page
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  // Block drag (prevent saving images by drag-and-drop)
+  document.addEventListener('dragstart', e => e.preventDefault());
+  // Block keyboard save shortcuts
+  document.addEventListener('keydown', e => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && (e.key === 's' || e.key === 'u')) e.preventDefault();
+  });
+  // Block print screen? (can't fully block, but we can warn)
+  // Long-press on mobile — handled by CSS user-select:none on images
+
+  // Smooth nav bg on scroll
+  const nav = document.querySelector('nav');
+  window.addEventListener('scroll', () => {
+    nav.style.backdropFilter = window.scrollY > 60 ? 'blur(12px)' : 'none';
+    nav.style.background = window.scrollY > 60
+      ? 'rgba(8,8,8,0.92)'
+      : 'linear-gradient(to bottom, rgba(8,8,8,0.95), transparent)';
+  }, { passive: true });
+
+  // Lazy fade-in for gallery items
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.opacity = '1';
+        e.target.style.transform = 'translateY(0)';
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.gp').forEach((el, i) => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(18px)';
+    el.style.transition = `opacity 0.6s ease ${i * 0.07}s, transform 0.6s ease ${i * 0.07}s`;
+    observer.observe(el);
+  });
+</script>
+</body>
+</html>
