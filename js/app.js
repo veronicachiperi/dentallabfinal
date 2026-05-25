@@ -1182,8 +1182,7 @@ function openClinicCaseEdit(caseId){
     const n=tb.dataset.tooth;
     const p=document.createElement('div');p.className='tooth-popover';
     p.innerHTML=`<div class="tooth-popover-arrow"></div><div class="tp-header">Dinte ${n}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button><div class="tp-btn-divider"></div><button class="tp-btn danger" data-type=""><span class="tp-swatch eraser">×</span>Șterge</button>`;
-    p.style.top=(tb.offsetTop+tb.offsetHeight+6)+'px';p.style.left=Math.max(0,tb.offsetLeft-16)+'px';
-    document.getElementById('clinicEditToothChart').appendChild(p);
+    document.body.appendChild(p);positionFloatingUnder(p,tb);
     p.querySelectorAll('.tp-btn').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setTooth(n,b.dataset.type);p.remove()}));
     setTimeout(()=>{const cl=ev=>{if(!p.contains(ev.target)&&ev.target!==tb){p.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
   }
@@ -1194,9 +1193,9 @@ function openClinicCaseEdit(caseId){
     if(jaw==='clear'){Array.from(tMap.keys()).forEach(n=>setTooth(n,''));return}
     const jawTeeth=jaw==='upper'?upper:lower;
     document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
-    const p=document.createElement('div');p.className='tooth-popover';p.style.cssText='position:absolute;top:34px;left:0;z-index:100';
+    const p=document.createElement('div');p.className='tooth-popover';
     p.innerHTML=`<div class="tp-header">${jaw==='upper'?'Maxilar complet':'Mandibulă completă'}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button>`;
-    btn.style.position='relative';btn.appendChild(p);
+    document.body.appendChild(p);positionFloatingUnder(p,btn);
     p.querySelectorAll('.tp-btn').forEach(pb=>pb.addEventListener('click',ev=>{ev.stopPropagation();jawTeeth.forEach(n=>setTooth(n,pb.dataset.type));p.remove()}));
     setTimeout(()=>{const cl=ev=>{if(!p.contains(ev.target)){p.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
   }));
@@ -1979,9 +1978,9 @@ function openNewCaseModal(defClinic){
       const jawTeeth=jaw==='upper'?upper:lower;
       // Open type picker popover anchored to the button
       document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
-      const p=document.createElement('div');p.className='tooth-popover';p.style.cssText='position:absolute;top:34px;left:0;z-index:100';
+      const p=document.createElement('div');p.className='tooth-popover';
       p.innerHTML=`<div class="tp-header">${jaw==='upper'?'Maxilar complet':'Mandibulă completă'}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button>`;
-      btn.style.position='relative';btn.appendChild(p);
+      document.body.appendChild(p);positionFloatingUnder(p,btn);
       p.querySelectorAll('.tp-btn').forEach(pb=>pb.addEventListener('click',ev=>{
         ev.stopPropagation();const t=pb.dataset.type;
         jawTeeth.forEach(n=>{
@@ -2000,8 +1999,7 @@ function openNewCaseModal(defClinic){
     tb.classList.add('popped');const n=tb.dataset.tooth;
     const p=document.createElement('div');p.className='tooth-popover';
     p.innerHTML=`<div class="tooth-popover-arrow"></div><div class="tp-header">Dinte ${n}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button><div class="tp-btn-divider"></div><button class="tp-btn danger" data-type="erase"><span class="tp-swatch eraser">×</span>Șterge</button>`;
-    p.style.top=(tb.offsetTop+tb.offsetHeight+6)+'px';p.style.left=Math.max(0,tb.offsetLeft-16)+'px';
-    document.getElementById('toothChartWrap').appendChild(p);
+    document.body.appendChild(p);positionFloatingUnder(p,tb);
     p.querySelectorAll('.tp-btn').forEach(b=>b.addEventListener('click',e=>{
       e.stopPropagation();const t=b.dataset.type;
       if(t==='erase'){tMap.delete(n);tb.className='tooth-cell'}
