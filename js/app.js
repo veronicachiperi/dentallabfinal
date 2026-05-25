@@ -205,6 +205,7 @@ async function moveCaseToStage(id,stageId){
 
 function reRenderAll(){
   applyOverrides();
+  if(typeof assignMonthlyNumbers==='function')assignMonthlyNumbers();
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
   renderPipeline();renderClinic();renderTechnicianPortal();
@@ -1763,10 +1764,34 @@ function renderEchipa(){
     });
   }));
   const isAdmin=(getCurrentUser()||{}).role==='admin';
-  const adminTools=isAdmin?`<div style="margin-top:22px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Administrare utilizatori</div>${EMPLOYEES.map(e=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:0.5px solid var(--border)"><div class="tl-tech ${e.id}">${escHTML(e.initials)}</div><div style="flex:1"><div style="font-size:13px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim)">${escHTML(e.stage||'tehnician')}</div></div><button class="btn danger" data-delete-employee="${escAttr(e.id)}" type="button">Șterge</button></div>`).join('')}</div>`:'';
-  root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Echipa</h1>${isAdmin?'<button class="btn primary" id="addEmpBtn" type="button">+ Angajat nou</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id]||{active:0,done:0,late:0};const TECH_COLORS={tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'};const TECH_ROLES={design:'Designer CAD',cam:'Tehnician CAM',ceramica:'Tehnician ceramică',prelucrare:'Tehnician prelucrare'};const stageColor=e.color||TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${escHTML(e.initials)}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div>${adminTools}</div></main></div>`;
+  const TECH_COLORS={tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'};
+  const TECH_ROLES={design:'Designer CAD',cam:'Tehnician CAM',ceramica:'Tehnician ceramică',prelucrare:'Tehnician prelucrare'};
+  root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Echipa</h1>${isAdmin?'<button class="btn primary" id="addEmpBtn" type="button">+ Angajat nou</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>c.stage!=='trimis').length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id]||{active:0,done:0,late:0};const stageColor=e.color||TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${escHTML(e.initials)}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div>${isAdmin?`<div id="accountStatusTools" style="margin-top:22px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi angajați</div><div style="font-size:12px;color:var(--text-muted)">Se verifică...</div></div>`:''}</div></main></div>`;
   document.getElementById('addEmpBtn')?.addEventListener('click',openAddEmployeeModal);
-  root.querySelectorAll('[data-delete-employee]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();deleteEmployeeFromAdmin(b.dataset.deleteEmployee)}));
+  if(isAdmin&&SUPABASE_CONFIGURED){
+    (async()=>{
+      const box=document.getElementById('accountStatusTools');if(!box)return;
+      const {data:profiles}=await _client().from('profiles').select('employee_id,username').not('employee_id','is',null);
+      const hasAccount=new Set((profiles||[]).map(p=>p.employee_id));
+      const profileByEmp={};(profiles||[]).forEach(p=>{profileByEmp[p.employee_id]=p});
+      box.innerHTML=`<div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi angajați</div>${EMPLOYEES.map(e=>{
+        const ok=hasAccount.has(e.id);
+        const uname=profileByEmp[e.id]?.username||'';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:0.5px solid var(--border)"><div class="tl-tech ${e.id}">${escHTML(e.initials)}</div><div style="flex:1"><div style="font-size:13px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim)">${ok?`@${escHTML(uname)}`:'Fără cont'}</div></div>${ok?`<span style="font-size:11px;color:#1D9E75;font-weight:500">✓ activ</span>`:`<button class="btn primary" style="font-size:11px;padding:4px 10px" data-create-account="${escAttr(e.id)}" type="button">Creează cont</button>`}<button class="btn danger" style="font-size:11px;padding:4px 10px;margin-left:6px" data-delete-employee="${escAttr(e.id)}" type="button">Șterge</button></div>`;
+      }).join('')}`;
+      box.querySelectorAll('[data-create-account]').forEach(b=>b.addEventListener('click',()=>{
+        const empId=b.dataset.createAccount;
+        const emp=EMPLOYEES.find(e=>e.id===empId);if(!emp)return;
+        const user=emp.name.trim().replace(/\s+/g,'');
+        const pass=prompt(`Parolă nouă pentru ${emp.name} (min. 8 caractere):`);
+        if(!pass||pass.length<8){alert('Parola trebuie să aibă minim 8 caractere.');return;}
+        sbAdminCreateUser(user,pass,'technician',null,empId)
+          .then(()=>{alert(`✓ Cont creat pentru ${emp.name}\nUsername: ${user}`);renderEchipa();})
+          .catch(err=>alert('Eroare: '+err.message));
+      }));
+      box.querySelectorAll('[data-delete-employee]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();deleteEmployeeFromAdmin(b.dataset.deleteEmployee)}));
+    })();
+  }
 }
 
 // === STATS ===
@@ -2828,6 +2853,7 @@ async function initApp(){
     loadNewCases();
   }
   applySidebarRoles();
+  if(typeof assignMonthlyNumbers==='function')assignMonthlyNumbers();
   updateMainSummary();
   renderClinic();
   renderCaseDetail();

@@ -11,13 +11,26 @@ function shortDayMon(str) {
   return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
 }
 
+function assignMonthlyNumbers() {
+  const groupDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala);
+  const groups = {};
+  CASES.forEach(c => {
+    const d = groupDate(c);
+    const key = d ? `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}` : 'unknown';
+    (groups[key] = groups[key] || []).push(c);
+  });
+  Object.keys(groups).forEach(k => {
+    groups[k].sort((a,b) => (groupDate(a) || 0) - (groupDate(b) || 0));
+    groups[k].forEach((c, i) => c._monthlyNum = i + 1);
+  });
+}
+
 function renderTable() {
   const root = document.getElementById('tableView');
   if (!root) return;
+  assignMonthlyNumbers();
   const filtered = applyFilter(CASES);
 
-  // Group by month of intrata; fall back to finala when entry date is missing
-  // so legitimate cases don't land in the "Necunoscută" bucket.
   const groupDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala);
   const groups = {};
   filtered.forEach(c => {
