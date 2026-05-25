@@ -870,6 +870,15 @@ button{font-family:inherit;cursor:pointer}
 .act-action{color:var(--text)}
 .act-detail{font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* === NEW CASE MOBILE FLOW === */
+.tooth-details{border:0.5px solid var(--border);border-radius:var(--radius-md);background:var(--bg);overflow:hidden;margin:0 0 12px}
+.tooth-details summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;font-size:12px;font-weight:500;color:var(--text)}
+.tooth-details summary::-webkit-details-marker{display:none}
+.tooth-details summary::after{content:'+';font-size:18px;line-height:1;color:var(--text-muted);font-weight:400}
+.tooth-details[open] summary::after{content:'-'}
+.tooth-details summary span{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-weight:500}
+.tooth-details-body{border-top:0.5px solid var(--border);padding:12px}
+
 /* === MOBILE POLISH OVERRIDES === */
 @media (max-width: 820px){
   html,body{width:100%;overflow-x:hidden}
@@ -912,6 +921,12 @@ button{font-family:inherit;cursor:pointer}
   .wizard-step small{display:none}
   .wizard-content{padding:12px;gap:10px}
   .wizard-panel{padding:12px}
+  .clinic-case-wizard .wizard-steps{display:none}
+  .clinic-case-wizard .wizard-content{padding:10px;gap:8px}
+  .clinic-case-wizard .wizard-panel{padding:10px;border-radius:8px}
+  .clinic-case-wizard .wizard-panel-title{font-size:10px;margin-bottom:8px}
+  .clinic-case-wizard .field{margin-bottom:8px}
+  .clinic-case-wizard .field label{font-size:10px}
   .mobile-upload-shortcut{
     display:flex;
     align-items:center;
@@ -938,11 +953,19 @@ button{font-family:inherit;cursor:pointer}
     padding:3px 6px;
   }
   .mobile-upload-shortcut b{font-weight:500}
+  .clinic-case-wizard .mobile-upload-shortcut{top:52px;min-height:42px;border-style:solid;background:#fff}
   .upload-well{min-height:54px;padding:10px}
+  .clinic-case-wizard .upload-well{min-height:48px}
   .field-row,.field-row.three{grid-template-columns:1fr;gap:0}
   .field input,.field select,.field textarea{font-size:16px;min-height:40px}
+  .tooth-details{margin-bottom:10px}
+  .tooth-details summary{padding:11px 12px}
+  .tooth-details-body{padding:10px}
   .tc-form-wrap{overflow-x:auto;padding:10px;-webkit-overflow-scrolling:touch}
   .tc-row-form{min-width:560px}
+  .clinic-case-wizard .tc-form-wrap{max-height:164px;overflow:auto}
+  .clinic-case-wizard .tc-row-form{min-width:500px}
+  .clinic-case-wizard .tc-summary{font-size:11px}
   .tc-jaw-controls{overflow-x:auto;white-space:nowrap;padding-bottom:2px}
   .tc-jaw-btn{flex:0 0 auto}
 
@@ -1042,5 +1065,6 @@ button{font-family:inherit;cursor:pointer}
   .pc-topbar .btn{flex:1;text-align:center}
   .cd-kv-grid{grid-template-columns:1fr}
   .wizard-step{min-width:120px}
+  .clinic-case-wizard .tc-row-form{min-width:460px}
   .kb-col{min-width:88vw}
 }
