@@ -2101,62 +2101,79 @@ function previewFisaPDF(c){
   document.getElementById('pdfDlBtn')?.addEventListener('click',()=>generateFisaPDF(c));
 }
 
-// === LOGIN ===
+// === LOGIN — invite-only, no public registration ===
+const _LOGIN_ATTEMPTS_KEY='pcad-login-attempts';
+function _getAttempts(){try{return JSON.parse(localStorage.getItem(_LOGIN_ATTEMPTS_KEY)||'{"n":0,"until":0}')}catch{return{n:0,until:0}}}
+function _recordFail(){
+  const d=_getAttempts();
+  d.n=(d.n||0)+1;
+  // After 5 failures lock out for 2 minutes
+  if(d.n>=5){d.until=Date.now()+120000;d.n=0;}
+  localStorage.setItem(_LOGIN_ATTEMPTS_KEY,JSON.stringify(d));
+  return d;
+}
+function _clearAttempts(){localStorage.removeItem(_LOGIN_ATTEMPTS_KEY)}
+function _lockedUntil(){const d=_getAttempts();return(d.until&&Date.now()<d.until)?d.until:0}
+
 function renderLogin(){
   const root=document.getElementById('loginShell');if(!root)return;
   const sb=typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED;
-  const clinicOpts=CLINICS.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  const empOpts=EMPLOYEES.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  if(sb){
-    // Supabase mode: username + password
-    root.innerHTML=`<div class="login-shell"><div class="login-box"><div class="login-brand"><div class="login-brand-name">PRIVATE CAD</div></div>
-<div id="loginForm"><div class="login-prompt">Autentificare</div>
-<div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="ex: maria_t" autocomplete="username"></div>
-<div class="field" style="margin-bottom:16px"><label>Parolă</label><input id="lPass" type="password" autocomplete="current-password"></div>
-<div id="loginErr" class="login-err" style="display:none"></div>
-<button class="btn primary" id="lSubmit" style="width:100%;margin-bottom:12px">Intră în cont</button>
-<button class="btn" id="showReg" style="width:100%;font-size:12px">Nu ai cont? Înregistrare</button></div>
-<div id="regForm" style="display:none"><div class="login-prompt">Cont nou</div>
-<div class="field" style="margin-bottom:10px"><label>Utilizator</label><input id="rUser" placeholder="ex: maria_t" autocomplete="username"></div>
-<div class="field" style="margin-bottom:10px"><label>Parolă</label><input id="rPass" type="password" autocomplete="new-password"></div>
-<div class="field" style="margin-bottom:10px"><label>Rol</label><select id="rRole"><option value="technician">Tehnician</option><option value="clinic">Clinică</option></select></div>
-<div id="rClinicWrap" class="field" style="margin-bottom:10px;display:none"><label>Clinică</label><select id="rClinic">${clinicOpts}</select></div>
-<div id="rEmpWrap" class="field" style="margin-bottom:16px;display:none"><label>Cont tehnician</label><select id="rEmp">${empOpts}</select></div>
-<div id="regErr" class="login-err" style="display:none"></div>
-<button class="btn primary" id="rSubmit" style="width:100%;margin-bottom:12px">Creează cont</button>
-<button class="btn" id="showLogin" style="width:100%;font-size:12px">← Înapoi la autentificare</button></div>
-</div></div>`;
-    // Login submit
-    const doLogin=async()=>{
-      const u=root.querySelector('#lUser').value.trim(),p=root.querySelector('#lPass').value;
-      if(!u||!p){_loginErr('loginErr','Completați toate câmpurile');return}
-      root.querySelector('#lSubmit').textContent='...';
-      try{const prof=await sbSignIn(u,p);_redirectAfterLogin(prof)}
-      catch(e){root.querySelector('#lSubmit').textContent='Intră în cont';_loginErr('loginErr',e.message||'Eroare de autentificare')}
-    };
-    root.querySelector('#lSubmit')?.addEventListener('click',doLogin);
-    root.querySelector('#lPass')?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
-    root.querySelector('#showReg')?.addEventListener('click',()=>{root.querySelector('#loginForm').style.display='none';root.querySelector('#regForm').style.display=''});
-    root.querySelector('#showLogin')?.addEventListener('click',()=>{root.querySelector('#regForm').style.display='none';root.querySelector('#loginForm').style.display=''});
-    root.querySelector('#rRole')?.addEventListener('change',e=>{
-      root.querySelector('#rClinicWrap').style.display=e.target.value==='clinic'?'':'none';
-      root.querySelector('#rEmpWrap').style.display=e.target.value==='technician'?'':'none';
-    });
-    root.querySelector('#rSubmit')?.addEventListener('click',async()=>{
-      const u=root.querySelector('#rUser').value.trim(),p=root.querySelector('#rPass').value;
-      const role=root.querySelector('#rRole').value;
-      const clinic=root.querySelector('#rClinic').value;
-      const emp=root.querySelector('#rEmp').value;
-      if(!u||!p){_loginErr('regErr','Completați toate câmpurile');return}
-      root.querySelector('#rSubmit').textContent='...';
-      try{
-        await sbSignUp(u,p,role,role==='clinic'?clinic:null,role==='technician'?emp:null);
-        const prof=await sbSignIn(u,p);_redirectAfterLogin(prof);
-      }catch(e){root.querySelector('#rSubmit').textContent='Creează cont';_loginErr('regErr',e.message||'Eroare la înregistrare')}
-    });
-  } else {
+  if(!sb){
     root.innerHTML=`<div class="login-shell"><div class="login-box"><div class="login-brand"><div class="login-brand-name">PRIVATE CAD</div></div><div class="login-err" style="display:block">Sistemul necesită conexiune Supabase. Contactați administratorul.</div></div></div>`;
+    return;
   }
+  root.innerHTML=`<div class="login-shell"><div class="login-box">
+    <div class="login-brand"><div class="login-brand-name">PRIVATE CAD</div><div class="login-brand-sub">Sistem privat · acces numai prin invitație</div></div>
+    <div class="login-prompt">Autentificare</div>
+    <div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="utilizator" autocomplete="username" spellcheck="false"></div>
+    <div class="field" style="margin-bottom:16px"><label>Parolă</label><input id="lPass" type="password" autocomplete="current-password"></div>
+    <div id="loginErr" class="login-err" style="display:none"></div>
+    <button class="btn primary" id="lSubmit" style="width:100%">Intră în cont</button>
+    <div class="login-invite-note">Nu ai cont? Contactează administratorul laboratorului.</div>
+  </div></div>`;
+
+  const errEl=root.querySelector('#loginErr');
+  const btn=root.querySelector('#lSubmit');
+
+  function showLockout(until){
+    const sec=Math.ceil((until-Date.now())/1000);
+    _loginErr('loginErr',`Prea multe încercări eșuate. Încearcă din nou în ${sec}s.`);
+    btn.disabled=true;
+    const t=setInterval(()=>{
+      const rem=Math.ceil((_lockedUntil()-Date.now())/1000);
+      if(rem<=0){clearInterval(t);btn.disabled=false;errEl.style.display='none';}
+      else _loginErr('loginErr',`Prea multe încercări eșuate. Încearcă din nou în ${rem}s.`);
+    },1000);
+  }
+
+  const doLogin=async()=>{
+    const lockUntil=_lockedUntil();
+    if(lockUntil){showLockout(lockUntil);return}
+    const u=root.querySelector('#lUser').value.trim(),p=root.querySelector('#lPass').value;
+    if(!u||!p){_loginErr('loginErr','Completați toate câmpurile');return}
+    btn.textContent='...';btn.disabled=true;
+    try{
+      const prof=await sbSignIn(u,p);
+      _clearAttempts();
+      _redirectAfterLogin(prof);
+    }catch(e){
+      const d=_recordFail();
+      btn.textContent='Intră în cont';btn.disabled=false;
+      if(_lockedUntil()){showLockout(_lockedUntil());}
+      else{
+        const remaining=5-d.n;
+        const msg=(e.message||'Utilizator sau parolă greșită')+(remaining>0&&remaining<5?` (${remaining} încercări rămase)`:'');
+        _loginErr('loginErr',msg);
+      }
+    }
+  };
+  btn.addEventListener('click',doLogin);
+  root.querySelector('#lPass')?.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+  root.querySelector('#lUser')?.addEventListener('keydown',e=>{if(e.key==='Enter')root.querySelector('#lPass')?.focus()});
+
+  // Check lockout on render
+  const lu=_lockedUntil();
+  if(lu)showLockout(lu);
 }
 function _loginErr(id,msg){const el=document.getElementById(id);if(el){el.textContent=msg;el.style.display='block'}}
 function _redirectAfterLogin(prof){

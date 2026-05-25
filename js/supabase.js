@@ -60,17 +60,22 @@ async function sbSignIn(username, password) {
   _session = data.session;
   const { data: p } = await _client().from('profiles').select('*').eq('id', data.user.id).single();
   _profile = p || null;
-  if (_profile) {
-    setCurrentUser({
-      id:         _profile.employee_id || _profile.clinic_id || _profile.id,
-      supabaseId: _profile.id,
-      name:       _profile.username,
-      initials:   _profile.username.slice(0, 2).toUpperCase(),
-      role:       _profile.role,
-      clinic:     _profile.clinic_id  || null,
-      employeeId: _profile.employee_id || null,
-    });
+  if (!_profile) {
+    // Auth succeeded but no profile row — account has no role, deny access
+    await _client().auth.signOut();
+    throw new Error('Cont neautorizat. Contactați administratorul pentru acces.');
   }
+  setCurrentUser({
+    id:         _profile.employee_id || _profile.clinic_id || _profile.id,
+    supabaseId: _profile.id,
+    name:       _profile.username,
+    initials:   _profile.username.slice(0, 2).toUpperCase(),
+    role:       _profile.role,
+    clinic:     _profile.clinic_id  || null,
+    employeeId: _profile.employee_id || null,
+  });
+  // Log successful sign-in
+  await _sbLog('login', 'auth', _profile.username, { role: _profile.role });
   return _profile;
 }
 
