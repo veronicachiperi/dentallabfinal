@@ -3,30 +3,40 @@ function withAlpha(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 const MONTH_NAMES = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
+const MON_SHORT = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
+function shortDayMon(str) {
+  if (!str) return '—';
+  const d = parseShortDate(str);
+  if (!d) return str;
+  return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+}
 
 function renderTable() {
   const root = document.getElementById('tableView');
   if (!root) return;
   const filtered = applyFilter(CASES);
 
-  // Group by month of intrata
+  // Group by month of intrata; fall back to finala when entry date is missing
+  // so legitimate cases don't land in the "Necunoscută" bucket.
+  const groupDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala);
   const groups = {};
   filtered.forEach(c => {
-    const d = parseShortDate(c.intrata);
+    const d = groupDate(c);
     const key = d ? `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}` : 'unknown';
     (groups[key] = groups[key] || []).push(c);
   });
   const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
   sortedKeys.forEach(k => {
-    groups[k].sort((a,b) => (parseShortDate(a.intrata) || 0) - (parseShortDate(b.intrata) || 0));
+    groups[k].sort((a,b) => (groupDate(a) || 0) - (groupDate(b) || 0));
     groups[k].forEach((c, i) => c._monthlyNum = i + 1);
   });
 
   let html = '';
   sortedKeys.forEach(k => {
+    if (k === 'unknown') return;
     const cases = groups[k];
-    let monthLabel = 'Necunoscută';
-    if (k !== 'unknown') { const [y, m] = k.split('-').map(Number); monthLabel = `${MONTH_NAMES[m]} ${y}`; }
+    const [y, m] = k.split('-').map(Number);
+    const monthLabel = `${MONTH_NAMES[m]} ${y}`;
     html += `
       <div class="month-section">
         <div class="month-header"><span class="month-name">${monthLabel}</span><span class="month-count">${cases.length} ${cases.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
@@ -64,7 +74,7 @@ function renderTableRow(c) {
   const stageIcon = c.notStarted ? '' : stageIconSVG(stage.id);
   const deadlineUrgent = labDeadlineStatus(c).urgent;
   const dueClass = c.late || deadlineUrgent ? 'late' : c.warn ? 'warn' : '';
-  const finalText = c.late ? 'restant' : c.finala;
+  const finalText = c.late ? 'restant' : shortDayMon(c.finala);
   const parsedNotes=typeof _parseNotes==='function'?_parseNotes(c.notes):[];
   const lastNote=parsedNotes.length?parsedNotes[parsedNotes.length-1].text:'';
   const noteText=lastNote||'—';
@@ -76,8 +86,8 @@ function renderTableRow(c) {
     <td><span class="tbl-clinic">${clinic.name}</span></td>
     <td><span class="tag">${c.type}</span></td>
     <td class="tbl-actions-cell"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare completă</button><button type="button" data-row-action="preview-pdf" data-case-id="${c.id}">Previzualizează PDF</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button><button type="button" data-row-action="delete" data-case-id="${c.id}" class="danger">Șterge cazul</button></div></div></td>
-    <td><span class="tbl-due" data-date-field="intrata">${c.intrata}</span></td>
-    <td><span class="tbl-due-bold" data-date-field="probaDate">${c.probaDate || '—'}</span></td>
+    <td><span class="tbl-due" data-date-field="intrata">${shortDayMon(c.intrata)}</span></td>
+    <td><span class="tbl-due-bold" data-date-field="probaDate">${shortDayMon(c.probaDate)}</span></td>
     <td><span class="tbl-due-bold ${dueClass}" data-date-field="finala">${finalText}</span></td>
     <td><span class="tbl-prio ${c.priority}">${c.priority}</span></td>
     <td>${renderFlowIndicator(c)}</td>
