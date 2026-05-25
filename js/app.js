@@ -200,6 +200,7 @@ async function moveCaseToStage(id,stageId){
 }
 
 function reRenderAll(){
+  applyOverrides();
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
   renderPipeline();renderClinic();renderTechnicianPortal();
@@ -211,6 +212,7 @@ async function refreshCasesFromServer(){
   if(!sbCases)return;
   CASES.length=0;
   sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
+  applyOverrides();
   reRenderAll();
   renderTechnicianPortal();
   renderEchipa();
@@ -2192,10 +2194,20 @@ function attachFilters(){
   const tm=['all','mine','late','week','notstarted','trimise'];
   tabs.forEach((t,i)=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('on'));t.classList.add('on');activeFilter.tab=tm[i];renderPipeline();if(typeof renderTable==='function')renderTable()}));
   const ch=document.getElementById('clinicFilterChip');
-  if(ch){
-    ch.addEventListener('click',e=>{e.stopPropagation();document.getElementById('clinicFilterMenu').classList.toggle('open')});
-    document.addEventListener('click',()=>document.getElementById('clinicFilterMenu')?.classList.remove('open'));
-    document.querySelectorAll('#clinicFilterMenu .chip-menu-item').forEach(it=>it.addEventListener('click',()=>{activeFilter.clinic=it.dataset.value;ch.textContent='Clinică: '+(it.dataset.value==='all'?'toate':getClinic(it.dataset.value).name);renderPipeline();if(typeof renderTable==='function')renderTable()}));
+  const menu=document.getElementById('clinicFilterMenu');
+  if(ch&&menu){
+    // Rebuild clinic list from live CLINICS array
+    menu.innerHTML=`<div class="chip-menu-item on" data-value="all">Toate clinicile</div>`
+      +CLINICS.map(cl=>`<div class="chip-menu-item" data-value="${escAttr(cl.id)}">${escHTML(cl.name)}</div>`).join('');
+    ch.addEventListener('click',e=>{e.stopPropagation();menu.classList.toggle('open')});
+    document.addEventListener('click',()=>menu.classList.remove('open'));
+    menu.querySelectorAll('.chip-menu-item').forEach(it=>it.addEventListener('click',()=>{
+      menu.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.remove('on'));
+      it.classList.add('on');
+      activeFilter.clinic=it.dataset.value;
+      ch.textContent='Clinică: '+(it.dataset.value==='all'?'toate':(getClinic(it.dataset.value)?.name||it.dataset.value));
+      renderPipeline();if(typeof renderTable==='function')renderTable();
+    }));
   }
 }
 function attachMobileMenu(){const b=document.querySelector('.mobile-menu-btn'),s=document.querySelector('.sidebar');if(!b||!s)return;b.addEventListener('click',()=>s.classList.toggle('open'))}
@@ -2695,7 +2707,13 @@ async function initApp(){
   if(hasSupabase){
     try{
       const prof=await withTimeout(sbRequireAuth(),8000,'Autentificarea Supabase');
-      if(!prof)return;
+      if(!prof){
+        // sbRequireAuth redirects to login.html when there's no session.
+        // If we're here with prof=null, force redirect (profile row missing or timed out).
+        if(!location.pathname.includes('login.html')&&!location.pathname.includes('setup.html'))
+          location.href='login.html';
+        return;
+      }
       // Clinic users go straight to their own portal
       if(prof.role==='clinic'&&prof.clinic_id&&!location.pathname.includes('clinic.html')&&!location.pathname.includes('case.html')&&!location.pathname.includes('termeni.html')&&!location.pathname.includes('arhiva.html')){
         location.href='clinic.html?id='+prof.clinic_id;return;
@@ -2706,6 +2724,8 @@ async function initApp(){
       if(sbCases){
         CASES.length=0;
         sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
+        applyOverrides();
+        loadNewCases();
       }
       sbSubscribeCases(reRenderAll);
       setInterval(()=>refreshCasesFromServer().catch(e=>console.warn('[sb refresh]',e.message)),20000);

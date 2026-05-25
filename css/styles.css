@@ -917,6 +917,25 @@ button{font-family:inherit;cursor:pointer}
   outline: 1px dashed var(--border-strong);
   outline-offset: 2px;
 }
+.page-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.page-loader-spin {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .inline-note-editor {
   position: fixed;
   z-index: 1001;
