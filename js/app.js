@@ -2825,7 +2825,9 @@ async function initApp(){
         CASES.length=0;
         sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});
         applyOverrides();
-        loadNewCases();
+        // NOTE: when Supabase loads successfully the database is the single
+        // source of truth — do NOT re-inject locally cached cases, otherwise
+        // cases deleted on the server reappear from this browser's localStorage.
       }
       sbSubscribeCases(reRenderAll);
       setInterval(()=>refreshCasesFromServer().catch(e=>console.warn('[sb refresh]',e.message)),20000);
