@@ -2382,7 +2382,8 @@ function openDatePopover(anchor, c, field, onSaved){
     else{if(typeof renderTable==='function')renderTable();if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();if(typeof renderClinic==='function'&&document.getElementById('clinicShell'))renderClinic();}
   }
   function saveDate(dateObj){
-    const value=fmtShortDate(dateObj);
+    const t=(pop.querySelector('.date-cal-time-input')?.value||'').trim();
+    const value=fmtShortDate(dateObj)+(t?' '+t:'');
     c[field]=value;
     if(field==='probaDate'){c.noProba=false;overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};overrides.edits[c.id].noProba=false;}
     c.deadlineUrgent=labDeadlineStatus(c).urgent;
@@ -2450,6 +2451,10 @@ function openDatePopover(anchor, c, field, onSaved){
       </div>
       <div class="date-cal-weekdays">${DAYS_RO.map(d=>`<span>${d}</span>`).join('')}</div>
       <div class="date-cal-grid">${cells}</div>
+      <div class="date-cal-time-row" style="display:flex;align-items:center;gap:8px;padding:10px 4px 2px">
+        <label style="font-size:11px;color:var(--text-muted);white-space:nowrap">Oră</label>
+        <input type="time" class="time-input date-cal-time-input" style="margin-top:0" value="${escAttr(extractTime(c[field]||''))}">
+      </div>
       <div class="date-cal-footer">
         <button class="btn date-cal-clear-btn" type="button">Șterge</button>
         ${field==='probaDate'?`<button class="btn date-cal-no-proba-btn" type="button" style="color:var(--text-muted)">Fără probă</button>`:''}
@@ -2475,6 +2480,9 @@ function openDatePopover(anchor, c, field, onSaved){
     pop.querySelector('.date-cal-clear-btn')?.addEventListener('click',e=>{e.stopPropagation();clearDate();});
     pop.querySelector('.date-cal-no-proba-btn')?.addEventListener('click',e=>{e.stopPropagation();saveNoProba();});
     pop.querySelector('.date-cal-today-btn')?.addEventListener('click',e=>{e.stopPropagation();saveDate(new Date(now));});
+    // Setting just the hour (when a date is already chosen) saves it too.
+    pop.querySelector('.date-cal-time-input')?.addEventListener('click',e=>e.stopPropagation());
+    pop.querySelector('.date-cal-time-input')?.addEventListener('change',e=>{e.stopPropagation();if(selected)saveDate(new Date(selected));});
   }
   render();
   positionFloatingUnder(pop,anchor.closest('td')||anchor);
