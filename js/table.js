@@ -19,11 +19,12 @@ function renderTable() {
     const key = d ? `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}` : 'unknown';
     (groups[key] = groups[key] || []).push(c);
   });
-  // Oldest month first so the list reads #1 (first entered) at the top
-  // down to the most recent case at the bottom.
-  const sortedKeys = Object.keys(groups).sort((a,b) => a.localeCompare(b));
+  // Newest month first; within each month newest case on top. Numerotarea
+  // c.seq rămâne neschimbată (calculată după data Intrată, ascendent global),
+  // deci #15 apare sus, #1 jos — ordinea afișării NU afectează numărul.
+  const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
   sortedKeys.forEach(k => {
-    groups[k].sort((a,b) => (groupDate(a) || 0) - (groupDate(b) || 0));
+    groups[k].sort((a,b) => (groupDate(b) || 0) - (groupDate(a) || 0));
   });
 
   let html = '';

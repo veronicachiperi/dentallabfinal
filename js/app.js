@@ -1224,7 +1224,7 @@ function openClinicCaseEdit(caseId){
   openModal(`<div class="modal-head"><div><div class="modal-kicker">${editorKicker}</div><div class="modal-title">Editează cazul · #${c.seq||c.id}</div></div><button class="modal-close" type="button">×</button></div>
     <div class="modal-body modal-body-compact">
       <div class="field-row ${canEditWorkflow?'three':''}"><div class="field"><label>Pacient</label><input id="ceName" value="${safeVal(c.name)}" autofocus></div><div class="field"><label>Clinică</label><input value="${escAttr(clinic.name)}" disabled></div>${stageField}</div>
-      <div class="field-row"><div class="field"><label>Medic</label><input id="ceDoctor" value="${safeVal(c.doctor)}"></div><div class="field"><label>Tip lucrare</label><select id="ceType">${typeOptions}</select></div></div>
+      <div class="field-row"><div class="field"><label>Medic</label><input id="ceDoctor" value="${safeVal(c.doctor)}"></div><div class="field"><label>Tip lucrare</label><input id="ceType" list="ceTypeList" value="${escAttr(c.type||'')}" placeholder="ex. ZR FULL — sau scrie alt tip" autocomplete="off"><datalist id="ceTypeList">${typeOptions}</datalist></div></div>
       <div class="field-row three"><div class="field"><label>Culoare</label><select id="ceColor">${colorOptions}</select></div><div class="field"><label>Tip implant</label><input id="ceImplant" value="${safeVal(c.implantType)}"></div><div class="field"><label>Tip amprentă</label><select id="ceAmprenta">${amprentaOptions}</select></div></div>
       <div class="field-row three"><div class="field"><label>Intrată</label><div class="date-edit-btn${c.intrata?'':' is-empty'}" id="ceIntrata" data-val="${escAttr((c.intrata||'').split(' ')[0])}"><span>${(c.intrata||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceIntrataTime" value="${escAttr(extractTime(c.intrata||''))}" placeholder="--:--"></div><div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:4px">Probă<label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:11px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ceNoProba"${c.noProba?' checked':''}> Fără probă</label></label><div class="date-edit-btn${c.noProba?' disabled':(c.probaDate?'':' is-empty')}" id="ceProba" data-val="${escAttr(c.noProba?'':(c.probaDate||'').split(' ')[0])}"><span>${c.noProba?'Fără probă':((c.probaDate||'').split(' ')[0]||'Alege data')}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceProbaTime" value="${escAttr(extractTime(c.probaDate||''))}" placeholder="--:--"></div><div class="field"><label>Finală</label><div class="date-edit-btn${c.finala?'':' is-empty'}" id="ceFinala" data-val="${escAttr((c.finala||'').split(' ')[0])}"><span>${(c.finala||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceFinalaTime" value="${escAttr(extractTime(c.finala||''))}" placeholder="--:--"></div></div>
       <div id="clinicEditDeadline"></div>
@@ -1260,7 +1260,7 @@ function openClinicCaseEdit(caseId){
     document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
     const n=tb.dataset.tooth;
     const p=document.createElement('div');p.className='tooth-popover';
-    p.innerHTML=`<div class="tooth-popover-arrow"></div><div class="tp-header">Dinte ${n}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button><div class="tp-btn-divider"></div><button class="tp-btn danger" data-type=""><span class="tp-swatch eraser">×</span>Șterge</button>`;
+    p.innerHTML=`<div class="tooth-popover-arrow"></div><div class="tp-header">Dinte ${n}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button><div class="tp-btn-divider"></div><button class="tp-btn danger" data-type=""><span class="tp-swatch eraser">×</span>Șterge</button>`;
     document.body.appendChild(p);positionFloatingUnder(p,tb);
     p.querySelectorAll('.tp-btn').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setTooth(n,b.dataset.type);p.remove()}));
     setTimeout(()=>{const cl=ev=>{if(!p.contains(ev.target)&&ev.target!==tb){p.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
@@ -1273,7 +1273,7 @@ function openClinicCaseEdit(caseId){
     const jawTeeth=jaw==='upper'?upper:lower;
     document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
     const p=document.createElement('div');p.className='tooth-popover';
-    p.innerHTML=`<div class="tp-header">${jaw==='upper'?'Maxilar complet':'Mandibulă completă'}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button>`;
+    p.innerHTML=`<div class="tp-header">${jaw==='upper'?'Maxilar complet':'Mandibulă completă'}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button>`;
     document.body.appendChild(p);positionFloatingUnder(p,btn);
     p.querySelectorAll('.tp-btn').forEach(pb=>pb.addEventListener('click',ev=>{ev.stopPropagation();jawTeeth.forEach(n=>setTooth(n,pb.dataset.type));p.remove()}));
     setTimeout(()=>{const cl=ev=>{if(!p.contains(ev.target)){p.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
@@ -2030,7 +2030,7 @@ function openNewCaseModal(defClinic){
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Lucrare</div>
-            <div class="field-row"><div class="field"><label>Tip</label><select id="ncType">${tOpts}</select></div><div class="field"><label>Culoare</label><select id="ncColor">${colOpts}</select></div></div>
+            <div class="field-row"><div class="field"><label>Tip</label><input id="ncType" list="ncTypeList" placeholder="ex. ZR FULL — sau scrie alt tip" autocomplete="off"><datalist id="ncTypeList">${tOpts}</datalist></div><div class="field"><label>Culoare</label><select id="ncColor">${colOpts}</select></div></div>
             <details class="tooth-details"${toothDetailsOpen}>
               <summary>Schema dentară <span>opțional</span></summary>
               <div class="tooth-details-body">
@@ -2121,7 +2121,7 @@ function openNewCaseModal(defClinic){
       // Open type picker popover anchored to the button
       document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
       const p=document.createElement('div');p.className='tooth-popover';
-      p.innerHTML=`<div class="tp-header">${jaw==='upper'?'Maxilar complet':'Mandibulă completă'}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button>`;
+      p.innerHTML=`<div class="tp-header">${jaw==='upper'?'Maxilar complet':'Mandibulă completă'}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button>`;
       document.body.appendChild(p);positionFloatingUnder(p,btn);
       p.querySelectorAll('.tp-btn').forEach(pb=>pb.addEventListener('click',ev=>{
         ev.stopPropagation();const t=pb.dataset.type;
@@ -2140,7 +2140,7 @@ function openNewCaseModal(defClinic){
     document.querySelectorAll('.tooth-cell.popped').forEach(c=>c.classList.remove('popped'));
     tb.classList.add('popped');const n=tb.dataset.tooth;
     const p=document.createElement('div');p.className='tooth-popover';
-    p.innerHTML=`<div class="tooth-popover-arrow"></div><div class="tp-header">Dinte ${n}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="emax"><span class="tp-swatch emax"></span>Emax</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button><div class="tp-btn-divider"></div><button class="tp-btn danger" data-type="erase"><span class="tp-swatch eraser">×</span>Șterge</button>`;
+    p.innerHTML=`<div class="tooth-popover-arrow"></div><div class="tp-header">Dinte ${n}</div><button class="tp-btn" data-type="crown"><span class="tp-swatch crown"></span>Coroană</button><button class="tp-btn" data-type="implant"><span class="tp-swatch implant"></span>Pe implant</button><button class="tp-btn" data-type="veneer"><span class="tp-swatch veneer"></span>Fațetă</button><div class="tp-btn-divider"></div><button class="tp-btn danger" data-type="erase"><span class="tp-swatch eraser">×</span>Șterge</button>`;
     document.body.appendChild(p);positionFloatingUnder(p,tb);
     p.querySelectorAll('.tp-btn').forEach(b=>b.addEventListener('click',e=>{
       e.stopPropagation();const t=b.dataset.type;
@@ -2229,7 +2229,7 @@ function buildFisaHTML(c){
     </table>
     <div style="font-size:12px;font-weight:700;border-bottom:1.5px solid #111;padding-bottom:5px;margin-bottom:10px;letter-spacing:.4px;text-transform:uppercase">Schema dentară (FDI)</div>
     <table style="border-collapse:separate;border-spacing:2px;width:100%;table-layout:fixed;margin-bottom:10px">${trow(upper)}${trow(lower)}</table>
-    <div style="margin-bottom:12px">${chip('crown','Coroană')}${chip('implant','Implant')}${chip('emax','Emax')}${chip('veneer','Fațetă')}</div>
+    <div style="margin-bottom:12px">${chip('crown','Coroană')}${chip('implant','Implant')}${chip('veneer','Fațetă')}</div>
     <div style="margin-bottom:18px">${selectedHTML}</div>
     <div style="font-size:12px;font-weight:700;border-bottom:1.5px solid #111;padding-bottom:5px;margin-bottom:10px;letter-spacing:.4px;text-transform:uppercase">Indicații speciale</div>
     <div style="min-height:64px;border:1px solid #888;border-radius:3px;padding:10px 12px;margin-bottom:26px;font-size:12px;line-height:1.55;color:#111">${notes}</div>
