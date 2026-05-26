@@ -4,13 +4,7 @@ function withAlpha(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 const MONTH_NAMES = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
-const MON_SHORT = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
-function shortDayMon(str) {
-  if (!str) return '—';
-  const d = parseShortDate(str);
-  if (!d) return str;
-  return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
-}
+// MON_SHORT and shortDayMon are now defined in data.js (used on every page).
 
 function renderTable() {
   const root = document.getElementById('tableView');

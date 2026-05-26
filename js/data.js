@@ -251,6 +251,23 @@ function extractTime(str) {
   const m = str.match(/\s(\d{2}:\d{2})$/);
   return m ? m[1] : '';
 }
+
+// Format european: "DD Lun" (fără an) și "DD Lun HH:MM" cu oră 24h.
+// Folosit în dashboard-ul de tehnician și oriunde vrem o dată compactă.
+const MON_SHORT = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
+function shortDayMon(str) {
+  if (!str) return '—';
+  const d = parseShortDate(str);
+  if (!d) return str;
+  return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+}
+function shortDayMonTime(str) {
+  if (!str) return '—';
+  const d = parseShortDate(str);
+  if (!d) return str;
+  const t = extractTime(str);
+  return t ? `${d.getDate()} ${MON_SHORT[d.getMonth()]} ${t}` : `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+}
 function parseShortDate(str) {
   if (!str) return null;
   const s = str.split(' ')[0]; // strip HH:MM if present
