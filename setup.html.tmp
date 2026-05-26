@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Setup conturi — PRIVATE CAD</title>
-  <link rel="stylesheet" href="css/styles.css?v=202605261107">
+  <link rel="stylesheet" href="css/styles.css?v202605261107">
   <style>
     body{background:var(--bg-page);padding:32px;font-family:inherit}
     .setup-box{max-width:600px;margin:0 auto;background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:28px}
@@ -52,8 +52,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/data.js?v=202605261107"></script>
-<script src="js/supabase.js?v=202605261107"></script>
+<script src="js/data.js?v202605261107"></script>
+<script src="js/supabase.js?v202605261107"></script>
 <script>
 const USERS = [
   { username: 'VeronicaChiperi',    role: 'admin',      section: 'Admin' },

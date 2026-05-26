@@ -363,17 +363,31 @@ function postProcessCase(c) {
   c.stageStatuses  = c.stageStatuses  || {};
   if (!c.notStarted && typeof getEtapeLabStages === 'function') {
     const stages  = getEtapeLabStages(c.type);
-    const curIdx  = stages.indexOf(c.stage);
     const def     = typeof STAGE_ASSIGNEE_DEFAULTS !== 'undefined' ? STAGE_ASSIGNEE_DEFAULTS : {};
-    stages.forEach((s, i) => {
-      if (curIdx === -1 || i < curIdx) {
+    let curIdx   = stages.indexOf(c.stage);
+    // Dacă lucrarea e la 'proba', găsim etapa de lab cu status 'la_proba'.
+    if (curIdx === -1 && c.stage === 'proba') {
+      curIdx = stages.findIndex(s => c.stageStatuses[s] === 'la_proba');
+    }
+    if (c.stage === 'terminat' || c.stage === 'trimis') {
+      // Lucrare terminată/expediată → toate etapele sunt finalizate.
+      stages.forEach(s => {
         if (!c.assignees[s])     c.assignees[s]     = def[s];
         if (!c.stageStatuses[s]) c.stageStatuses[s] = 'finalizat';
-      } else if (i === curIdx) {
-        if (!c.assignees[s])     c.assignees[s]     = def[s];
-        if (!c.stageStatuses[s]) c.stageStatuses[s] = 'in_lucru';
-      }
-    });
+      });
+    } else if (curIdx >= 0) {
+      // Doar etapele DINAINTE de cea curentă sunt finalizate.
+      // Etapele de DUPĂ rămân neatinse (afișate ca „în așteptare").
+      stages.forEach((s, i) => {
+        if (i < curIdx) {
+          if (!c.assignees[s])     c.assignees[s]     = def[s];
+          if (!c.stageStatuses[s]) c.stageStatuses[s] = 'finalizat';
+        } else if (i === curIdx) {
+          if (!c.assignees[s])     c.assignees[s]     = def[s];
+          if (!c.stageStatuses[s]) c.stageStatuses[s] = 'in_lucru';
+        }
+      });
+    }
     if (!c.assignee) c.assignee = typeof primaryStageAssignee === 'function'
       ? (primaryStageAssignee(c,c.stage) || primaryStageAssignee(c,stages[0]))
       : (Array.isArray(c.assignees[c.stage]) ? c.assignees[c.stage][0] : c.assignees[c.stage]) || (Array.isArray(c.assignees[stages[0]]) ? c.assignees[stages[0]][0] : c.assignees[stages[0]]);
