@@ -112,3 +112,4 @@ The data shape in `js/data.js` is already aligned with what a Postgres schema wo
 ---
 
 Built with no framework, no build step, no dependencies (except jsPDF from CDN for PDF generation).
+ 
