@@ -1,3 +1,4 @@
+/* © 2026 Veronica Chiperi — PRIVATE CAD. Cod proprietar / Proprietary code. Toate drepturile rezervate / All rights reserved. Reproducerea, redistribuirea sau crearea unei aplicații similare fără acord scris sunt interzise. */
 const STAGES = [
   { id: 'design',     name: 'Design',     color: '#85B7EB', order: 1 },
   { id: 'cam',        name: 'CAM',        color: '#444441', order: 2 },

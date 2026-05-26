@@ -1,3 +1,4 @@
+/* © 2026 Veronica Chiperi — PRIVATE CAD. Cod proprietar / Proprietary code. Toate drepturile rezervate / All rights reserved. Reproducerea, redistribuirea sau crearea unei aplicații similare fără acord scris sunt interzise. */
 // ============================================================
 // Supabase integration — auth + database + real-time
 // Fill in SUPABASE_URL and SUPABASE_ANON_KEY from:

@@ -1,3 +1,4 @@
+/* © 2026 Veronica Chiperi — PRIVATE CAD. Cod proprietar / Proprietary code. Toate drepturile rezervate / All rights reserved. Reproducerea, redistribuirea sau crearea unei aplicații similare fără acord scris sunt interzise. */
 :root{--bg:#fff;--bg-soft:#f7f7f5;--bg-page:#fafaf8;--text:#1a1a1a;--text-muted:#6b7280;--text-dim:#9ca3af;--border:rgba(17,24,39,0.08);--border-strong:rgba(17,24,39,0.16);--accent:#1a1a1a;--warn:#BA7517;--warn-bg:#FAEEDA;--late:#A32D2D;--late-bg:#FCEBEB;--info:#185FA5;--info-bg:#E6F1FB;--good:#1D9E75;--good-bg:#EAF3DE;--back:#534AB7;--back-bg:#EEEDFE;--radius-sm:4px;--radius:6px;--radius-md:8px;--radius-lg:12px;--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;--font-mono:ui-monospace,"SF Mono",Menlo,Monaco,Consolas,monospace}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;font-family:var(--font);font-size:14px;color:var(--text);background:var(--bg-page);-webkit-font-smoothing:antialiased}
