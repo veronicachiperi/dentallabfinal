@@ -170,8 +170,8 @@ function applyFilter(cases){
     if(activeFilter.tab==='notstarted'&&!isCaseNotStarted(c))return false;
     if(activeFilter.tab==='proba'&&!isCaseAtProba(c))return false;
     if(activeFilter.tab==='approved'&&!isCaseProbaApproved(c))return false;
-    if(activeFilter.tab==='cam'&&c.stage!=='cam')return false;
-    if(activeFilter.tab==='ceramica'&&c.stage!=='ceramica')return false;
+    if(activeFilter.tab==='cam'&&!(c.stage==='cam'||c.stageStatuses?.cam==='in_lucru'))return false;
+    if(activeFilter.tab==='ceramica'&&!(c.stage==='ceramica'||c.stageStatuses?.ceramica==='in_lucru'))return false;
     if(activeFilter.tab==='ready'&&c.stage!=='terminat')return false;
     if(activeFilter.tab==='unassigned'&&!c.notStarted&&c.assignee)return false;
     return true;
@@ -507,8 +507,27 @@ function refreshDerivedNotifications(){
     });
   };
   NOTIFICATIONS.length=0;
+  const _today=todayLabDate();
   CASES.forEach(c=>{
     if(c.stage==='trimis')return;
+    // Probă AZI — prioritate maximă în clopoțel, sortate după oră.
+    if(!c.noProba && c.probaDate){
+      const pd=parseShortDate(c.probaDate);
+      if(pd && pd.toDateString()===_today.toDateString()){
+        const t=extractTime(c.probaDate);
+        const cln=(getClinic(c.clinic)||{name:c.clinic||''}).name;
+        pushNotification({
+          id:`proba-today-${c.id}`,
+          caseId:c.id,
+          targetUserId:null,
+          kind:'Probă azi',
+          text:`${t?t+' · ':''}${c.name}${cln?' · '+cln:''}${t?'':' (oră nesetată)'}`,
+          time:t||'azi',
+          _probaToday:true,
+          _probaHour:t||'99:99'
+        });
+      }
+    }
     const due=caseDueInfo(c);
     if(c.late||due.days<=1){
       pushNotification({
@@ -582,6 +601,13 @@ function refreshDerivedNotifications(){
         time:'acum'
       }));
     }
+  });
+  // Probele de azi urcă în capul listei, sortate după oră (HH:MM ascending).
+  NOTIFICATIONS.sort((a,b)=>{
+    if(a._probaToday&&!b._probaToday)return -1;
+    if(!a._probaToday&&b._probaToday)return 1;
+    if(a._probaToday&&b._probaToday)return (a._probaHour||'99:99').localeCompare(b._probaHour||'99:99');
+    return 0;
   });
 }
 
@@ -729,10 +755,10 @@ function renderActionDashboard(){
   const activeAll=CASES.filter(c=>c.stage!=='trimis');
   const active=activeAll.filter(c=>activeFilter.clinic==='all'||c.clinic===activeFilter.clinic);
   const dueToday=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===today.toDateString()});
-  // „În proces" = lucrarea se află la etapa respectivă (revendicată sau nu),
-  // nu doar când e marcată explicit „in_lucru".
-  const inCam=active.filter(c=>c.stage==='cam');
-  const inCer=active.filter(c=>c.stage==='ceramica');
+  // „În proces" = lucrarea e la etapa respectivă (c.stage) SAU substarea
+  // de la acea etapă e „in_lucru" (revendicată activ de tehnician).
+  const inCam=active.filter(c=>c.stage==='cam'||c.stageStatuses?.cam==='in_lucru');
+  const inCer=active.filter(c=>c.stage==='ceramica'||c.stageStatuses?.ceramica==='in_lucru');
   const proba=active.filter(isCaseAtProba);
   const approved=active.filter(isCaseProbaApproved);
   const notStarted=active.filter(isCaseNotStarted);
@@ -786,7 +812,7 @@ function openNotificationDrawer(){
   drawer.className='notif-drawer';
   const unread=visibleNotifications.filter(n=>n.unread).length;
   drawer.innerHTML=`<div class="notif-head"><div><div class="notif-eyebrow">${unread} necitite</div><h2>Notificări</h2></div><button class="notif-close" type="button">×</button></div>
-    <div class="notif-list">${visibleNotifications.map(n=>{const c=getCase(n.caseId);const cl=c?getClinic(c.clinic):null;return `<button class="notif-item ${n.unread?'unread':''}" type="button" data-notif-id="${n.id}" data-case-id="${n.caseId}">
+    <div class="notif-list">${visibleNotifications.map(n=>{const c=getCase(n.caseId);const cl=c?getClinic(c.clinic):null;const urgentCls=n._probaToday?' notif-item--urgent':'';return `<button class="notif-item ${n.unread?'unread':''}${urgentCls}" type="button" data-notif-id="${n.id}" data-case-id="${n.caseId}">
       <span class="notif-dot"></span><span class="notif-body"><b>${n.kind}</b><span>${n.text}</span><small>${n.time}${cl?' · '+cl.name:''}</small></span>
     </button>`}).join('')}</div>
     <div class="notif-foot"><button class="btn" type="button" id="markNotificationsRead">Marchează citite</button></div>`;

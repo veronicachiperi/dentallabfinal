@@ -253,6 +253,10 @@ button{font-family:inherit;cursor:pointer}
 .date-edit-btn.is-empty{color:var(--text-dim)}
 .date-edit-btn.disabled{opacity:0.4;pointer-events:none}
 .date-edit-btn .cal-ico{opacity:0.4;font-size:13px;flex-shrink:0}
+.tbl-due-time{display:block;font-size:10px;font-weight:500;color:var(--text-muted);letter-spacing:.2px;margin-top:1px}
+.notif-item--urgent{background:rgba(163,45,45,0.06);border-left:3px solid var(--late,#A32D2D)}
+.notif-item--urgent .notif-body b{color:var(--late,#A32D2D)}
+.notif-item--urgent .notif-dot{background:var(--late,#A32D2D)}
 .time-input{width:100%;margin-top:6px;padding:7px 10px;border:0.5px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;background:var(--bg);color:var(--text);min-height:32px;box-sizing:border-box;transition:border-color .15s}
 .time-input:hover{border-color:var(--border-strong)}
 .cal-pill-time{letter-spacing:.3px}
