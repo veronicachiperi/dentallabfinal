@@ -170,8 +170,8 @@ function applyFilter(cases){
     if(activeFilter.tab==='notstarted'&&!isCaseNotStarted(c))return false;
     if(activeFilter.tab==='proba'&&!isCaseAtProba(c))return false;
     if(activeFilter.tab==='approved'&&!isCaseProbaApproved(c))return false;
-    if(activeFilter.tab==='cam'&&c.stageStatuses?.cam!=='in_lucru')return false;
-    if(activeFilter.tab==='ceramica'&&c.stageStatuses?.ceramica!=='in_lucru')return false;
+    if(activeFilter.tab==='cam'&&c.stage!=='cam')return false;
+    if(activeFilter.tab==='ceramica'&&c.stage!=='ceramica')return false;
     if(activeFilter.tab==='ready'&&c.stage!=='terminat')return false;
     if(activeFilter.tab==='unassigned'&&!c.notStarted&&c.assignee)return false;
     return true;
@@ -729,8 +729,10 @@ function renderActionDashboard(){
   const activeAll=CASES.filter(c=>c.stage!=='trimis');
   const active=activeAll.filter(c=>activeFilter.clinic==='all'||c.clinic===activeFilter.clinic);
   const dueToday=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===today.toDateString()});
-  const inCam=active.filter(c=>c.stageStatuses?.cam==='in_lucru');
-  const inCer=active.filter(c=>c.stageStatuses?.ceramica==='in_lucru');
+  // „În proces" = lucrarea se află la etapa respectivă (revendicată sau nu),
+  // nu doar când e marcată explicit „in_lucru".
+  const inCam=active.filter(c=>c.stage==='cam');
+  const inCer=active.filter(c=>c.stage==='ceramica');
   const proba=active.filter(isCaseAtProba);
   const approved=active.filter(isCaseProbaApproved);
   const notStarted=active.filter(isCaseNotStarted);
