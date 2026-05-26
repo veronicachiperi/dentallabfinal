@@ -1492,10 +1492,14 @@ function renderCalendar(){
   const days=new Date(calYear,calMonth+1,0).getDate();
   const cells=Math.ceil((startWk+days)/7)*7;
   const filt=c=>calClinicFilter==='all'||c.clinic===calClinicFilter;
+  // Folosim aceeași definiție „caz valid + activ" ca pe dashboard ca să nu mai
+  // existe diferențe de număr între calendar, sidebar și tabel.
+  const validAll=CASES.filter(c=>c.stage!=='trimis'&&isValidCase(c));
+  const filteredByClinic=validAll.filter(filt);
   const byDate={};
-  CASES.filter(filt).forEach(c=>{const d=parseShortDate(c.finala);if(d){const k=d.toDateString();(byDate[k]=byDate[k]||[]).push(c)}});
-  const cnt={all:CASES.filter(filt).length};
-  CLINICS.forEach(cl=>cnt[cl.id]=casesForClinic(cl.id).length);
+  filteredByClinic.forEach(c=>{const d=parseShortDate(c.finala);if(d){const k=d.toDateString();(byDate[k]=byDate[k]||[]).push(c)}});
+  const cnt={all:filteredByClinic.length};
+  CLINICS.forEach(cl=>cnt[cl.id]=validAll.filter(c=>c.clinic===cl.id).length);
 
   let h=`<div class="app">${adminSidebarHTML('calendar')}<main class="main" style="padding:20px"><div class="cal-shell"><div class="cal-topbar"><button class="cal-nav-btn" id="calPrev">‹</button><div class="cal-month-title">${MONTH_NAMES_RO[calMonth]} ${calYear}</div><button class="cal-nav-btn" id="calNext">›</button><button class="cal-today-btn" id="calToday">Astăzi</button><div class="spacer"></div><a href="index.html" class="btn">Lucrări</a></div><div class="cal-clinic-tabs"><button class="cal-clinic-tab ${calClinicFilter==='all'?'on':''}" data-clinic="all">Toate <span class="cal-clinic-count">${cnt.all}</span></button>${CLINICS.map(cl=>`<button class="cal-clinic-tab ${calClinicFilter===cl.id?'on':''}" data-clinic="${cl.id}">${cl.name} <span class="cal-clinic-count">${cnt[cl.id]}</span></button>`).join('')}</div><div class="cal-weekdays">${['Luni','Marți','Mie','Joi','Vin','Sâmb','Dum'].map(d=>`<div class="cal-weekday">${d}</div>`).join('')}</div><div class="cal-grid">`;
 
@@ -2197,7 +2201,8 @@ function buildFisaHTML(c){
   const safe=s=>{const v=String(s==null?'':s).trim();return v?v.replace(/</g,'&lt;'):'—'};
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
-  const colors={crown:'#CFE4F9',implant:'#F4D77A',emax:'#F2BFA8',veneer:'#C6E2A1'};
+  // Nuanțe de gri pentru printare curată (în loc de culori).
+  const colors={crown:'#ECECEC',implant:'#C9C9C9',emax:'#B8B8B8',veneer:'#9E9E9E'};
   const letters={crown:'C',implant:'I',emax:'E',veneer:'F'};
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
   const tcell=n=>{
@@ -2227,8 +2232,8 @@ function buildFisaHTML(c){
     <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
       ${row('Pacient',c.name,'Clinică',cl.name)}
       ${row('Medic',c.doctor,'Tip lucrare',c.type)}
-      ${row('Intrată',c.intrata,'Probă',c.probaDate)}
-      ${row('Finală',c.finala,'Culoare',c.color)}
+      ${row('Intrată',shortDayMonTime(c.intrata),'Probă',shortDayMonTime(c.probaDate))}
+      ${row('Finală',shortDayMonTime(c.finala),'Culoare',c.color)}
       ${row('Implant',c.implantType,'Amprentă',c.amprentaType)}
     </table>
     <div style="font-size:12px;font-weight:700;border-bottom:1.5px solid #111;padding-bottom:5px;margin-bottom:10px;letter-spacing:.4px;text-transform:uppercase">Schema dentară (FDI)</div>
