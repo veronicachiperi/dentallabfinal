@@ -171,6 +171,14 @@ function labDeadlineStatus(c) {
   return { term, businessDays, min, urgent };
 }
 
+// Helper folosit peste tot ca să excludem înregistrările goale (fără nume,
+// fără clinică și fără tip). Garantează că toate contoarele (sidebar, KPI,
+// tabel pe luni) folosesc aceeași definiție de „caz valid".
+function isValidCase(c) {
+  if (!c) return false;
+  return Boolean((c.name||'').trim() || (c.clinic||'').trim() || (c.type||'').trim());
+}
+
 function getClinic(id)   { return CLINICS.find(c => c.id === id); }
 function getEmployee(id) { return id ? EMPLOYEES.find(e => e.id === id) : null; }
 function getStage(id)    { return STAGES.find(s => s.id === id); }

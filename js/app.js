@@ -157,7 +157,7 @@ function applyFilter(cases){
   if(user?.role==='clinic'&&user?.clinic){src=cases.filter(c=>c.clinic===user.clinic)}
   // Skip completely-empty/junk records (no name, no clinic and no type).
   // A real case always has at least a patient name, so these are invalid rows.
-  src=src.filter(c=>(c.name||'').trim()||(c.clinic||'').trim()||(c.type||'').trim());
+  src=src.filter(c=>isValidCase(c));
   return src.filter(c=>{
     const isTrimis=c.stage==='trimis';
     if(activeFilter.tab==='trimise')return isTrimis;
@@ -414,8 +414,8 @@ ${role==='admin'?item('activity.html','Activitate'):''}
 
 function updateMainSummary(){
   refreshDerivedNotifications();
-  const active=CASES.filter(c=>c.stage!=='trimis').length;
-  const late=CASES.filter(c=>c.stage!=='trimis'&&c.late).length;
+  const active=CASES.filter(c=>c.stage!=='trimis'&&isValidCase(c)).length;
+  const late=CASES.filter(c=>c.stage!=='trimis'&&c.late&&isValidCase(c)).length;
   const count=document.getElementById('navCountLucrari');
   if(count)count.textContent=active;
   const banner=document.getElementById('lateBanner');
@@ -673,10 +673,14 @@ function renderAttachedFiles(c){
   if(!files.length)return '<div class="file-empty">Niciun fișier atașat încă.</div>';
   return files.map((f,i)=>`<div class="file-item">
     <div class="file-icon-mini">${fileExt(f.name)}</div>
-    <span class="file-name">${f.name}</span>
-    ${f.folderUrl?`<a class="file-size" href="${escAttr(f.folderUrl)}" target="_blank" rel="noreferrer">WorkDrive</a>`:`<span class="file-size" title="${escAttr(f.folder||f.path||'')}">${formatBytes(f.size)}</span>`}
-    ${isPrintableAttachment(f)?`<button class="file-mini-btn" data-file-preview="${i}" type="button">Preview</button><button class="file-mini-btn" data-file-print="${i}" type="button">Print</button><button class="file-mini-btn" data-file-download="${i}" type="button">Descarcă</button>`:''}
-    <button class="file-mini-btn danger" data-file-delete="${i}" type="button">Șterge</button>
+    <div class="file-main">
+      <div class="file-name" title="${escAttr(f.name)}">${escHTML(f.name)}</div>
+      ${f.folderUrl?`<a class="file-size" href="${escAttr(f.folderUrl)}" target="_blank" rel="noreferrer">WorkDrive</a>`:`<span class="file-size" title="${escAttr(f.folder||f.path||'')}">${formatBytes(f.size)}</span>`}
+    </div>
+    <div class="file-actions">
+      ${isPrintableAttachment(f)?`<button class="file-mini-btn" data-file-preview="${i}" type="button">Preview</button><button class="file-mini-btn" data-file-print="${i}" type="button">Print</button><button class="file-mini-btn" data-file-download="${i}" type="button">Descarcă</button>`:''}
+      <button class="file-mini-btn danger" data-file-delete="${i}" type="button">Șterge</button>
+    </div>
   </div>`).join('');
 }
 
@@ -752,7 +756,7 @@ function renderActionDashboard(){
   const root=document.getElementById('actionDashboard');
   if(!root)return;
   const today=todayLabDate();
-  const activeAll=CASES.filter(c=>c.stage!=='trimis');
+  const activeAll=CASES.filter(c=>c.stage!=='trimis'&&isValidCase(c));
   const active=activeAll.filter(c=>activeFilter.clinic==='all'||c.clinic===activeFilter.clinic);
   const dueToday=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===today.toDateString()});
   // „În proces" = lucrarea e la etapa respectivă (c.stage) SAU substarea
@@ -1545,7 +1549,7 @@ function renderTechnicianPortal(){
   const stageName=stage.name;
   // Exclude empty/junk cases (no name, no clinic and no type) — same guard as
   // applyFilter, ca să nu apară lucrări goale în portalul tehnicianului.
-  const validCases=CASES.filter(c=>(c.name||'').trim()||(c.clinic||'').trim()||(c.type||'').trim());
+  const validCases=CASES.filter(c=>isValidCase(c));
   const myInProgress=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='in_lucru');
   const sentToProbe=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='la_proba');
   const approvedCases=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='proba_aprobata');
