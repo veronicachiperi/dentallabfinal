@@ -12,52 +12,75 @@ function renderTable() {
   assignCaseNumbers();
   const filtered = applyFilter(CASES);
 
-  const groupDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala);
-  const groups = {};
-  filtered.forEach(c => {
-    const d = groupDate(c);
-    const key = d ? `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}` : 'unknown';
-    (groups[key] = groups[key] || []).push(c);
-  });
-  // Newest month first; within each month newest case on top. Numerotarea
-  // c.seq rămâne neschimbată (calculată după data Intrată, ascendent global),
-  // deci #15 apare sus, #1 jos — ordinea afișării NU afectează numărul.
-  const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
-  sortedKeys.forEach(k => {
-    groups[k].sort((a,b) => (groupDate(b) || 0) - (groupDate(a) || 0));
-  });
+  const tblHeaders = `<thead><tr>
+    <th style="width:40px">#</th>
+    <th>Nume</th>
+    <th>Clinică</th>
+    <th>Tip</th>
+    <th style="width:94px">Acțiuni</th>
+    <th>Intrată</th>
+    <th>Probă</th>
+    <th>Finală</th>
+    <th>Prioritate</th>
+    <th style="width:200px">Etape lab</th>
+    <th>Etapă</th>
+    <th>Notițe</th>
+  </tr></thead>`;
 
   let html = '';
-  sortedKeys.forEach(k => {
-    if (k === 'unknown') return;
-    const cases = groups[k];
-    const [y, m] = k.split('-').map(Number);
-    const monthLabel = `${MONTH_NAMES[m]} ${y}`;
-    html += `
-      <div class="month-section">
-        <div class="month-header"><span class="month-name">${monthLabel}</span><span class="month-count">${cases.length} ${cases.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
-        <div class="tbl-wrap">
-          <table class="tbl">
-            <thead><tr>
-              <th style="width:40px">#</th>
-              <th>Nume</th>
-              <th>Clinică</th>
-              <th>Tip</th>
-              <th style="width:94px">Acțiuni</th>
-              <th>Intrată</th>
-              <th>Probă</th>
-              <th>Finală</th>
-              <th>Prioritate</th>
-              <th style="width:200px">Etape lab</th>
-              <th>Etapă</th>
-              <th>Notițe</th>
-            </tr></thead>
-            <tbody>${cases.map(renderTableRow).join('')}</tbody>
-          </table>
-        </div>
-      </div>`;
-  });
-  if (!sortedKeys.length) html = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Nicio lucrare pentru filtrul curent.</div>';
+  const sortMode = (typeof activeFilter !== 'undefined' && activeFilter.sort) || 'default';
+
+  if (sortMode !== 'default') {
+    // Sortare globală pe Data Probei sau Data Finală (asc/desc), fără grupare pe luni.
+    const field = sortMode.startsWith('proba') ? 'probaDate' : 'finala';
+    const dir = sortMode.endsWith('-desc') ? -1 : 1;
+    const sorted = filtered.slice().sort((a, b) => {
+      const da = parseShortDate(a[field]);
+      const db = parseShortDate(b[field]);
+      if (!da && !db) return 0;
+      if (!da) return 1;          // fără dată — la final, indiferent de direcție
+      if (!db) return -1;
+      return (da - db) * dir;
+    });
+    const labels = {
+      'proba-asc': 'Data probei — cea mai veche sus',
+      'proba-desc': 'Data probei — cea mai nouă sus',
+      'finala-asc': 'Data finală — cea mai veche sus',
+      'finala-desc': 'Data finală — cea mai nouă sus'
+    };
+    html = sorted.length
+      ? `<div class="month-section">
+          <div class="month-header"><span class="month-name">${labels[sortMode] || 'Sortare'}</span><span class="month-count">${sorted.length} ${sorted.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
+          <div class="tbl-wrap"><table class="tbl">${tblHeaders}<tbody>${sorted.map(renderTableRow).join('')}</tbody></table></div>
+        </div>`
+      : '<div style="padding:40px;text-align:center;color:var(--text-dim)">Nicio lucrare pentru filtrul curent.</div>';
+  } else {
+    // Default: grupare pe luni după data Intrată (cu fallback pe finală).
+    const groupDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala);
+    const groups = {};
+    filtered.forEach(c => {
+      const d = groupDate(c);
+      const key = d ? `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}` : 'unknown';
+      (groups[key] = groups[key] || []).push(c);
+    });
+    const sortedKeys = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+    sortedKeys.forEach(k => {
+      groups[k].sort((a,b) => (groupDate(b) || 0) - (groupDate(a) || 0));
+    });
+    sortedKeys.forEach(k => {
+      if (k === 'unknown') return;
+      const cases = groups[k];
+      const [y, m] = k.split('-').map(Number);
+      const monthLabel = `${MONTH_NAMES[m]} ${y}`;
+      html += `
+        <div class="month-section">
+          <div class="month-header"><span class="month-name">${monthLabel}</span><span class="month-count">${cases.length} ${cases.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
+          <div class="tbl-wrap"><table class="tbl">${tblHeaders}<tbody>${cases.map(renderTableRow).join('')}</tbody></table></div>
+        </div>`;
+    });
+    if (!sortedKeys.length) html = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Nicio lucrare pentru filtrul curent.</div>';
+  }
+
   root.innerHTML = html;
   attachTableHandlers(root);
 }

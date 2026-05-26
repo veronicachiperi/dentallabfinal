@@ -147,7 +147,7 @@ function chooseFilesForCase(caseId,onDone){
   input.click();
 }
 
-const activeFilter={tab:'all',clinic:'all'};
+const activeFilter={tab:'all',clinic:'all',sort:'default'};
 function applyFilter(cases){
   const today=todayLabDate();
   const weekEnd=new Date(today);weekEnd.setDate(today.getDate()+7);
@@ -2466,6 +2466,21 @@ function attachFilters(){
       activeFilter.clinic=it.dataset.value;
       ch.textContent='Clinică: '+(it.dataset.value==='all'?'toate':(getClinic(it.dataset.value)?.name||it.dataset.value));
       renderPipeline();if(typeof renderTable==='function')renderTable();
+    }));
+  }
+  // Sort chip — sortare opțională după Data Probei sau Data Finală.
+  const sortCh=document.getElementById('sortFilterChip');
+  const sortMenu=document.getElementById('sortFilterMenu');
+  if(sortCh&&sortMenu){
+    const sortLabels={'default':'pe luni','proba-asc':'probă ↑','proba-desc':'probă ↓','finala-asc':'finală ↑','finala-desc':'finală ↓'};
+    sortCh.addEventListener('click',e=>{e.stopPropagation();sortMenu.classList.toggle('open')});
+    document.addEventListener('click',()=>sortMenu.classList.remove('open'));
+    sortMenu.querySelectorAll('.chip-menu-item').forEach(it=>it.addEventListener('click',()=>{
+      sortMenu.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.remove('on'));
+      it.classList.add('on');
+      activeFilter.sort=it.dataset.value;
+      sortCh.textContent='Sortare: '+(sortLabels[it.dataset.value]||it.dataset.value);
+      if(typeof renderTable==='function')renderTable();
     }));
   }
 }
