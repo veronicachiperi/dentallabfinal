@@ -1543,13 +1543,16 @@ function renderTechnicianPortal(){
   const myStage=techStage(user.id);
   const stage=getStage(myStage);
   const stageName=stage.name;
-  const myInProgress=CASES.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='in_lucru');
-  const sentToProbe=CASES.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='la_proba');
-  const approvedCases=CASES.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='proba_aprobata');
-  const barsReady=CASES.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='bari_finalizate');
-  const waitingBars=CASES.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='asteptare_bari');
+  // Exclude empty/junk cases (no name, no clinic and no type) — same guard as
+  // applyFilter, ca să nu apară lucrări goale în portalul tehnicianului.
+  const validCases=CASES.filter(c=>(c.name||'').trim()||(c.clinic||'').trim()||(c.type||'').trim());
+  const myInProgress=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='in_lucru');
+  const sentToProbe=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='la_proba');
+  const approvedCases=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='proba_aprobata');
+  const barsReady=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='bari_finalizate');
+  const waitingBars=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='asteptare_bari');
   const myActive=[...myInProgress,...approvedCases,...waitingBars,...barsReady];
-  const claimable=CASES.filter(c=>{
+  const claimable=validCases.filter(c=>{
     const ms=getEtapeLabStages(c.type);
     if(!ms.includes(myStage))return false;
     const status=c.stageStatuses?.[myStage]||'neincepute';
@@ -1558,7 +1561,7 @@ function renderTechnicianPortal(){
     if(my>0){const prev=ms[my-1];if(c.stageStatuses?.[prev]!=='finalizat')return false}
     return true;
   });
-  const completed=CASES.filter(c=>c.stageStatuses?.[myStage]==='finalizat'&&stageAssignees(c,myStage).includes(user.id));
+  const completed=validCases.filter(c=>c.stageStatuses?.[myStage]==='finalizat'&&stageAssignees(c,myStage).includes(user.id));
   const approvedCount=approvedCases.length+barsReady.length;
   const lateCount=[...myInProgress,...sentToProbe,...approvedCases,...waitingBars,...barsReady].filter(c=>c.late).length;
   const stageColors={design:'#85B7EB',cam:'#444441',prelucrare:'#854F0B',ceramica:'#EF9F27'};
