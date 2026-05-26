@@ -2193,40 +2193,49 @@ function buildFisaHTML(c){
   const safe=s=>{const v=String(s==null?'':s).trim();return v?v.replace(/</g,'&lt;'):'—'};
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
-  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);const mark=t?`<b>${n}</b><small>${({crown:'C',implant:'I',emax:'E',veneer:'F'})[t.type]||''}</small>`:n;return `<td style="text-align:center;height:22px;font-size:10px;border:1px solid #bbb">${mark}</td>`};
-  const trow=arr=>'<tr>'+arr.slice(0,8).map(tcell).join('')+'<td style="border:0;width:6px"></td>'+arr.slice(8).map(tcell).join('')+'</tr>';
-  const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
+  const colors={crown:'#CFE4F9',implant:'#F4D77A',emax:'#F2BFA8',veneer:'#C6E2A1'};
+  const letters={crown:'C',implant:'I',emax:'E',veneer:'F'};
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
+  const tcell=n=>{
+    const t=(c.teeth||[]).find(x=>x.n===n);
+    const bg=t?colors[t.type]||'#fff':'#fff';
+    const letter=t?letters[t.type]||'':'';
+    return `<td style="text-align:center;height:32px;font-size:11px;border:1px solid #555;background:${bg};padding:3px 1px;vertical-align:middle"><div style="font-weight:700;line-height:1">${n}</div>${letter?`<div style="font-size:9px;font-weight:600;color:#222;margin-top:2px;line-height:1">${letter}</div>`:''}</td>`;
+  };
+  const trow=arr=>'<tr>'+arr.slice(0,8).map(tcell).join('')+'<td style="border:0;width:10px"></td>'+arr.slice(8).map(tcell).join('')+'</tr>';
+  const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
   const stageName=publicStageName(c);
   const tehnician=getEmployee(c.assignee)?.name||'—';
-  const summaryHTML=Object.keys(byType).length
-    ? Object.entries(byType).map(([t,ns])=>`${labels[t]}: ${ns.sort((a,b)=>a-b).join(', ')}`).join(' | ')
-    : 'Niciun dinte selectat';
+  const chip=(t,lbl)=>`<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:10.5px;color:#222"><span style="display:inline-block;width:11px;height:11px;background:${colors[t]};border:1px solid #555;border-radius:2px"></span>${letters[t]} — ${lbl}</span>`;
+  const selectedHTML=Object.keys(byType).length
+    ? Object.entries(byType).map(([t,ns])=>`<div style="font-size:11.5px;margin-bottom:4px;line-height:1.45"><span style="display:inline-block;width:10px;height:10px;background:${colors[t]};border:1px solid #555;border-radius:2px;margin-right:6px;vertical-align:-1px"></span><b>${labels[t]}:</b> ${ns.sort((a,b)=>a-b).join(', ')}</div>`).join('')
+    : '<div style="font-size:10.5px;color:#666;font-style:italic">Niciun dinte selectat</div>';
   const notes=_parseNotes(c.notes).map(n=>safe(n.text)).join('<br>')||'Fără indicații suplimentare';
-  const row=(a,b,c1,d)=>`<tr><th>${a}</th><td>${safe(b)}</td><th>${c1}</th><td>${safe(d)}</td></tr>`;
-  return `<div style="font-family:Arial,sans-serif;color:#111;font-size:10px;line-height:1.3;width:500px;background:#fff">
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:9px">
+  const row=(a,b,c1,d)=>`<tr><th style="text-align:right;padding:4px 10px 4px 0;font-weight:600;font-size:11px;color:#555;width:78px;vertical-align:top">${a}</th><td style="padding:4px 14px 4px 0;font-size:12px;color:#111;font-weight:500">${safe(b)}</td><th style="text-align:right;padding:4px 10px 4px 0;font-weight:600;font-size:11px;color:#555;width:78px;vertical-align:top">${c1}</th><td style="padding:4px 0;font-size:12px;color:#111;font-weight:500">${safe(d)}</td></tr>`;
+  return `<div style="font-family:Arial,sans-serif;color:#111;font-size:12px;line-height:1.5;width:540px;background:#fff;padding:6px 4px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #111;padding-bottom:10px;margin-bottom:14px">
       <div>
-        <div style="font-size:15px;font-weight:700">Fișă de laborator</div>
-        <div style="font-size:9px">PRIVATE CAD</div>
+        <div style="font-size:18px;font-weight:700;letter-spacing:.3px">Fișă de laborator</div>
+        <div style="font-size:10px;color:#666;margin-top:2px;letter-spacing:.5px">PRIVATE CAD</div>
       </div>
-      <div style="font-size:16px;font-weight:700">#${c.seq||c.id}</div>
+      <div style="font-size:22px;font-weight:700;color:#111">#${c.seq||c.id}</div>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:10px">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
       ${row('Pacient',c.name,'Clinică',cl.name)}
       ${row('Medic',c.doctor,'Tip lucrare',c.type)}
       ${row('Intrată',c.intrata,'Probă',c.probaDate)}
       ${row('Finală',c.finala,'Culoare',c.color)}
       ${row('Implant',c.implantType,'Amprentă',c.amprentaType)}
     </table>
-    <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Schema dentară FDI</div>
-    <table style="border-collapse:collapse;width:100%;table-layout:fixed;margin-bottom:6px">${trow(upper)}${trow(lower)}</table>
-    <div style="font-size:9px;margin-bottom:10px"><b>Legendă:</b> C = Coroană, I = Implant, E = Emax, F = Fațetă<br><b>Selectate:</b> ${summaryHTML}</div>
-    <div style="font-size:11px;font-weight:700;border-bottom:1px solid #111;padding-bottom:3px;margin-bottom:6px">Indicații speciale</div>
-    <div style="min-height:46px;border:1px solid #999;padding:7px;margin-bottom:16px">${notes}</div>
-    <div style="display:flex;gap:20px;margin-top:8px">
-      <div style="flex:1;border-top:1px solid #111;padding-top:4px">Semnătura medic</div>
-      <div style="flex:1;border-top:1px solid #111;padding-top:4px">Semnătura tehnician</div>
+    <div style="font-size:12px;font-weight:700;border-bottom:1.5px solid #111;padding-bottom:5px;margin-bottom:10px;letter-spacing:.4px;text-transform:uppercase">Schema dentară (FDI)</div>
+    <table style="border-collapse:separate;border-spacing:2px;width:100%;table-layout:fixed;margin-bottom:10px">${trow(upper)}${trow(lower)}</table>
+    <div style="margin-bottom:12px">${chip('crown','Coroană')}${chip('implant','Implant')}${chip('emax','Emax')}${chip('veneer','Fațetă')}</div>
+    <div style="margin-bottom:18px">${selectedHTML}</div>
+    <div style="font-size:12px;font-weight:700;border-bottom:1.5px solid #111;padding-bottom:5px;margin-bottom:10px;letter-spacing:.4px;text-transform:uppercase">Indicații speciale</div>
+    <div style="min-height:64px;border:1px solid #888;border-radius:3px;padding:10px 12px;margin-bottom:26px;font-size:12px;line-height:1.55;color:#111">${notes}</div>
+    <div style="display:flex;gap:28px;margin-top:32px">
+      <div style="flex:1;border-top:1px solid #111;padding-top:6px;font-size:10.5px;color:#444">Semnătura medic</div>
+      <div style="flex:1;border-top:1px solid #111;padding-top:6px;font-size:10.5px;color:#444">Semnătura tehnician</div>
     </div>
   </div>`;
 }
@@ -2237,7 +2246,7 @@ function generateFisaPDF(c){
   w.style.position='fixed';
   w.style.left='0';
   w.style.top='0';
-  w.style.width='500px';
+  w.style.width='540px';
   w.style.background='#fff';
   w.style.zIndex='-1';
   document.body.appendChild(w);
