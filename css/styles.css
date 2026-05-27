@@ -1050,6 +1050,38 @@ button{font-family:inherit;cursor:pointer}
   .tbl-wrap,.ar-tbl-wrap,.terms-editor-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .tbl{min-width:980px}
 
+  /* Sticky pe mobil: coloanele # și Nume rămân fixate la stânga la scroll orizontal */
+  .tbl thead th:nth-child(1),
+  .tbl tbody td:nth-child(1){
+    position:sticky;left:0;z-index:3;
+    width:40px;min-width:40px;max-width:40px;
+    background:var(--bg);
+  }
+  .tbl thead th:nth-child(2),
+  .tbl tbody td:nth-child(2){
+    position:sticky;left:40px;z-index:3;
+    background:var(--bg);
+    box-shadow:6px 0 8px -4px rgba(0,0,0,.10);
+  }
+  .tbl thead th:nth-child(1),
+  .tbl thead th:nth-child(2){
+    z-index:5;background:var(--bg-soft);
+  }
+  /* Păstrează vizibilitatea pe hover row */
+  .tbl tbody tr:hover td:nth-child(1),
+  .tbl tbody tr:hover td:nth-child(2){
+    background:var(--bg-soft);
+  }
+  /* Faded rows (notStarted) */
+  .tbl tbody tr.tbl-row-faded td:nth-child(1),
+  .tbl tbody tr.tbl-row-faded td:nth-child(2){
+    background:var(--bg-soft);
+  }
+  .tbl tbody tr.tbl-row-faded:hover td:nth-child(1),
+  .tbl tbody tr.tbl-row-faded:hover td:nth-child(2){
+    background:var(--bg);
+  }
+
   .pipeline-board{display:flex;overflow-x:auto;gap:1px;min-height:calc(100dvh - 180px);scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
   .kb-col{min-width:82vw;scroll-snap-align:start}
   .kb-card{padding:12px}
