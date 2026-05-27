@@ -43,10 +43,10 @@ function renderTable() {
       return (da - db) * dir;
     });
     const labels = {
-      'proba-asc': 'Data probei — cea mai veche sus',
-      'proba-desc': 'Data probei — cea mai nouă sus',
-      'finala-asc': 'Data finală — cea mai veche sus',
-      'finala-desc': 'Data finală — cea mai nouă sus'
+      'proba-asc': 'Data probei — crescător',
+      'proba-desc': 'Data probei — descrescător',
+      'finala-asc': 'Data finală — crescător',
+      'finala-desc': 'Data finală — descrescător'
     };
     html = sorted.length
       ? `<div class="month-section">
