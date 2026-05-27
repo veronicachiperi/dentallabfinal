@@ -172,11 +172,16 @@ function applyFilter(cases){
     if(activeFilter.tab==='approved'&&!isCaseProbaApproved(c))return false;
     if(activeFilter.tab==='cam'&&!(c.stage==='cam'||c.stageStatuses?.cam==='in_lucru'))return false;
     if(activeFilter.tab==='ceramica'&&!(c.stage==='ceramica'||c.stageStatuses?.ceramica==='in_lucru'))return false;
-    // Search persistent: numele pacientului, clinica, tipul, #caz.
+    // Search persistent: numele pacientului, clinica, tipul, #caz, notițe, dinți, urgență, etc.
     if(activeFilter.q){
       const q=activeFilter.q.toLowerCase();
       const cln=(getClinic(c.clinic)||{name:c.clinic||''}).name;
-      const hay=[c.name,c.lastName,c.firstName,cln,c.type,c.doctor,'#'+c.seq,'#'+c.id]
+      const notesTxt=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' ');
+      const teethTxt=(Array.isArray(c.teeth)?c.teeth:[]).map(t=>t&&t.n).filter(Boolean).join(' ');
+      const urgentTag=(c.deadlineUrgent||c.late||(typeof labDeadlineStatus==='function'&&labDeadlineStatus(c).urgent))?'urgent urgenta urgență':'';
+      const stageTxt=typeof publicStageName==='function'?publicStageName(c):(c.stage||'');
+      const hay=[c.name,c.lastName,c.firstName,cln,c.type,c.doctor,'#'+c.seq,'#'+c.id,
+                 notesTxt,c.color,c.implantType,c.amprentaType,teethTxt,urgentTag,stageTxt,c.priority]
         .filter(Boolean).join(' ').toLowerCase();
       if(!hay.includes(q))return false;
     }
@@ -856,9 +861,9 @@ function renderActionDashboard(){
   <div class="dash-grid">
     <section class="dash-panel">
       <div class="dash-panel-head"><span>De rezolvat prima dată</span><small>${worklist.length} priorități</small></div>
-      <div class="dash-worklist">${worklist.length?worklist.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const due=caseDueInfo(c);const deadlineUrgent=labDeadlineStatus(c).urgent;return `<a class="dash-work-row ${c.late||deadlineUrgent?'late':c.notStarted?'muted':''}" href="case.html?id=${c.id}">
+      <div class="dash-worklist">${worklist.length?worklist.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const deadlineUrgent=labDeadlineStatus(c).urgent;const _pd=!c.noProba?parseShortDate(c.probaDate):null;const _fd=parseShortDate(c.finala);const _isP=_isSameDay(_pd,_t)||_isSameDay(_pd,_tomorrow);const probaLbl=(!c.noProba&&c.probaDate)?('Probă '+shortDayMonTime(c.probaDate)):'';const finalaLbl=c.finala?('Finală '+shortDayMonTime(c.finala)):'';const primaryLbl=_isP?probaLbl:finalaLbl;const secondaryLbl=_isP?finalaLbl:'';return `<a class="dash-work-row ${c.late||deadlineUrgent?'late':c.notStarted?'muted':''}" href="case.html?id=${c.id}">
         <div class="dash-work-main"><b>${c.name}</b><span>${cl.name} · ${c.type}</span></div>
-        <div class="dash-work-meta"><span class="dash-chip" style="--chip:${publicStageColor(c)}">${publicStageName(c)}</span><strong>${due.label}</strong></div>
+        <div class="dash-work-meta"><span class="dash-chip" style="--chip:${publicStageColor(c)}">${publicStageName(c)}</span><strong>${primaryLbl}</strong>${secondaryLbl?'<span style="font-size:11px;color:var(--text-dim);margin-left:6px">'+secondaryLbl+'</span>':''}</div>
       </a>`}).join(''):'<div class="dash-empty">Nicio lucrare încă. Adaugă primul caz real din butonul Caz nou.</div>'}</div>
     </section>
   </div>`;
