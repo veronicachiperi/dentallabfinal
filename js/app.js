@@ -1041,6 +1041,51 @@ function resetCaseToNotStarted(c){
   renderClinic();
 }
 
+// Resetează DOAR o singură etapă: scoate tehnicianul, statusul devine "neincepute".
+// Cazul rămâne în lucru; permite reasignarea facilă a unui alt tehnician.
+function resetStage(c, stageId){
+  if(!c || !stageId) return;
+  c.stageStatuses = c.stageStatuses || {};
+  c.assignees = c.assignees || {};
+  c.stageStatuses[stageId] = 'neincepute';
+  setStageAssignees(c, stageId, []);
+  const labStages = (typeof getEtapeLabStages === 'function') ? getEtapeLabStages(c.type) : ['design','cam','prelucrare','ceramica'];
+  const activeStatuses = ['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'];
+  // Dacă etapa curentă era cea resetată, recalculează c.stage:
+  if(c.stage === stageId){
+    let newActive = null;
+    for(let i=labStages.length-1; i>=0; i--){
+      if(activeStatuses.includes(c.stageStatuses[labStages[i]])){ newActive = labStages[i]; break; }
+    }
+    if(newActive){ c.stage = newActive; c.notStarted = false; }
+    else {
+      const anyFinalizat = labStages.some(s => c.stageStatuses[s] === 'finalizat');
+      if(anyFinalizat){
+        let next = null;
+        for(let i=0; i<labStages.length; i++){
+          if(c.stageStatuses[labStages[i]] !== 'finalizat'){ next = labStages[i]; break; }
+        }
+        c.stage = next || labStages[0] || 'design';
+        c.notStarted = false;
+      } else {
+        c.stage = labStages[0] || 'design';
+        c.notStarted = true;
+      }
+    }
+  }
+  c.assignee = primaryStageAssignee(c, c.stage) || null;
+  c.deadlineUrgent = labDeadlineStatus(c).urgent;
+  c.priority = computePriority(c);
+  overrides.edits = overrides.edits || {};
+  overrides.edits[c.id] = {...overrides.edits[c.id], stage:c.stage, notStarted:c.notStarted, assignee:c.assignee, assignees:c.assignees, stageStatuses:c.stageStatuses, deadlineUrgent:c.deadlineUrgent, priority:c.priority};
+  saveOverrides(overrides);
+  if(typeof _syncCase === 'function') _syncCase(c);
+  if(typeof renderTable === 'function') renderTable();
+  if(typeof renderPipeline === 'function') renderPipeline();
+  if(typeof renderClinic === 'function') renderClinic();
+  if(typeof updateMainSummary === 'function') updateMainSummary();
+}
+
 function openCollaboratorEditor(c,stageId,onDone){
   if(!c||!stageId)return;
   const stage=getStage(stageId);
@@ -1460,7 +1505,8 @@ function renderCaseDetail(){
         ...(labStageRequiresProbe(sId)?[{value:'la_proba',label:'Marchez ca: La probă'}]:[]),
         {value:'finalizat',label:'Marchez ca: Finalizat ✓'},
         {value:'collaborators',label:'Colaboratori...'},
-        {value:'reset',label:'Resetează (neincepute)'}
+        {value:'reset_stage',label:'Resetează doar această etapă (schimbă tehnicianul)'},
+        {value:'reset',label:'Resetează tot cazul'}
       ];
       const assignedStage=stageAssignees(c,sId);
       EMPLOYEES.forEach(emp=>{
@@ -1474,7 +1520,13 @@ function renderCaseDetail(){
           return;
         }
         else if(sel.value==='reset'){
+          if(!confirm('Resetezi TOT cazul la „neîncepute"? Toate etapele se pierd.'))return;
           resetCaseToNotStarted(c);
+          renderCaseDetail();
+          return;
+        }
+        else if(sel.value==='reset_stage'){
+          resetStage(c,sId);
           renderCaseDetail();
           return;
         }
@@ -2901,7 +2953,8 @@ function attachInlineEditors(root) {
         ...(labStageRequiresProbe(stage)?[{ value: 'la_proba', label: 'Marchez ca: La probă' }]:[]),
         { value: 'finalizat', label: 'Marchez ca: Finalizat ✓' },
         { value: 'collaborators', label: 'Colaboratori...' },
-        { value: 'reset', label: 'Resetează (neincepute)' }
+        { value: 'reset_stage', label: 'Resetează doar această etapă (schimbă tehnicianul)' },
+        { value: 'reset', label: 'Resetează tot cazul' }
       ];
       // Add tech-change submenu items
       EMPLOYEES.forEach(emp => {
@@ -2919,7 +2972,11 @@ function attachInlineEditors(root) {
           openCollaboratorEditor(c,stage,()=>{if(typeof renderTable==='function')renderTable();if(typeof renderPipeline==='function')renderPipeline();});
           return;
         } else if (sel.value === 'reset') {
+          if(!confirm('Resetezi TOT cazul la „neîncepute"? Toate etapele se pierd.'))return;
           resetCaseToNotStarted(c);
+          return;
+        } else if (sel.value === 'reset_stage') {
+          resetStage(c, stage);
           return;
         } else if (sel.value.startsWith('tech:')) {
           addStageAssignee(c,stage,sel.value.slice(5));

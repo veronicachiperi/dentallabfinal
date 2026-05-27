@@ -144,7 +144,9 @@ function renderFlowIndicator(c) {
     const tech = techs[0] || null;
     // FINALIZAT cu tehnician → avatar tehnician + badge mic ✓ (procesul vechi).
     // FINALIZAT fără tehnician → cerc verde plin cu ✓ (cazuri marcate manual).
-    if ((status === 'finalizat' || status === 'bari_finalizate') && tech) {
+    // EXCEPȚIE: cam și la_print sunt utilaje, NU afișează inițiale chiar dacă există tech asignat.
+    const NO_TECH_DISPLAY_STAGES = new Set(['cam','la_print']);
+    if ((status === 'finalizat' || status === 'bari_finalizate') && tech && !NO_TECH_DISPLAY_STAGES.has(sId)) {
       const badge = `<span class="substate-badge final">✓</span>`;
       html += `<span class="node-stack" data-case-id="${c.id}" data-stage="${sId}" title="${techs.map(t=>t.name).join(', ')} · finalizat"><span class="node ${tech.id}" data-case-id="${c.id}" data-stage="${sId}">${tech.initials}${badge}</span>${techs.slice(1,3).map(t=>`<span class="node mini ${t.id}" data-case-id="${c.id}" data-stage="${sId}">${t.initials}</span>`).join('')}</span>`;
     } else if (status === 'finalizat' || status === 'bari_finalizate') {
