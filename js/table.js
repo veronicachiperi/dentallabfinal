@@ -142,11 +142,13 @@ function renderFlowIndicator(c) {
     }
     const techs = techIds.map(id=>getEmployee(id)).filter(Boolean);
     const tech = techs[0] || null;
-    // FINALIZAT — cerc verde plin cu ✓, indiferent dacă există tehnician.
-    if (status === 'finalizat' || status === 'bari_finalizate') {
-      const ttl = tech ? `${tech.name} · finalizat` : 'Etapă finalizată';
-      const extras = techs.slice(1,3).map(t=>`<span class="node mini ${t.id}" data-case-id="${c.id}" data-stage="${sId}">${t.initials}</span>`).join('');
-      html += `<span class="node-stack" data-case-id="${c.id}" data-stage="${sId}" title="${ttl}"><span class="node-done" data-case-id="${c.id}" data-stage="${sId}">✓</span>${extras}</span>`;
+    // FINALIZAT cu tehnician → avatar tehnician + badge mic ✓ (procesul vechi).
+    // FINALIZAT fără tehnician → cerc verde plin cu ✓ (cazuri marcate manual).
+    if ((status === 'finalizat' || status === 'bari_finalizate') && tech) {
+      const badge = `<span class="substate-badge final">✓</span>`;
+      html += `<span class="node-stack" data-case-id="${c.id}" data-stage="${sId}" title="${techs.map(t=>t.name).join(', ')} · finalizat"><span class="node ${tech.id}" data-case-id="${c.id}" data-stage="${sId}">${tech.initials}${badge}</span>${techs.slice(1,3).map(t=>`<span class="node mini ${t.id}" data-case-id="${c.id}" data-stage="${sId}">${t.initials}</span>`).join('')}</span>`;
+    } else if (status === 'finalizat' || status === 'bari_finalizate') {
+      html += `<span class="node-stack" data-case-id="${c.id}" data-stage="${sId}" title="Etapă finalizată"><span class="node-done" data-case-id="${c.id}" data-stage="${sId}">✓</span></span>`;
     } else if ((status === 'in_lucru' || status === 'la_proba' || status === 'proba_aprobata' || status === 'asteptare_bari') && tech) {
       const badge = status === 'asteptare_bari' ? `<span class="substate-badge bars">B</span>` :
                     status === 'proba_aprobata' ? `<span class="substate-badge approved">A</span>` :

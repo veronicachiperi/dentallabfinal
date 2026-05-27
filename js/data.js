@@ -333,7 +333,9 @@ function assignCaseNumbers() {
   sorted.forEach((c, i) => c.seq = i + 1);
 }
 
-const STAGE_ASSIGNEE_DEFAULTS = { design:'tchi', cam:'tchi', la_print:'tchi', prelucrare:'amoi', ceramica:'acur', proba:'acur', terminat:'acur', trimis:'acur' };
+// CAM și La print sunt operate de utilaj (3D printer, mașină CAM) — fără
+// tehnician asignat automat. Etapele cu lucru manual păstrează defaultul.
+const STAGE_ASSIGNEE_DEFAULTS = { design:'tchi', prelucrare:'amoi', ceramica:'acur', proba:'acur', terminat:'acur', trimis:'acur' };
 
 CASES.forEach(c => {
   c.assignees = c.assignees || {};
