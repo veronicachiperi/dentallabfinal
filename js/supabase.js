@@ -194,6 +194,12 @@ async function sbLoadCases() {
 
 async function sbSaveCase(c) {
   if (!SUPABASE_CONFIGURED) return;
+  // Protecție: NU permitem inserarea unui caz complet gol (fără nume, clinică
+  // și tip). Asta blochează orice cale care ar crea înregistrări fantomă.
+  if (!c.id) {
+    const empty = !(c.name||'').trim() && !(c.clinic||'').trim() && !(c.type||'').trim();
+    if (empty) { console.warn('[sbSaveCase] refused empty case'); return; }
+  }
   const db = _caseToDb(c);
   if (!c.id) {
     const { data, error } = await _client().from('cases').insert(db).select().single();
