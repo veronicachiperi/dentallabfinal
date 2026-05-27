@@ -1238,7 +1238,7 @@ function renderClinic(){
             <span class="pc-progress-label">${stageName}</span>
             ${clinicFlowHTML(c)}
           </div>
-          <div class="tbl-due-bold ${c.late||labDeadlineStatus(c).urgent?'late':''}">${c.late?'restant':c.finala}</div>
+          <div class="tbl-due-bold ${c.late||labDeadlineStatus(c).urgent?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div>
           <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
             ${a.action!=='note'?`<button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button>`:''}
             <button class="pc-action note" data-action="edit" data-case-id="${c.id}">Editează</button>
