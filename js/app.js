@@ -803,29 +803,29 @@ function renderActionDashboard(){
     {tab:'approved',label:'Probă aprobată',value:approved.length,tone:'good',hint:'revine la designer'},
     {tab:'notstarted',label:'Neîncepute',value:notStarted.length,tone:'muted',hint:'pornește lucrarea'}
   ];
-  // Prioritate „De rezolvat prima dată" — pentru flux design:
-  //   0) Probe azi (cea mai urgentă), 1) Probe mâine,
-  //   2) Lucrări neîncepute cu finala azi/mâine,
-  //   3) Restante (late), 4) Urgente (deadline lab), 5) Restul după apropiere.
+  // „De rezolvat prima dată" — DOAR aceste 4 categorii, în ordinea de mai jos.
+  // Restul lucrărilor (urgent lab, alte neîncepute, etc.) NU mai apar aici.
   const _t=todayLabDate();
   const _tomorrow=new Date(_t);_tomorrow.setDate(_t.getDate()+1);
   const _isSameDay=(d,ref)=>d&&ref&&d.toDateString()===ref.toDateString();
   const priorityScore=c=>{
     const pd=!c.noProba?parseShortDate(c.probaDate):null;
-    if(_isSameDay(pd,_t))return 0;       // proba azi
-    if(_isSameDay(pd,_tomorrow))return 1; // proba mâine
+    if(_isSameDay(pd,_t))return 0;       // 1. Probă AZI
+    if(_isSameDay(pd,_tomorrow))return 1; // 2. Probă MÂINE
     const fd=parseShortDate(c.finala);
-    if(c.notStarted&&(_isSameDay(fd,_t)||_isSameDay(fd,_tomorrow)))return 2; // neînceput, finala azi/mâine
-    if(c.late)return 3;
-    if(labDeadlineStatus(c).urgent)return 4;
-    if(c.notStarted)return 5;
-    return 6;
+    if(c.notStarted&&(_isSameDay(fd,_t)||_isSameDay(fd,_tomorrow)))return 2; // 3. Neînceput, finala azi/mâine
+    if(c.late)return 3;                   // 4. Restante (depășite)
+    return 99;                            // în afara listei
   };
-  const worklist=active.slice().sort((a,b)=>{
-    const pa=priorityScore(a),pb=priorityScore(b);
-    if(pa!==pb)return pa-pb;
-    return caseDueInfo(a).days-caseDueInfo(b).days;
-  }).slice(0,8);
+  const worklist=active
+    .map(c=>({c,p:priorityScore(c)}))
+    .filter(x=>x.p<=3)
+    .sort((a,b)=>{
+      if(a.p!==b.p)return a.p-b.p;
+      return caseDueInfo(a.c).days-caseDueInfo(b.c).days;
+    })
+    .slice(0,8)
+    .map(x=>x.c);
   root.innerHTML=`<div class="dash-head">
     <div><div class="dash-eyebrow">Azi · ${longDateRO(today)}</div><h1 class="dash-title">Dashboard lucrări</h1></div>
     <button class="btn" type="button" data-dash-filter="all">Vezi toate</button>
