@@ -316,7 +316,11 @@ function todayLabDate() {
 function assignCaseNumbers() {
   const entryDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala)
     || (c.createdAt ? new Date(c.createdAt) : null);
-  const sorted = CASES.slice().sort((a, b) => {
+  // Numerotăm DOAR cazurile valide (au cel puțin nume, clinică sau tip);
+  // rândurile goale din DB nu primesc seq, ca să nu inflateze contorul.
+  const valid = CASES.filter(c => typeof isValidCase === 'function' ? isValidCase(c)
+    : ((c.name||'').trim() || (c.clinic||'').trim() || (c.type||'').trim()));
+  const sorted = valid.slice().sort((a, b) => {
     const da = entryDate(a), db = entryDate(b);
     if (da && db && da - db !== 0) return da - db;
     if (da && !db) return -1;
