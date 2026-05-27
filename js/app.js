@@ -147,7 +147,7 @@ function chooseFilesForCase(caseId,onDone){
   input.click();
 }
 
-const activeFilter={tab:'all',clinic:'all',sort:'default'};
+const activeFilter={tab:'all',clinic:'all',sort:'default',q:''};
 function applyFilter(cases){
   const today=todayLabDate();
   const weekEnd=new Date(today);weekEnd.setDate(today.getDate()+7);
@@ -172,6 +172,14 @@ function applyFilter(cases){
     if(activeFilter.tab==='approved'&&!isCaseProbaApproved(c))return false;
     if(activeFilter.tab==='cam'&&!(c.stage==='cam'||c.stageStatuses?.cam==='in_lucru'))return false;
     if(activeFilter.tab==='ceramica'&&!(c.stage==='ceramica'||c.stageStatuses?.ceramica==='in_lucru'))return false;
+    // Search persistent: numele pacientului, clinica, tipul, #caz.
+    if(activeFilter.q){
+      const q=activeFilter.q.toLowerCase();
+      const cln=(getClinic(c.clinic)||{name:c.clinic||''}).name;
+      const hay=[c.name,c.lastName,c.firstName,cln,c.type,c.doctor,'#'+c.seq,'#'+c.id]
+        .filter(Boolean).join(' ').toLowerCase();
+      if(!hay.includes(q))return false;
+    }
     if(activeFilter.tab==='ready'&&c.stage!=='terminat')return false;
     if(activeFilter.tab==='unassigned'&&!c.notStarted&&c.assignee)return false;
     return true;
@@ -220,6 +228,16 @@ async function moveCaseToStage(id,stageId){
     activateLabStage(c,stageId,primaryStageAssignee(c,stageId)||STAGE_ASSIGNEE_DEFAULTS[stageId]);
   }else{
     c.stage=stageId;c.notStarted=false;
+    // Variantele "_finisat" marchează intern și substarea ca finalizat,
+    // ca să apară corect în arhivă/rapoarte (cine a închis CAM-ul, când etc.).
+    c.stageStatuses=c.stageStatuses||{};
+    const finisatMap={cam_finisat:'cam',print_finisat:'la_print'};
+    const labStage=finisatMap[stageId];
+    if(labStage){
+      c.stageStatuses[labStage]='finalizat';
+      if(!c.finalTech)c.finalTech=primaryStageAssignee(c,labStage)||c.assignee||null;
+      if(!c.completedDate&&typeof fmtShortDate==='function')c.completedDate=fmtShortDate(todayLabDate());
+    }
   }
   overrides.stages=overrides.stages||{};overrides.stages[c.id]=stageId;
   overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:stageId,notStarted:false,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee};
@@ -1750,7 +1768,18 @@ function renderArchive(){
     const cs=groups[k];
     let lbl='Necunoscută';
     if(k!=='unknown'){const[y,m]=k.split('-').map(Number);lbl=`${MONTH_NAMES_RO[m]} ${y}`}
-    h+=`<div class="ar-month-section">${lbl} · ${cs.length} lucrări</div><div class="ar-tbl-wrap"><table class="ar-tbl"><thead><tr><th>#</th><th>Pacient</th><th>Clinică</th><th>Tip</th><th>Status</th><th>Tehnician</th><th>Intrată</th><th>Data arhivă</th><th>Durată</th><th>Acțiuni</th></tr></thead><tbody>${cs.map(c=>{const t=getEmployee(archiveTech(c));return `<tr data-case-id="${c.id}"><td><span class="tbl-num">#${c.seq||c.id}</span></td><td><span class="tbl-name">${c.name}</span></td><td><span class="tbl-clinic">${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</span></td><td><span class="tag">${c.type}</span></td><td><span class="tbl-pill" style="background:${c.stage==='trimis'?'rgba(39,80,10,.15)':'rgba(29,158,117,.15)'};color:${c.stage==='trimis'?'#27500A':'#1D9E75'}">${statusLabel(c)}</span></td><td>${t?`<span class="ar-tech-av-mini"><span class="ar-tech-av-circle-mini ${t.id}">${t.initials}</span>${t.name}</span>`:'—'}</td><td><span class="tbl-due">${c.intrata}</span></td><td><span class="tbl-due-bold">${c.sentDate||c.completedDate||c.finala}</span></td><td><span class="tbl-due">${c.durationDays||'—'} zile</span></td><td><button class="ar-action-icon" data-pdf="${c.id}">PDF</button> <button class="ar-action-icon" data-view="${c.id}">Vezi</button></td></tr>`}).join('')}</tbody></table></div>`;
+    h+=`<div class="ar-month-section">${lbl} · ${cs.length} lucrări</div><div class="ar-tbl-wrap"><table class="ar-tbl"><thead><tr><th>#</th><th>Pacient</th><th>Clinică</th><th>Tip</th><th>Status</th><th>Tehnicieni (per etapă)</th><th>Intrată</th><th>Data arhivă</th><th>Durată</th><th>Acțiuni</th></tr></thead><tbody>${cs.map(c=>{
+      // Listă unică de tehnicieni care au lucrat la caz, cu etapele asociate.
+      const stageNames={design:'Design',la_print:'Print',cam:'CAM',la_bare:'Bare',prelucrare:'Prelucrare',ceramica:'Ceramică'};
+      const byTech={};
+      Object.keys(c.assignees||{}).forEach(s=>{
+        const ids=Array.isArray(c.assignees[s])?c.assignees[s]:[c.assignees[s]];
+        ids.filter(Boolean).forEach(id=>{(byTech[id]=byTech[id]||[]).push(stageNames[s]||s)});
+      });
+      const techHTML=Object.keys(byTech).length
+        ? Object.entries(byTech).map(([id,stgs])=>{const e=getEmployee(id);if(!e)return '';return `<span class="ar-tech-av-mini" title="${escAttr(e.name+' — '+stgs.join(', '))}" style="margin-right:6px"><span class="ar-tech-av-circle-mini ${e.id}">${e.initials}</span><small style="font-size:10px;color:var(--text-muted);margin-left:4px">${stgs.join('·')}</small></span>`}).join('')
+        : '—';
+      return `<tr data-case-id="${c.id}"><td><span class="tbl-num">#${c.seq||c.id}</span></td><td><span class="tbl-name">${c.name}</span></td><td><span class="tbl-clinic">${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</span></td><td><span class="tag">${c.type}</span></td><td><span class="tbl-pill" style="background:${c.stage==='trimis'?'rgba(39,80,10,.15)':'rgba(29,158,117,.15)'};color:${c.stage==='trimis'?'#27500A':'#1D9E75'}">${statusLabel(c)}</span></td><td style="min-width:180px">${techHTML}</td><td><span class="tbl-due">${c.intrata}</span></td><td><span class="tbl-due-bold">${c.sentDate||c.completedDate||c.finala}</span></td><td><span class="tbl-due">${c.durationDays||'—'} zile</span></td><td><button class="ar-action-icon" data-pdf="${c.id}">PDF</button> <button class="ar-action-icon" data-view="${c.id}">Vezi</button></td></tr>`}).join('')}</tbody></table></div>`;
   });
   h+=`</div></main></div>`;
   root.innerHTML=h;
@@ -2481,8 +2510,18 @@ async function renderActivityLog(){
 
 // === SEARCH + FILTERS ===
 function attachSearch(){
-  const i=document.getElementById('searchInput');if(!i)return;
-  i.addEventListener('input',()=>{const q=i.value.toLowerCase().trim();document.querySelectorAll('.tbl tbody tr,.kb-card').forEach(el=>el.style.display=(!q||el.textContent.toLowerCase().includes(q))?'':'none')});
+  // Suportă atât #searchInput (vechiul loc — topbar) cât și #tableSearchInput (nou — lângă tabel).
+  const inputs=document.querySelectorAll('#searchInput,#tableSearchInput');
+  if(!inputs.length)return;
+  // Sincronizează valoarea inițială cu filtrul curent.
+  inputs.forEach(i=>{ if(activeFilter.q) i.value=activeFilter.q; });
+  inputs.forEach(i=>i.addEventListener('input',()=>{
+    activeFilter.q=i.value.trim();
+    // Reflectă valoarea în celelalte inputuri (dacă există).
+    inputs.forEach(j=>{ if(j!==i) j.value=i.value; });
+    if(typeof renderTable==='function')renderTable();
+    if(typeof renderPipeline==='function')renderPipeline();
+  }));
 }
 function attachFilters(){
   const tabs=document.querySelectorAll('.subbar .tab');if(!tabs.length)return;

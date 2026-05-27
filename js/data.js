@@ -1,13 +1,16 @@
 /* © 2026 Veronica Chiperi — PRIVATE CAD. Cod proprietar / Proprietary code. Toate drepturile rezervate / All rights reserved. Reproducerea, redistribuirea sau crearea unei aplicații similare fără acord scris sunt interzise. */
 const STAGES = [
-  { id: 'design',     name: 'Design',     color: '#85B7EB', order: 1 },
-  { id: 'cam',        name: 'CAM',        color: '#444441', order: 2 },
-  { id: 'la_print',   name: 'La print',   color: '#185FA5', order: 3 },
-  { id: 'prelucrare', name: 'Prelucrare', color: '#854F0B', order: 4 },
-  { id: 'ceramica',   name: 'Ceramică',   color: '#EF9F27', order: 5 },
-  { id: 'proba',      name: 'La probă',   color: '#EAC04A', order: 6 },
-  { id: 'terminat',   name: 'Terminat',   color: '#97C459', order: 7 },
-  { id: 'trimis',     name: 'Trimis',     color: '#27500A', order: 8 }
+  { id: 'design',         name: 'Design',         color: '#85B7EB', order: 1 },
+  { id: 'la_print',       name: 'La print',       color: '#185FA5', order: 2 },
+  { id: 'print_finisat',  name: 'Print finisat',  color: '#1D9E75', order: 3 },
+  { id: 'cam',            name: 'CAM',            color: '#444441', order: 4 },
+  { id: 'cam_finisat',    name: 'CAM finisat',    color: '#1D9E75', order: 5 },
+  { id: 'la_bare',        name: 'La bare',        color: '#854F0B', order: 6 },
+  { id: 'prelucrare',     name: 'Prelucrare',     color: '#854F0B', order: 7 },
+  { id: 'ceramica',       name: 'Ceramică',       color: '#EF9F27', order: 8 },
+  { id: 'proba',          name: 'La probă',       color: '#EAC04A', order: 9 },
+  { id: 'terminat',       name: 'Terminat',       color: '#97C459', order: 10 },
+  { id: 'trimis',         name: 'Trimis',         color: '#27500A', order: 11 }
 ];
 
 // Etape lab arătate în coloana "Etape lab" — 4 max (Design, CAM, Prelucrare, Ceramică)

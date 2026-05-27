@@ -118,6 +118,10 @@ function renderTableRow(c) {
 function renderFlowIndicator(c) {
   const stages = getEtapeLabStages(c.type); // 4 sau 3 etape (skip Ceramică)
   const labels = { design: '1', cam: '2', prelucrare: '3', ceramica: '4' };
+  // Mapare: dacă c.stage este varianta "_finisat" a unei etape de lab,
+  // tratăm acea etapă ca finalizată chiar dacă stageStatuses nu e setat.
+  const finisatToLab = { print_finisat: 'la_print', cam_finisat: 'cam' };
+  const labFromFinisat = finisatToLab[c.stage];
   const activeStage = probaLabStage(c) || probaApprovedStage(c) || barsWaitingStage(c) || barsReadyStage(c) || (stages.includes(c.stage) ? c.stage : null);
   const activeIndex = c.stage === 'terminat' || c.stage === 'trimis'
     ? stages.length
@@ -127,25 +131,32 @@ function renderFlowIndicator(c) {
   let html = '<span class="flow">';
   stages.forEach((sId, i) => {
     let status = c.stageStatuses?.[sId] || 'neincepute';
+    // Dacă cazul e marcat ca "X_finisat", tratează etapa X ca finalizată.
+    if (labFromFinisat === sId) status = 'finalizat';
+    // Dacă cazul e la o etapă mai târzie decât asta, marchează asta ca finalizată.
+    if (c.stage === 'terminat' || c.stage === 'trimis') status = 'finalizat';
     let techIds = stageAssignees(c,sId);
-    if(!c.notStarted && activeIndex > -1 && i > activeIndex && c.stage !== 'terminat' && c.stage !== 'trimis'){
+    if(!c.notStarted && activeIndex > -1 && i > activeIndex && c.stage !== 'terminat' && c.stage !== 'trimis' && status !== 'finalizat'){
       status = 'neincepute';
       techIds = [];
     }
     const techs = techIds.map(id=>getEmployee(id)).filter(Boolean);
     const tech = techs[0] || null;
-    if ((status === 'finalizat' || status === 'in_lucru' || status === 'la_proba' || status === 'proba_aprobata' || status === 'asteptare_bari' || status === 'bari_finalizate') && tech) {
-      const badge = status === 'finalizat' ? `<span class="substate-badge final">✓</span>` :
-                    status === 'bari_finalizate' ? `<span class="substate-badge final">✓</span>` :
-                    status === 'asteptare_bari' ? `<span class="substate-badge bars">B</span>` :
+    // FINALIZAT — cerc verde plin cu ✓, indiferent dacă există tehnician.
+    if (status === 'finalizat' || status === 'bari_finalizate') {
+      const ttl = tech ? `${tech.name} · finalizat` : 'Etapă finalizată';
+      const extras = techs.slice(1,3).map(t=>`<span class="node mini ${t.id}" data-case-id="${c.id}" data-stage="${sId}">${t.initials}</span>`).join('');
+      html += `<span class="node-stack" data-case-id="${c.id}" data-stage="${sId}" title="${ttl}"><span class="node-done" data-case-id="${c.id}" data-stage="${sId}">✓</span>${extras}</span>`;
+    } else if ((status === 'in_lucru' || status === 'la_proba' || status === 'proba_aprobata' || status === 'asteptare_bari') && tech) {
+      const badge = status === 'asteptare_bari' ? `<span class="substate-badge bars">B</span>` :
                     status === 'proba_aprobata' ? `<span class="substate-badge approved">A</span>` :
                     status === 'la_proba' ? `<span class="substate-badge proba">P</span>` :
                     `<span class="substate-badge lucru">●</span>`;
       html += `<span class="node-stack" data-case-id="${c.id}" data-stage="${sId}" title="${techs.map(t=>t.name).join(', ')} · ${status}"><span class="node ${tech.id}" data-case-id="${c.id}" data-stage="${sId}">${tech.initials}${badge}</span>${techs.slice(1,3).map(t=>`<span class="node mini ${t.id}" data-case-id="${c.id}" data-stage="${sId}">${t.initials}</span>`).join('')}</span>`;
     } else if (!c.notStarted && c.stage === sId) {
-      html += `<span class="node-current" data-case-id="${c.id}" data-stage="${sId}" title="Etapa curentă · nerevendicată">${labels[sId]}</span>`;
+      html += `<span class="node-current" data-case-id="${c.id}" data-stage="${sId}" title="Etapa curentă · click pentru a o revendica">${labels[sId]}</span>`;
     } else {
-      html += `<span class="node-em" data-case-id="${c.id}" data-stage="${sId}" title="Click pentru a începe">${labels[sId]}</span>`;
+      html += `<span class="node-em" data-case-id="${c.id}" data-stage="${sId}" title="Click pentru a marca în lucru">${labels[sId]}</span>`;
     }
     if (i < stages.length - 1) {
       const nextStatus = c.stageStatuses?.[stages[i + 1]] || 'neincepute';
