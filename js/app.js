@@ -803,19 +803,21 @@ function renderActionDashboard(){
     {tab:'approved',label:'Probă aprobată',value:approved.length,tone:'good',hint:'revine la designer'},
     {tab:'notstarted',label:'Neîncepute',value:notStarted.length,tone:'muted',hint:'pornește lucrarea'}
   ];
-  // „De rezolvat prima dată" — DOAR aceste 4 categorii, în ordinea de mai jos.
-  // Restul lucrărilor (urgent lab, alte neîncepute, etc.) NU mai apar aici.
+  // „De rezolvat prima dată" — STRICT lucrări NEÎNCEPUTE cu probă sau finală
+  // azi/mâine. Nimic altceva.
   const _t=todayLabDate();
   const _tomorrow=new Date(_t);_tomorrow.setDate(_t.getDate()+1);
   const _isSameDay=(d,ref)=>d&&ref&&d.toDateString()===ref.toDateString();
+  const _isTodayOrTomorrow=d=>_isSameDay(d,_t)||_isSameDay(d,_tomorrow);
   const priorityScore=c=>{
+    if(!c.notStarted)return 99; // doar neîncepute
     const pd=!c.noProba?parseShortDate(c.probaDate):null;
-    if(_isSameDay(pd,_t))return 0;       // 1. Probă AZI
-    if(_isSameDay(pd,_tomorrow))return 1; // 2. Probă MÂINE
     const fd=parseShortDate(c.finala);
-    if(c.notStarted&&(_isSameDay(fd,_t)||_isSameDay(fd,_tomorrow)))return 2; // 3. Neînceput, finala azi/mâine
-    if(c.late)return 3;                   // 4. Restante (depășite)
-    return 99;                            // în afara listei
+    if(_isSameDay(pd,_t))return 0;        // probă azi
+    if(_isSameDay(pd,_tomorrow))return 1; // probă mâine
+    if(_isSameDay(fd,_t))return 2;        // finală azi
+    if(_isSameDay(fd,_tomorrow))return 3; // finală mâine
+    return 99;
   };
   const worklist=active
     .map(c=>({c,p:priorityScore(c)}))
