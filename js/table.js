@@ -233,7 +233,7 @@ function handleStageClick(caseId, stageId) {
   const status = c.stageStatuses[stageId] || 'neincepute';
   let completedStage=false;
 
-  // Design: neincepute → in_lucru → la_proba → finalizat.
+  // Design: neincepute → in_lucru → la_proba → proba_aprobata → finalizat.
   // Restul etapelor: neincepute → in_lucru → finalizat.
     if (status === 'neincepute') {
     if(typeof activateLabStage==='function')activateLabStage(c,stageId,primaryStageAssignee(c,stageId)||user.id);
@@ -245,13 +245,15 @@ function handleStageClick(caseId, stageId) {
       c.assignee = primaryStageAssignee(c,stageId);
     }
   } else if (status === 'in_lucru' && typeof labStageRequiresProbe==='function' && labStageRequiresProbe(stageId)) {
-    c.stageStatuses[stageId] = 'la_proba';
-    c.stage = 'proba';
-    c.notStarted = false;
+    if(typeof setLabStageStatus==='function')setLabStageStatus(c,stageId,'la_proba',primaryStageAssignee(c,stageId)||user.id);
+    else{c.stageStatuses[stageId] = 'la_proba';c.stage = 'proba';c.notStarted = false;}
   } else if (status === 'in_lucru') {
     completeLabStage(c, stageId);
     completedStage=true;
   } else if (status === 'la_proba') {
+    if(typeof setLabStageStatus==='function')setLabStageStatus(c,stageId,'proba_aprobata',primaryStageAssignee(c,stageId)||user.id);
+    else{c.stageStatuses[stageId]='proba_aprobata';c.stage=stageId;c.notStarted=false;}
+  } else if (status === 'proba_aprobata') {
     completeLabStage(c, stageId);
     completedStage=true;
   } else if (status === 'finalizat') {

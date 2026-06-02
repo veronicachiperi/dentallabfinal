@@ -196,12 +196,107 @@ function nextStage(current, type) {
   const i = flow.indexOf(current);
   return flow[Math.min(i + 1, flow.length - 1)] || current;
 }
+function resolveLabStageForCase(c, preferredStage) {
+  const stages = getEtapeLabStages(c?.type);
+  if (!stages.length) return null;
+  if (preferredStage && stages.includes(preferredStage)) return preferredStage;
+  const withStatus = status => stages.find(s => c?.stageStatuses?.[s] === status) || null;
+  return withStatus('la_proba')
+    || withStatus('proba_aprobata')
+    || withStatus('asteptare_bari')
+    || withStatus('bari_finalizate')
+    || (stages.includes(c?.stage) ? c.stage : null)
+    || stages.find(s => {
+      const st = c?.stageStatuses?.[s];
+      return st && st !== 'neincepute' && st !== 'finalizat';
+    })
+    || stages.find(s => (c?.stageStatuses?.[s] || 'neincepute') !== 'finalizat')
+    || stages[0];
+}
+function setLabStageStatus(c, stageId, status, assigneeId) {
+  if (!c) return null;
+  const stages = getEtapeLabStages(c.type);
+  const idx = stages.indexOf(stageId);
+  if (idx < 0) return null;
+  c.stageStatuses = c.stageStatuses || {};
+  c.assignees = c.assignees || {};
+  stages.forEach((s, i) => {
+    if (i < idx) c.stageStatuses[s] = 'finalizat';
+    else if (i === idx) c.stageStatuses[s] = status;
+    else c.stageStatuses[s] = 'neincepute';
+  });
+  c.notStarted = false;
+  c.stage = status === 'la_proba' ? 'proba' : stageId;
+  const assignee = assigneeId || primaryStageAssignee(c, stageId) || STAGE_ASSIGNEE_DEFAULTS[stageId] || null;
+  if (assignee && !stageAssignees(c, stageId).includes(assignee)) addStageAssignee(c, stageId, assignee);
+  c.assignee = primaryStageAssignee(c, stageId) || assignee || c.assignee || null;
+  return stageId;
+}
+function applyCaseStageSelection(c, stageId, assigneeId) {
+  if (!c || !stageId) return null;
+  const stages = getEtapeLabStages(c.type);
+  const activeLabStage = resolveLabStageForCase(c, stages.includes(stageId) ? stageId : null) || stages[0];
+  if (stageId === 'proba') {
+    return setLabStageStatus(c, activeLabStage, 'la_proba', assigneeId);
+  }
+  if (stageId === 'proba_aprobata') {
+    return setLabStageStatus(c, activeLabStage, 'proba_aprobata', assigneeId);
+  }
+  if (stages.includes(stageId)) {
+    return setLabStageStatus(c, stageId, 'in_lucru', assigneeId);
+  }
+  const finisatMap = { cam_finisat: 'cam', print_finisat: 'la_print' };
+  const labStage = finisatMap[stageId];
+  if (labStage && stages.includes(labStage)) {
+    setLabStageStatus(c, labStage, 'finalizat', assigneeId);
+    if (!c.finalTech) c.finalTech = primaryStageAssignee(c, labStage) || c.assignee || null;
+    if (!c.completedDate && typeof fmtShortDate === 'function') c.completedDate = fmtShortDate(todayLabDate());
+    return labStage;
+  }
+  if (stageId === 'terminat' || stageId === 'trimis') {
+    c.stageStatuses = c.stageStatuses || {};
+    stages.forEach(s => { c.stageStatuses[s] = 'finalizat'; });
+    c.stage = stageId;
+    c.notStarted = false;
+    c.assignee = null;
+    if (stageId === 'terminat') {
+      if (!c.finalTech) c.finalTech = primaryStageAssignee(c, stages[stages.length - 1]) || c.finalTech || null;
+      if (!c.completedDate && typeof fmtShortDate === 'function') c.completedDate = fmtShortDate(todayLabDate());
+    }
+    if (stageId === 'trimis' && !c.sentDate && typeof fmtShortDate === 'function') c.sentDate = fmtShortDate(todayLabDate());
+    return stageId;
+  }
+  c.stage = stageId;
+  c.notStarted = false;
+  return stageId;
+}
+function stageMoveOptions(c, opts = {}) {
+  const options = [];
+  const seen = new Set();
+  const add = (value, label) => {
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    options.push({ value, label });
+  };
+  getEtapeLabStages(c?.type).forEach(id => add(id, getStage(id)?.name || id));
+  add('proba', 'La probă');
+  add('proba_aprobata', 'Probă aprobată');
+  add('terminat', 'Terminat');
+  if (opts.includeTrimis) add('trimis', 'Trimis');
+  return options;
+}
+function selectedStageMoveValue(c) {
+  if (!c) return '';
+  const stages = getEtapeLabStages(c.type);
+  if (stages.some(s => c.stageStatuses?.[s] === 'proba_aprobata')) return 'proba_aprobata';
+  if (c.stage === 'proba' || stages.some(s => c.stageStatuses?.[s] === 'la_proba')) return 'proba';
+  return c.stage || '';
+}
 function completeLabStage(c, stageId) {
   c.stageStatuses = c.stageStatuses || {};
   c.assignees = c.assignees || {};
-  c.stageStatuses[stageId] = 'finalizat';
-  c.notStarted = false;
   const stages = getEtapeLabStages(c.type);
+  setLabStageStatus(c, stageId, 'finalizat', primaryStageAssignee(c, stageId) || c.assignee || null);
   const nextIdx = stages.indexOf(stageId) + 1;
   if (nextIdx > 0 && nextIdx < stages.length) {
     const next = stages[nextIdx];
