@@ -292,6 +292,21 @@ function selectedStageMoveValue(c) {
   if (c.stage === 'proba' || stages.some(s => c.stageStatuses?.[s] === 'la_proba')) return 'proba';
   return c.stage || '';
 }
+function displayLabStageStatus(c, stageId) {
+  if (!c || !stageId) return 'neincepute';
+  const stages = getEtapeLabStages(c.type);
+  const idx = stages.indexOf(stageId);
+  if (idx < 0) return c.stageStatuses?.[stageId] || 'neincepute';
+  if (c.stage === 'terminat' || c.stage === 'trimis') return 'finalizat';
+  if (c.notStarted) return 'neincepute';
+  const active = resolveLabStageForCase(c);
+  const activeIdx = stages.indexOf(active);
+  let status = c.stageStatuses?.[stageId] || 'neincepute';
+  if (activeIdx > -1 && idx > activeIdx) return 'neincepute';
+  if (activeIdx > -1 && idx < activeIdx && status === 'neincepute') return 'finalizat';
+  if (activeIdx > -1 && idx === activeIdx && status === 'finalizat') return 'in_lucru';
+  return status;
+}
 function completeLabStage(c, stageId) {
   c.stageStatuses = c.stageStatuses || {};
   c.assignees = c.assignees || {};

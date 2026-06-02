@@ -96,7 +96,7 @@ function renderTableRow(c) {
   const finalText = c.late ? 'restant' : shortDayMon(c.finala);
   const parsedNotes=typeof _parseNotes==='function'?_parseNotes(c.notes):[];
   const lastNote=parsedNotes.length?parsedNotes[parsedNotes.length-1].text:'';
-  const noteText=lastNote||'—';
+  const noteText=lastNote||'+ Notiță';
   const noteEsc=noteText.replace(/</g,'&lt;');
   const hasNote=parsedNotes.length>0;
  return `<tr data-case-id="${c.id}" class="${c.notStarted?'tbl-row-faded':''}">
@@ -111,7 +111,7 @@ function renderTableRow(c) {
     <td><span class="tbl-prio ${c.priority}">${c.priority}</span></td>
     <td>${renderFlowIndicator(c)}</td>
     <td><span class="tbl-pill" style="background:${withAlpha(stageColor,0.15)};color:${stageColor}">${stageIcon}<span style="margin-left:${stageIcon?'4px':'0'}">${stageLabel}</span></span></td>
-    <td><span class="tbl-notes ${hasNote?'has-note':''}" title="${noteEsc}">${noteEsc}</span></td>
+    <td><span class="tbl-notes ${hasNote?'has-note':'is-empty'}" title="${hasNote?noteEsc:'Adaugă notiță'}">${noteEsc}${parsedNotes.length>1?` <small>+${parsedNotes.length-1}</small>`:''}</span></td>
   </tr>`;
 }
 
@@ -174,7 +174,8 @@ function renderFlowIndicator(c) {
 function attachTableHandlers(root) {
   root.querySelectorAll('tbody tr').forEach(tr => {
     tr.addEventListener('click', e => {
-      if (e.target.closest('.node, .node-stack, .node-em, .fisa-btn, button, .row-actions-menu')) return;
+      const name=e.target.closest('.tbl-name');
+      if(!name||!tr.contains(name))return;
       location.href = `case.html?id=${tr.dataset.caseId}`;
     });
   });

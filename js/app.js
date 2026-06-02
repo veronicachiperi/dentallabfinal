@@ -160,18 +160,7 @@ function applyFilter(cases){
   src=src.filter(c=>isValidCase(c));
   return src.filter(c=>{
     const isTrimis=c.stage==='trimis';
-    if(activeFilter.tab==='trimise')return isTrimis;
-    if(isTrimis)return false;
     if(activeFilter.clinic!=='all'&&c.clinic!==activeFilter.clinic)return false;
-    if(activeFilter.tab==='mine'){if(!user||!(c.assignee===user.id||stageAssignees(c,c.stage).includes(user.id)))return false}
-    if(activeFilter.tab==='late'&&!c.late)return false;
-    if(activeFilter.tab==='today'){const f=parseShortDate(c.finala);if(!f||f.toDateString()!==today.toDateString())return false}
-    if(activeFilter.tab==='week'){const f=parseShortDate(c.finala);if(!f||f<today||f>weekEnd)return false}
-    if(activeFilter.tab==='notstarted'&&!isCaseNotStarted(c))return false;
-    if(activeFilter.tab==='proba'&&!isCaseAtProba(c))return false;
-    if(activeFilter.tab==='approved'&&!isCaseProbaApproved(c))return false;
-    if(activeFilter.tab==='cam'&&!(c.stage==='cam'||c.stageStatuses?.cam==='in_lucru'))return false;
-    if(activeFilter.tab==='ceramica'&&!(c.stage==='ceramica'||c.stageStatuses?.ceramica==='in_lucru'))return false;
     // Search persistent: numele pacientului, clinica, tipul, #caz, notițe, dinți, urgență, etc.
     if(activeFilter.q){
       const q=activeFilter.q.toLowerCase();
@@ -185,6 +174,17 @@ function applyFilter(cases){
         .filter(Boolean).join(' ').toLowerCase();
       if(!hay.includes(q))return false;
     }
+    if(activeFilter.tab==='trimise')return isTrimis;
+    if(isTrimis)return Boolean(activeFilter.q);
+    if(activeFilter.tab==='mine'){if(!user||!(c.assignee===user.id||stageAssignees(c,c.stage).includes(user.id)))return false}
+    if(activeFilter.tab==='late'&&!c.late)return false;
+    if(activeFilter.tab==='today'){const f=parseShortDate(c.finala);if(!f||f.toDateString()!==today.toDateString())return false}
+    if(activeFilter.tab==='week'){const f=parseShortDate(c.finala);if(!f||f<today||f>weekEnd)return false}
+    if(activeFilter.tab==='notstarted'&&!isCaseNotStarted(c))return false;
+    if(activeFilter.tab==='proba'&&!isCaseAtProba(c))return false;
+    if(activeFilter.tab==='approved'&&!isCaseProbaApproved(c))return false;
+    if(activeFilter.tab==='cam'&&!(c.stage==='cam'||c.stageStatuses?.cam==='in_lucru'))return false;
+    if(activeFilter.tab==='ceramica'&&!(c.stage==='ceramica'||c.stageStatuses?.ceramica==='in_lucru'))return false;
     if(activeFilter.tab==='ready'&&c.stage!=='terminat')return false;
     if(activeFilter.tab==='unassigned'&&!c.notStarted&&c.assignee)return false;
     return true;
@@ -1141,13 +1141,23 @@ function renderClinic(){
   const clinic=getClinic(clinicId);
   if(!clinic){root.innerHTML='<p>Clinică inexistentă</p>';return}
   const clinicName=String(clinic.name||clinic.id||'Clinică');
-  const cases=casesForClinic(clinicId);
+  const cases=casesForClinic(clinicId).filter(c=>typeof isValidCase==='function'?isValidCase(c):true);
   const active=cases.filter(c=>c.stage!=='trimis');
   const notStarted=cases.filter(isCaseNotStarted);
   const proba=cases.filter(isCaseAtProba);
   const finished=cases.filter(c=>c.stage==='terminat');
   const shipped=cases.filter(c=>c.stage==='trimis');
   const late=cases.filter(c=>c.late);
+  const viewParam=new URLSearchParams(location.search).get('view')||'active';
+  const allowedClinicViews=['active','notstarted','proba','finished','shipped'];
+  const clinicView=allowedClinicViews.includes(viewParam)?viewParam:'active';
+  const visibleCases=clinicView==='notstarted'?notStarted
+    : clinicView==='proba'?proba
+    : clinicView==='finished'?finished
+    : clinicView==='shipped'?shipped
+    : active;
+  const clinicViewUrl=view=>`clinic.html?id=${encodeURIComponent(clinicId)}&view=${view}`;
+  const clinicStat=(view,count,label,numCls='')=>`<a class="pc-stat ${clinicView===view?'on':''}" href="${clinicViewUrl(view)}"><div class="pc-stat-num ${numCls}">${count}</div><div class="pc-stat-lbl">${label}</div></a>`;
 
   function clinicFlowFor(c){
     const labStages=getEtapeLabStages(c.type);
@@ -1198,7 +1208,7 @@ function renderClinic(){
       <div class="pc-logo">${escHTML(clinicName.slice(0,2).toUpperCase())}</div>
       <div>
         <div class="pc-clinic-name">${escHTML(clinicName)}</div>
-        <div class="pc-clinic-sub">Portalul clinicii · ${active.length} lucrări active</div>
+        <div class="pc-clinic-sub">Portalul clinicii · ${active.length} active · ${shipped.length} expediate</div>
       </div>
       <div class="spacer"></div>
       <a href="${termsPageUrl(clinicId)}" class="btn">Termenii laboratorului</a>
@@ -1216,17 +1226,17 @@ function renderClinic(){
     </div>
     <div class="pc-clinic-tabs-row">${clinicTabs}</div>
     <div class="pc-stats">
-      <div class="pc-stat"><div class="pc-stat-num">${active.length}</div><div class="pc-stat-lbl">Active</div></div>
-      <div class="pc-stat"><div class="pc-stat-num">${notStarted.length}</div><div class="pc-stat-lbl">Neîncepute</div></div>
-      <div class="pc-stat"><div class="pc-stat-num proba">${proba.length}</div><div class="pc-stat-lbl">La probă</div></div>
-      <div class="pc-stat"><div class="pc-stat-num ready">${finished.length}</div><div class="pc-stat-lbl">Terminate</div></div>
-      <div class="pc-stat"><div class="pc-stat-num shipped">${shipped.length}</div><div class="pc-stat-lbl">Expediate</div></div>
+      ${clinicStat('active',active.length,'Active')}
+      ${clinicStat('notstarted',notStarted.length,'Neîncepute')}
+      ${clinicStat('proba',proba.length,'La probă','proba')}
+      ${clinicStat('finished',finished.length,'Terminate','ready')}
+      ${clinicStat('shipped',shipped.length,'Expediate','shipped')}
     </div>
     <div class="pc-table">
       <div class="pc-row-grid head">
         <div>Caz</div><div>Pacient</div><div>Tip lucrare</div><div>Etapă</div><div>Finală</div><div></div>
       </div>
-      ${cases.map(c=>{
+      ${visibleCases.length?visibleCases.map(c=>{
         const a=ra(c);
         const pct=progressPct(c);
         const stageName=publicStageName(c);
@@ -1247,7 +1257,7 @@ function renderClinic(){
             <button class="pc-action note" data-action="menu" data-case-id="${c.id}">Acțiuni ▾</button>
           </div>
         </div>`;
-      }).join('')}
+      }).join(''):`<div style="padding:28px;text-align:center;color:var(--text-dim);font-size:13px">Nu există lucrări în această secțiune.</div>`}
     </div>
   </div>
   </div>`;
@@ -1498,7 +1508,7 @@ function renderCaseDetail(){
   const actionsMenu=isClinicView
     ?`<button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`
     :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`;
-  root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.seq||c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-dim);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=c.stageStatuses?.[sId]||'neincepute';const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" style="cursor:pointer" title="Click pentru a schimba starea"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
+  root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.seq||c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-dim);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=typeof displayLabStageStatus==='function'?displayLabStageStatus(c,sId):(c.stageStatuses?.[sId]||'neincepute');const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" style="cursor:pointer" title="Click pentru a schimba starea"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
   document.querySelector('.fisa-fmeta')?.replaceChildren(document.createTextNode('A5 · alb-negru'));
   document.getElementById('dlFisaBtn')?.insertAdjacentHTML('beforebegin','<button class="btn" id="previewFisaBtn">Previzualizează</button>');
@@ -3172,19 +3182,7 @@ function attachInlineEditors(root) {
     });
   });
 
-  // CAZ # — click on .tbl-num to open case detail
-  root.querySelectorAll('.tbl-num').forEach(el => {
-    if (el.closest('thead')) return;
-    if (el.dataset.editorAttached) return;
-    el.dataset.editorAttached = '1';
-    el.style.cursor = 'pointer';
-    el.addEventListener('click', e => {
-      e.stopPropagation();
-      const tr = el.closest('tr,.kb-card');
-      if (!tr) return;
-      location.href = `case.html?id=${tr.dataset.caseId}`;
-    });
-  });
+  // Deschiderea cazului din tabel se face doar pe numele pacientului.
 }
 
 // Hook into existing render functions — call after each render

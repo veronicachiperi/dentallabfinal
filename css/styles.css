@@ -107,7 +107,12 @@ button{font-family:inherit;cursor:pointer}
 .tbl-prio.reusim{background:var(--good-bg);color:var(--good)}
 .tbl-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 9px;border-radius:var(--radius-sm);font-weight:500;white-space:nowrap}
 .tbl-pill .pdot{width:5px;height:5px;border-radius:50%}
-.tbl-notes{font-size:11px;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
+.tbl-name{cursor:pointer}
+.tbl-name:hover{color:var(--info);text-decoration:underline;text-underline-offset:3px}
+.tbl-notes{font-size:11px;color:var(--text-muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;padding:3px 7px;border:0.5px solid transparent;border-radius:var(--radius-sm);cursor:pointer}
+.tbl-notes:hover,.tbl-notes.has-note{background:var(--bg-soft);border-color:var(--border)}
+.tbl-notes.is-empty{color:var(--info)}
+.tbl-notes small{font-size:9px;color:var(--text-dim);margin-left:4px}
 
 .fisa-btn{font-size:9px;font-weight:500;padding:3px 8px;border:0.5px solid #B4B2A9;border-radius:var(--radius-sm);background:var(--bg);color:var(--late);font-family:var(--font-mono);cursor:pointer}
 .fisa-btn:hover{background:var(--late-bg);border-color:var(--late)}
@@ -431,7 +436,9 @@ button{font-family:inherit;cursor:pointer}
 .pc-greet-title{font-size:20px;font-weight:500;margin:0}
 .pc-greet-sub{font-size:13px;color:var(--text-muted);margin-top:4px}
 .pc-stats{padding:0 24px 16px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-.pc-stat{background:var(--bg-soft);padding:14px 16px;border-radius:var(--radius-md)}
+.pc-stat{background:var(--bg-soft);padding:14px 16px;border-radius:var(--radius-md);text-decoration:none;color:var(--text);display:block;border:0.5px solid transparent}
+.pc-stat:hover{border-color:var(--border-strong);background:var(--bg)}
+.pc-stat.on{background:var(--bg);border-color:var(--text);box-shadow:0 10px 24px rgba(0,0,0,.06)}
 .pc-stat-num{font-size:22px;font-weight:500}
 .pc-stat-num.late{color:var(--late)}
 .pc-stat-num.proba{color:var(--warn)}
