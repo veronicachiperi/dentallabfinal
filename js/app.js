@@ -1476,7 +1476,7 @@ function openClinicCaseEdit(caseId){
     c.probaDate=c.noProba?'':readDateTimeInput('ceProba','ceProbaTime');
     c.finala=readDateTimeInput('ceFinala','ceFinalaTime');
     c.teeth=Array.from(tMap.entries()).map(([n,type])=>({n:Number(n),type})).sort((a,b)=>a.n-b.n);
-    c.notes=document.getElementById('ceNotes').value.trim();
+    c.notes=notesFromTextArea(document.getElementById('ceNotes').value,c.notes);
     c.deadlineUrgent=labDeadlineStatus(c).urgent;
     c.priority=computePriority(c);
     overrides.edits=overrides.edits||{};
@@ -1627,11 +1627,7 @@ function renderCaseDetail(){
   window.caseActionsCloseHandler=e=>{if(!e.target.closest('.case-actions'))document.getElementById('caseActionsMenu')?.classList.remove('open')};
   document.addEventListener('click',window.caseActionsCloseHandler);
   // Render existing notes from c.notes (stored as JSON array)
-  function parseNotes(raw){
-    if(!raw)return[];
-    try{const p=JSON.parse(raw);return Array.isArray(p)?p:[{text:raw,author:'—',initials:'—',ts:0}]}
-    catch{return raw.trim()?[{text:raw,author:'—',initials:'—',ts:0}]:[]}
-  }
+  const parseNotes=raw=>_parseNotes(raw);
   function renderNoteList(){
     const list=document.getElementById('noteList');if(!list)return;
     const notes=parseNotes(c.notes);
@@ -2384,7 +2380,7 @@ function openNewCaseModal(defClinic){
     rememberWorkType(type);
     const caseClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
     const ncNoProba=document.getElementById('ncNoProba')?.checked||false;
-    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:document.getElementById('ncNotes').value,assignees:{},stageStatuses:{},notStarted:true};
+    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true};
     if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
     nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
     nc.priority=computePriority(nc);
@@ -2882,7 +2878,48 @@ function readDateInputFromElement(input){
   return v?fmtShortDate(parseShortDate(v)||new Date(v)):'';
 }
 
-function _parseNotes(raw){if(!raw)return[];try{const p=JSON.parse(raw);return Array.isArray(p)?p:[{text:raw,author:'—',initials:'—',ts:0}]}catch{return raw.trim()?[{text:raw,author:'—',initials:'—',ts:0}]:[]}}
+function _noteFallbackUser(){
+  const u=typeof getCurrentUser==='function'?getCurrentUser():null;
+  const name=(u&&u.name)||'Utilizator';
+  const initials=(u&&u.initials)||name.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase()||'?';
+  return{name,initials};
+}
+function _normalizeNote(n,fallback){
+  const fb=fallback||_noteFallbackUser();
+  const text=String((typeof n==='string'?n:n?.text)||'').trim();
+  if(!text)return null;
+  const author=String((typeof n==='object'&&n?.author)||fb.name||'Utilizator').trim()||fb.name;
+  const initials=String((typeof n==='object'&&n?.initials)||fb.initials||'?').trim()||fb.initials;
+  const ts=Number(typeof n==='object'?n?.ts:0)||0;
+  return{text,author,initials,ts};
+}
+function _parseNotes(raw){
+  if(!raw)return[];
+  const fb=_noteFallbackUser();
+  try{
+    const p=JSON.parse(raw);
+    const arr=Array.isArray(p)?p:[p];
+    return arr.map(n=>_normalizeNote(n,fb)).filter(Boolean);
+  }catch{
+    const text=String(raw||'').trim();
+    return text?[_normalizeNote({text,author:fb.name,initials:fb.initials,ts:0},fb)]:[];
+  }
+}
+function notesFromTextArea(text,existingRaw){
+  const fb=_noteFallbackUser();
+  const existing=_parseNotes(existingRaw);
+  const byText=new Map();
+  existing.forEach(n=>{
+    const key=n.text.trim();
+    if(!byText.has(key))byText.set(key,[]);
+    byText.get(key).push(n);
+  });
+  const notes=String(text||'').split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
+    const bucket=byText.get(line);
+    return bucket&&bucket.length?bucket.shift():_normalizeNote({text:line,author:fb.name,initials:fb.initials,ts:Date.now()},fb);
+  }).filter(Boolean);
+  return notes.length?JSON.stringify(notes):'';
+}
 function _noteItemHTML(n){return`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div class="note-text">${escHTML(n.text)}</div></div></div>`}
 
 function openInlineNoteEditor(anchor, c) {
