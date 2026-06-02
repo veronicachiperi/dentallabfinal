@@ -206,6 +206,7 @@ function purgeCaseFromLocalCache(id){
 async function deleteCase(id){
   const c=getCase(id);if(!c)return;
   if(!confirm(`Ștergi cazul "${c.name}"? Această acțiune nu poate fi anulată.`))return;
+  const redirectAfterDelete=getCurrentUser()?.role==='clinic'?`clinic.html?id=${getCurrentUser().clinic||c.clinic}`:'index.html';
   if(typeof sbDeleteCase==='function'&&SUPABASE_CONFIGURED){
     try{await sbDeleteCase(c.id,c.name)}catch(e){alert('Eroare la ștergere: '+e.message);return}
   }
@@ -213,7 +214,27 @@ async function deleteCase(id){
   if(i>=0)CASES.splice(i,1);
   purgeCaseFromLocalCache(id);
   reRenderAll();
-  if(location.pathname.includes('case.html'))location.href='index.html';
+  if(typeof renderArchive==='function')renderArchive();
+  if(location.pathname.includes('case.html'))location.href=redirectAfterDelete;
+}
+
+async function archiveCase(id){
+  const c=getCase(id);if(!c)return;
+  if(!confirm(`Arhivezi cazul "${c.name}"? Lucrarea va trece în arhivă ca expediată.`))return;
+  c.stage='trimis';
+  c.notStarted=false;
+  c.sentDate=fmtShortDate(todayLabDate());
+  c.stageStatuses=c.stageStatuses||{};
+  c.assignees=c.assignees||{};
+  overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';
+  overrides.edits=overrides.edits||{};
+  overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,sentDate:c.sentDate,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee};
+  saveOverrides(overrides);
+  try{await syncCaseNow(c)}
+  catch(e){alert('Arhivarea a fost salvată local, dar nu s-a transmis către server: '+e.message);return}
+  reRenderAll();
+  if(typeof renderArchive==='function')renderArchive();
+  if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();
 }
 
 // Move case to a different stage
@@ -1000,8 +1021,8 @@ function renderKanbanCard(c){
       `<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button>`+
       (isAdminOrTech?`<div class="kb-pop-sep"></div><div class="kb-pop-label">Mută la etapă</div>${stageOpts}`+
       (currentStageAssignable?`<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="collaborators">Colaboratori...</button>`:'')+
-      `<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="reset">Clear → Neînceput</button>`:'')+
-      (user.role==='admin'||user.role==='clinic'?`<button class="kb-pop-item danger" type="button" data-act="delete">Șterge cazul</button>`:'');
+      `<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="archive">Arhivează</button><button class="kb-pop-item" type="button" data-act="reset">Clear all → Neînceput</button>`:'')+
+      (isAdminOrTech||user.role==='clinic'?`<button class="kb-pop-item danger" type="button" data-act="delete">Șterge lucrarea</button>`:'');
     card.appendChild(m);
     m.querySelectorAll('.kb-pop-item').forEach(it=>it.addEventListener('click',ev=>{
       ev.stopPropagation();
@@ -1009,6 +1030,7 @@ function renderKanbanCard(c){
       if(act==='view-pdf'){previewFisaPDF(c)}
       if(act==='dl-pdf'){generateFisaPDF(c)}
       if(act==='reset'&&confirm(`Resetezi progresul pentru ${c.name}?`))resetCaseToNotStarted(c);
+      if(act==='archive')archiveCase(c.id);
       if(act==='open')location.href=`case.html?id=${c.id}`;
       if(act==='move'){moveCaseToStage(c.id,it.dataset.stage)}
       if(act==='collaborators'){openCollaboratorEditor(c,c.stage,()=>{renderPipeline();if(typeof renderTable==='function')renderTable();})}
@@ -1243,6 +1265,7 @@ function renderClinic(){
             ${a.action!=='note'?`<button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button>`:''}
             <button class="pc-action note" data-action="edit" data-case-id="${c.id}">Editează</button>
             <button class="pc-action note" data-action="note" data-case-id="${c.id}">Notă</button>
+            <button class="pc-action note" data-action="menu" data-case-id="${c.id}">Acțiuni ▾</button>
           </div>
         </div>`;
       }).join('')}
@@ -1260,6 +1283,11 @@ function renderClinic(){
   document.querySelectorAll('.pc-action[data-action]').forEach(b=>{
     b.addEventListener('click',async e=>{
       e.stopPropagation();
+      if(b.dataset.action==='menu'){
+        const c=getCase(Number(b.dataset.caseId));
+        if(c)openClinicCaseMenu(b,c);
+        return;
+      }
       b.disabled=true;
       try{await handleClinicAction(b.dataset.action,Number(b.dataset.caseId))}
       finally{b.disabled=false}
@@ -1269,6 +1297,27 @@ function renderClinic(){
     t.addEventListener('click',()=>{location.href=`clinic.html?id=${t.dataset.clinicId}`});
   });
   document.getElementById('clinicLogoutBtn')?.addEventListener('click',()=>sbSignOut&&sbSignOut());
+}
+
+function openClinicCaseMenu(anchor,c){
+  document.querySelectorAll('.clinic-case-popover,.kb-card-popover,.kb-col-popover').forEach(p=>p.remove());
+  const host=anchor.parentElement;
+  if(!host)return;
+  host.style.position='relative';
+  const m=document.createElement('div');
+  m.className='clinic-case-popover kb-card-popover';
+  m.innerHTML=`<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button><button class="kb-pop-item" type="button" data-act="archive">Arhivează</button><button class="kb-pop-item" type="button" data-act="reset">Clear all → Neînceput</button><button class="kb-pop-item danger" type="button" data-act="delete">Șterge lucrarea</button>`;
+  host.appendChild(m);
+  m.querySelectorAll('.kb-pop-item').forEach(it=>it.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    const act=it.dataset.act;
+    if(act==='open')location.href=`case.html?id=${c.id}`;
+    if(act==='archive')await archiveCase(c.id);
+    if(act==='reset'&&confirm(`Resetezi progresul pentru ${c.name}?`))resetCaseToNotStarted(c);
+    if(act==='delete')await deleteCase(c.id);
+    m.remove();
+  }));
+  setTimeout(()=>{const cl=ev=>{if(!m.contains(ev.target)&&ev.target!==anchor){m.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
 }
 
 async function handleClinicAction(action,caseId){
@@ -1465,8 +1514,8 @@ function renderCaseDetail(){
   const backHref=isClinicView?`clinic.html?id=${c.clinic}`:'index.html';
   const backLabel=isClinicView?'← Portal clinică':'← Pipeline';
   const actionsMenu=isClinicView
-    ?`<button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button>`
-    :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button><button type="button" data-case-action="delete" class="danger">Șterge cazul</button>`;
+    ?`<button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`
+    :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`;
   root.innerHTML=`<div class="case-shell"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.seq||c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-dim);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=c.stageStatuses?.[sId]||'neincepute';const cls=st==='finalizat'?'done':(st==='in_lucru'||st==='la_proba')?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" style="cursor:pointer" title="Click pentru a schimba starea"><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
   document.querySelector('.fisa-fmeta')?.replaceChildren(document.createTextNode('A5 · alb-negru'));
@@ -1566,6 +1615,11 @@ function renderCaseDetail(){
     if(b.dataset.caseAction==='view-pdf')previewFisaPDF(c);
     if(b.dataset.caseAction==='pdf')generateFisaPDF(c);
     if(b.dataset.caseAction==='attach')attach();
+    if(b.dataset.caseAction==='archive')archiveCase(c.id);
+    if(b.dataset.caseAction==='reset'&&confirm('Resetezi TOT cazul la „neîncepute"? Toate etapele se pierd.')){
+      resetCaseToNotStarted(c);
+      renderCaseDetail();
+    }
     if(b.dataset.caseAction==='move'){
       const stageOpts=PIPELINE_STAGES.map(s=>{const st=getStage(s);return`<option value="${s}"${c.stage===s?' selected':''}>${st?.name||s}</option>`}).join('');
       openModal(`<div class="modal-head"><div class="modal-title">Mută cazul · ${c.name}</div><button class="modal-close" type="button">×</button></div><div class="modal-body"><div class="field"><label>Etapă nouă</label><select id="moveStageSelect">${stageOpts}</select></div></div><div class="modal-foot"><button class="btn modal-close">Anulează</button><button class="btn primary" id="moveSaveBtn">Mută</button></div>`);
@@ -3140,10 +3194,10 @@ async function initApp(){
     try{
       const prof=await withTimeout(sbRequireAuth(),8000,'Autentificarea Supabase');
       if(!prof){
-        // sbRequireAuth redirects to login.html when there's no session.
+        // sbRequireAuth redirects public visitors to landing.html when there's no session.
         // If we're here with prof=null, force redirect (profile row missing or timed out).
-        if(!location.pathname.includes('login.html')&&!location.pathname.includes('setup.html'))
-          location.href='login.html';
+        if(!location.pathname.includes('login.html')&&!location.pathname.includes('landing.html')&&!location.pathname.includes('setup.html'))
+          location.href='landing.html';
         return;
       }
       // Clinic users go straight to their own portal

@@ -35,7 +35,7 @@ async function sbRequireAuth() {
   if (!SUPABASE_CONFIGURED) return null;
   const { data } = await _client().auth.getSession();
   if (!data.session) {
-    if (!location.pathname.includes('login.html')) location.href = 'login.html';
+    if (!location.pathname.includes('login.html') && !location.pathname.includes('landing.html')) location.href = 'landing.html';
     return null;
   }
   _session = data.session;
