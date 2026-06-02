@@ -2536,15 +2536,36 @@ function renderLogin(){
     root.innerHTML=`<div class="login-shell"><div class="login-box"><div class="login-brand"><div class="login-brand-name">PRIVATE CAD</div></div><div class="login-err" style="display:block">Sistemul necesită conexiune Supabase. Contactați administratorul.</div></div></div>`;
     return;
   }
-  root.innerHTML=`<div class="login-shell"><div class="login-box">
-    <div class="login-brand"><div class="login-brand-name">PRIVATE CAD</div><div class="login-brand-sub">Sistem privat · acces numai prin invitație</div></div>
-    <div class="login-prompt">Autentificare</div>
-    <div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="utilizator" autocomplete="username" spellcheck="false" autocapitalize="none" autocorrect="off"></div>
-    <div class="field" style="margin-bottom:16px"><label>Parolă</label><input id="lPass" type="password" autocomplete="current-password"></div>
-    <div id="loginErr" class="login-err" style="display:none"></div>
-    <button class="btn primary" id="lSubmit" style="width:100%;min-height:44px;font-size:15px">Intră în cont</button>
-    <div class="login-invite-note">Nu ai cont? Contactează administratorul laboratorului.</div>
-  </div></div>`;
+  root.innerHTML=`<div class="login-shell">
+      <section class="login-visual" aria-hidden="true">
+        <div class="login-visual-bg"></div>
+        <div class="login-visual-top">
+          <span class="login-mark">PC</span>
+          <span>PRIVATE CAD</span>
+        </div>
+      <div class="login-visual-copy">
+        <div class="login-kicker">Laborator stomatologic · Chișinău</div>
+        <h1>Precizie digitală pentru fiecare caz.</h1>
+        <p>Portal privat pentru clinici și echipa laboratorului.</p>
+      </div>
+      <div class="login-photo-strip">
+        <span style="background-image:url('assets/gallery/g2.jpg')"></span>
+        <span style="background-image:url('assets/gallery/g5.jpg')"></span>
+        <span style="background-image:url('assets/gallery/g7.jpg')"></span>
+      </div>
+    </section>
+    <section class="login-panel">
+      <div class="login-box">
+        <div class="login-brand"><div class="login-brand-name">PRIVATE CAD</div><div class="login-brand-sub">Sistem privat · acces numai prin invitație</div></div>
+        <div class="login-prompt">Autentificare</div>
+        <div class="field" style="margin-bottom:12px"><label>Utilizator</label><input id="lUser" placeholder="utilizator" autocomplete="username" spellcheck="false" autocapitalize="none" autocorrect="off"></div>
+        <div class="field" style="margin-bottom:16px"><label>Parolă</label><input id="lPass" type="password" autocomplete="current-password"></div>
+        <div id="loginErr" class="login-err" style="display:none"></div>
+        <button class="btn primary" id="lSubmit" style="width:100%;min-height:48px;font-size:15px">Intră în cont</button>
+        <div class="login-invite-note">Nu ai cont? Contactează administratorul laboratorului.</div>
+      </div>
+    </section>
+  </div>`;
 
   const errEl=root.querySelector('#loginErr');
   const btn=root.querySelector('#lSubmit');
