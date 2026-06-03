@@ -501,8 +501,10 @@ function publicStageColor(c){
 }
 function isCaseNotStarted(c){
   if(!c)return false;
+  if(c.notStarted)return true;
+  if(c.stage&&c.stage!=='design')return false;
   const stages=getEtapeLabStages(c.type);
-  return Boolean(c.notStarted||stages.every(s=>(c.stageStatuses?.[s]||'neincepute')==='neincepute'));
+  return stages.every(s=>(c.stageStatuses?.[s]||'neincepute')==='neincepute');
 }
 function probaLabStage(c){
   return getEtapeLabStages(c.type).find(s=>c.stageStatuses?.[s]==='la_proba')||null;
@@ -924,7 +926,9 @@ function attachNotifications(){
 function renderPipeline(){
   const root=document.getElementById('pipeline');
   if(!root)return;
-  const cols=['notstarted',...PIPELINE_STAGES];
+  const pipelineCols=typeof PIPELINE_COLUMNS!=='undefined'?PIPELINE_COLUMNS:PIPELINE_STAGES;
+  const cols=['notstarted',...pipelineCols];
+  root.style.gridTemplateColumns=`repeat(${cols.length}, minmax(150px, 1fr))`;
   root.innerHTML='';
   cols.forEach(stageId=>{
     const isNotStartedCol=stageId==='notstarted';

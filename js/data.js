@@ -25,8 +25,10 @@ function getEtapeLabStages(type) {
   return TYPES_SKIP_CERAMICA.some(t => workType.includes(normTerm(t))) ? ETAPE_LAB_NO_CERAMIC : ETAPE_LAB_FULL;
 }
 
-const PIPELINE_STAGES = ['design', 'cam', 'prelucrare', 'ceramica', 'proba', 'terminat']; // No Trimis
+const PIPELINE_STAGES = ['design', 'cam', 'prelucrare', 'ceramica', 'proba', 'terminat']; // Flux rapid/advance. No Trimis
 const PIPELINE_STAGES_NO_CERAMIC = ['design', 'cam', 'prelucrare', 'proba', 'terminat'];
+const PIPELINE_COLUMNS = ['design', 'la_print', 'print_finisat', 'cam', 'cam_finisat', 'la_bare', 'prelucrare', 'ceramica', 'proba', 'terminat'];
+const STAGE_MOVE_SEQUENCE = ['design', 'la_print', 'print_finisat', 'cam', 'cam_finisat', 'la_bare', 'prelucrare', 'ceramica', 'proba', 'proba_aprobata', 'terminat'];
 
 const STAGE_ICONS = {
   design:     '<polygon points="12,3 21,21 3,21"/>',
@@ -247,11 +249,22 @@ function applyCaseStageSelection(c, stageId, assigneeId) {
   }
   const finisatMap = { cam_finisat: 'cam', print_finisat: 'la_print' };
   const labStage = finisatMap[stageId];
-  if (labStage && stages.includes(labStage)) {
-    setLabStageStatus(c, labStage, 'finalizat', assigneeId);
-    if (!c.finalTech) c.finalTech = primaryStageAssignee(c, labStage) || c.assignee || null;
-    if (!c.completedDate && typeof fmtShortDate === 'function') c.completedDate = fmtShortDate(todayLabDate());
-    return labStage;
+  if (labStage) {
+    c.stageStatuses = c.stageStatuses || {};
+    c.assignees = c.assignees || {};
+    if (stages.includes(labStage)) {
+      stages.forEach((s, i) => {
+        const labIdx = stages.indexOf(labStage);
+        if (i <= labIdx) c.stageStatuses[s] = 'finalizat';
+        else if (!c.stageStatuses[s]) c.stageStatuses[s] = 'neincepute';
+      });
+    }
+    c.stageStatuses[labStage] = 'finalizat';
+    if (assigneeId && !stageAssignees(c, labStage).includes(assigneeId)) addStageAssignee(c, labStage, assigneeId);
+    c.stage = stageId;
+    c.notStarted = false;
+    c.assignee = primaryStageAssignee(c, labStage) || assigneeId || c.assignee || null;
+    return stageId;
   }
   if (stageId === 'terminat' || stageId === 'trimis') {
     c.stageStatuses = c.stageStatuses || {};
@@ -278,10 +291,11 @@ function stageMoveOptions(c, opts = {}) {
     seen.add(value);
     options.push({ value, label });
   };
-  getEtapeLabStages(c?.type).forEach(id => add(id, getStage(id)?.name || id));
-  add('proba', 'La probă');
-  add('proba_aprobata', 'Probă aprobată');
-  add('terminat', 'Terminat');
+  const skipCeramica = TYPES_SKIP_CERAMICA.some(t => normTerm(c?.type || '').includes(normTerm(t)));
+  STAGE_MOVE_SEQUENCE.forEach(id => {
+    if (skipCeramica && id === 'ceramica') return;
+    add(id, getStage(id)?.name || (id === 'proba_aprobata' ? 'Probă aprobată' : id));
+  });
   if (opts.includeTrimis) add('trimis', 'Trimis');
   return options;
 }

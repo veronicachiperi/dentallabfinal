@@ -43,9 +43,9 @@
       text-decoration: none;
     }
     .nav-logo img {
-      height: 32px; width: auto;
-      filter: brightness(0) invert(1);
+      height: 38px; width: auto;
       pointer-events: none; user-select: none;
+      border-radius: 3px;
     }
     .nav-brand-text {
       font-size: 14px; font-weight: 700; letter-spacing: 2px;
@@ -85,15 +85,28 @@
     .hero-bg {
       position: absolute; inset: 0;
       background:
-        radial-gradient(ellipse 80% 60% at 50% 40%, rgba(201,169,110,0.06) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 40% at 20% 80%, rgba(201,169,110,0.04) 0%, transparent 60%);
+        linear-gradient(90deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.70) 42%, rgba(0,0,0,0.58) 100%),
+        linear-gradient(0deg, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.25) 45%, rgba(8,8,8,0.70) 100%),
+        url('assets/gallery/g2.jpg?v=20260602') center/cover no-repeat;
+      transform: scale(1.01);
     }
-    .hero-logo {
-      width: 72px; height: 72px;
-      margin-bottom: 28px;
-      filter: brightness(0) invert(1);
+    .hero-lockup {
+      width: min(520px, 86vw);
+      height: auto;
+      margin-bottom: 34px;
       pointer-events: none; user-select: none;
-      opacity: 0.9;
+      opacity: 0.96;
+      border-radius: 4px;
+      box-shadow: 0 26px 80px rgba(0,0,0,0.38);
+    }
+    .hero-logo-mark {
+      display: none;
+      width: 84px;
+      height: auto;
+      margin-bottom: 24px;
+      border-radius: 4px;
+      pointer-events: none;
+      user-select: none;
     }
     .hero-label {
       font-size: 11px; letter-spacing: 4px; color: var(--gold);
@@ -269,7 +282,9 @@
     .footer-brand {
       font-size: 12px; font-weight: 700; letter-spacing: 2px;
       color: var(--muted); text-transform: uppercase;
+      display: flex; align-items: center; gap: 12px;
     }
+    .footer-brand img { height: 30px; width: auto; border-radius: 3px; opacity: .82; }
     .footer-note {
       font-size: 11px; color: var(--dim); letter-spacing: 0.3px;
     }
@@ -278,6 +293,8 @@
     @media (max-width: 900px) {
       nav { padding: 16px 20px; }
       .nav-brand-text { display: none; }
+      .nav-logo img { height: 34px; }
+      .hero-lockup { width: min(440px, 92vw); margin-bottom: 28px; }
       .section { padding: 70px 20px; }
       .stats-strip { grid-template-columns: repeat(2, 1fr); }
       .stat-cell:nth-child(2) { border-right: none; }
@@ -289,6 +306,8 @@
     @media (max-width: 480px) {
       .gallery-grid { grid-template-columns: 1fr; }
       .stats-strip { grid-template-columns: 1fr 1fr; }
+      .hero-lockup { display: none; }
+      .hero-logo-mark { display: block; }
     }
   </style>
 </head>
@@ -297,7 +316,7 @@
 <!-- NAV -->
 <nav>
   <a class="nav-logo" href="landing.html">
-    <img src="assets/private-cad-logo.png" alt="Private CAD">
+    <img src="assets/brand/private-cad-tooth.png?v=20260602" alt="Private CAD">
     <span class="nav-brand-text">Private CAD</span>
   </a>
   <div class="nav-cta">
@@ -309,7 +328,8 @@
 <!-- HERO -->
 <section class="hero">
   <div class="hero-bg"></div>
-  <img src="assets/private-cad-logo.png" alt="Private CAD" class="hero-logo">
+  <img src="assets/brand/private-cad-lockup.png?v=20260602" alt="Private CAD" class="hero-lockup">
+  <img src="assets/brand/private-cad-tooth.png?v=20260602" alt="Private CAD" class="hero-logo-mark">
   <div class="hero-label">Laborator Stomatologic · Chișinău</div>
   <h1 class="hero-title">
     Precizie la nivel de <span>micron</span>.<br>
@@ -438,7 +458,7 @@
 
 <!-- FOOTER -->
 <footer>
-  <div class="footer-brand">Private CAD · Laborator Stomatologic</div>
+  <div class="footer-brand"><img src="assets/brand/private-cad-tooth.png?v=20260602" alt="">Private CAD · Laborator Stomatologic</div>
   <div class="footer-note">© 2026 Private CAD. Toate drepturile rezervate.</div>
 </footer>
 
