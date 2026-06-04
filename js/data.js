@@ -17,11 +17,18 @@ const STAGES = [
 // Ordinea fluxului: Design → CAM → Prelucrare → Ceramică → Terminat.
 const ETAPE_LAB_FULL = ['design', 'cam', 'prelucrare', 'ceramica'];
 const ETAPE_LAB_NO_CERAMIC = ['design', 'cam', 'prelucrare'];
+const ETAPE_LAB_DESIGN_ONLY = ['design'];
+const TYPES_DESIGN_ONLY = ['MOCKUP'];
 // Tipuri de lucrări care NU includ Ceramică
 const TYPES_SKIP_CERAMICA = ['PROVIZORIE', 'STANDART', 'PMMA DINTI', 'PMMA IMPL', 'PMMA DINTI/IMPL'];
 
+function isDesignOnlyType(type) {
+  const workType = normTerm(type);
+  return TYPES_DESIGN_ONLY.some(t => workType.includes(normTerm(t)));
+}
 function getEtapeLabStages(type) {
   const workType = normTerm(type);
+  if (isDesignOnlyType(type)) return ETAPE_LAB_DESIGN_ONLY;
   return TYPES_SKIP_CERAMICA.some(t => workType.includes(normTerm(t))) ? ETAPE_LAB_NO_CERAMIC : ETAPE_LAB_FULL;
 }
 
@@ -192,7 +199,9 @@ function casesForClinic(id) { return CASES.filter(c => c.clinic === id); }
 function casesInStage(id)   { return CASES.filter(c => c.stage === id); }
 function nextStage(current, type) {
   const workType = normTerm(type);
-  const flow = workType && TYPES_SKIP_CERAMICA.some(t => workType.includes(normTerm(t)))
+  const flow = isDesignOnlyType(type)
+    ? (current === 'proba' ? ['proba', 'terminat', 'trimis'] : ['design', 'terminat', 'trimis'])
+    : workType && TYPES_SKIP_CERAMICA.some(t => workType.includes(normTerm(t)))
     ? PIPELINE_STAGES_NO_CERAMIC.concat('trimis')
     : PIPELINE_STAGES.concat('trimis');
   const i = flow.indexOf(current);
@@ -292,7 +301,9 @@ function stageMoveOptions(c, opts = {}) {
     options.push({ value, label });
   };
   const skipCeramica = TYPES_SKIP_CERAMICA.some(t => normTerm(c?.type || '').includes(normTerm(t)));
+  const designOnly = isDesignOnlyType(c?.type);
   STAGE_MOVE_SEQUENCE.forEach(id => {
+    if (designOnly && !['design', 'proba', 'proba_aprobata', 'terminat'].includes(id)) return;
     if (skipCeramica && id === 'ceramica') return;
     add(id, getStage(id)?.name || (id === 'proba_aprobata' ? 'Probă aprobată' : id));
   });

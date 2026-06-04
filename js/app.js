@@ -1266,7 +1266,7 @@ function renderClinic(){
   </div>
   </div>`;
 
-  document.getElementById('newCaseBtnClinic')?.addEventListener('click',()=>openNewCaseModal(clinicId));
+  document.getElementById('newCaseBtnClinic')?.addEventListener('click',()=>openNewCaseModal(isClinicUser?clinicId:null));
   document.querySelectorAll('.pc-row-grid[data-case-id]').forEach(r=>{
     r.addEventListener('click',e=>{
       if(e.target.tagName==='BUTTON')return;
@@ -2218,9 +2218,10 @@ function escClose(e){if(e.key==='Escape')closeModal()}
 function openNewCaseModal(defClinic){
   const user=getCurrentUser();
   const lockedClinicId=(user&&user.role==='clinic'&&user.clinic)?user.clinic:null;
-  const selectedClinicId=lockedClinicId||defClinic||CLINICS[0]?.id||'';
+  const selectedClinicId=lockedClinicId||defClinic||'UNKNOWN';
   const visibleClinics=lockedClinicId?(CLINICS.filter(c=>c.id===lockedClinicId).length?CLINICS.filter(c=>c.id===lockedClinicId):[{id:lockedClinicId,name:user.name||lockedClinicId}]):CLINICS;
-  const cOpts=visibleClinics.map(c=>`<option value="${escAttr(c.id)}" ${c.id===selectedClinicId?'selected':''}>${escHTML(c.name||c.id||'Clinică')}</option>`).join('');
+  const unknownClinicOption=lockedClinicId?'':`<option value="UNKNOWN" ${selectedClinicId==='UNKNOWN'?'selected':''}>UNKNOWN</option>`;
+  const cOpts=unknownClinicOption+visibleClinics.map(c=>`<option value="${escAttr(c.id)}" ${c.id===selectedClinicId?'selected':''}>${escHTML(c.name||c.id||'Clinică')}</option>`).join('');
   const tOpts=allWorkTypes().map(t=>`<option value="${escAttr(t)}">${escHTML(t)}</option>`).join('');
   const colOpts=COLORS_VITA.map(c=>`<option>${c}</option>`).join('');
   const today=new Date();const pD=new Date(today);pD.setDate(today.getDate()+5);const fD=new Date(today);fD.setDate(today.getDate()+7);
