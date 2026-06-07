@@ -83,6 +83,7 @@ async function deleteAttachment(c,index){
   files.splice(index,1);
   attachments[c.id]=files;
   saveAttachments(attachments);
+  auditCaseAction(c,'delete_file',{file:f.name||'—'});
   renderCaseDetail();
 }
 function fileToDataURL(file){
@@ -137,6 +138,7 @@ async function storeCaseFiles(caseId,files){
   }catch{
     await persistCaseFiles(caseId,arr);
   }
+  auditCaseAction(c,'add_file',{count:arr.length,files:arr.map(f=>f.name).join(', ')});
   return arr.length;
 }
 function chooseFilesForCase(caseId,onDone){
@@ -221,6 +223,7 @@ async function deleteCase(id){
 async function archiveCase(id){
   const c=getCase(id);if(!c)return;
   if(!confirm(`Arhivezi cazul "${c.name}"? Lucrarea va trece în arhivă ca expediată.`))return;
+  const before=caseAuditSnapshot(c);
   c.stage='trimis';
   c.notStarted=false;
   c.sentDate=fmtShortDate(todayLabDate());
@@ -232,6 +235,7 @@ async function archiveCase(id){
   saveOverrides(overrides);
   try{await syncCaseNow(c)}
   catch(e){alert('Arhivarea a fost salvată local, dar nu s-a transmis către server: '+e.message);return}
+  auditCaseChangesFrom(c,before,'archive_case');
   reRenderAll();
   if(typeof renderArchive==='function')renderArchive();
   if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();
@@ -240,6 +244,7 @@ async function archiveCase(id){
 // Move case to a different stage
 async function moveCaseToStage(id,stageId){
   const c=getCase(id);if(!c)return;
+  const before=caseAuditSnapshot(c);
   if(typeof applyCaseStageSelection==='function')applyCaseStageSelection(c,stageId);
   else {c.stage=stageId;c.notStarted=false;}
   overrides.stages=overrides.stages||{};overrides.stages[c.id]=c.stage;
@@ -249,6 +254,7 @@ async function moveCaseToStage(id,stageId){
     // Full save so stage + substates + assignees all reach the server.
     try{await sbSaveCase(c)}catch(e){console.warn('[sb sync]',e.message)}
   }
+  auditCaseChangesFrom(c,before,'change_stage');
   reRenderAll();
 }
 
@@ -288,6 +294,108 @@ function _syncCase(c){
 }
 async function syncCaseNow(c){
   if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED)await sbSaveCase(c);
+}
+
+const AUDIT_FIELD_LABELS={
+  name:'Pacient',
+  clinic:'Clinică',
+  doctor:'Medic',
+  type:'Tip lucrare',
+  color:'Culoare',
+  implantType:'Tip implant',
+  amprentaType:'Tip amprentă',
+  intrata:'Data intrării',
+  probaDate:'Data probei',
+  finala:'Data finală',
+  noProba:'Fără probă',
+  priority:'Prioritate',
+  stage:'Etapă',
+  stageStatuses:'Status etape',
+  assignee:'Tehnician',
+  teeth:'Schema dentară',
+  notesCount:'Notițe',
+  sentDate:'Data expedierii',
+  completedDate:'Data terminării'
+};
+const AUDIT_STATUS_LABELS={
+  neincepute:'Neînceput',
+  in_lucru:'În lucru',
+  la_proba:'La probă',
+  proba_aprobata:'Probă aprobată',
+  finalizat:'Finalizat',
+  asteptare_bari:'Așteaptă bare',
+  bari_finalizate:'Bare finalizate',
+  asteptare_raspuns:'Așteaptă răspuns',
+  astept_aprobare:'Așteaptă aprobare',
+  trimis:'Expediat'
+};
+function auditDisplayValue(field,value){
+  if(value===undefined||value===null||value==='')return'—';
+  if(field==='clinic')return getClinic(value)?.name||String(value);
+  if(field==='stage')return getStage(value)?.name||AUDIT_STATUS_LABELS[value]||String(value);
+  if(field==='assignee')return getEmployee(value)?.name||String(value);
+  if(field==='stageStatuses')return String(value)||'—';
+  if(field==='teeth')return Array.isArray(value)?(value.length?`${value.length} dinți`:'—'):String(value);
+  if(field==='notesCount')return `${Number(value)||0}`;
+  if(value===true)return'Da';
+  if(value===false)return'Nu';
+  if(Array.isArray(value))return value.length?value.join(', '):'—';
+  if(typeof value==='object')return JSON.stringify(value);
+  return String(value);
+}
+function auditStageStatusSummary(c){
+  const stages=typeof getEtapeLabStages==='function'?getEtapeLabStages(c.type):(typeof PIPELINE_STAGES!=='undefined'?PIPELINE_STAGES:[]);
+  if(!stages.length)return'—';
+  return stages.map(s=>{
+    const raw=c.stageStatuses?.[s]||(c.notStarted?'neincepute':(c.stage===s?'in_lucru':'neincepute'));
+    return `${getStage(s)?.name||s}: ${AUDIT_STATUS_LABELS[raw]||raw}`;
+  }).join('; ');
+}
+function caseAuditSnapshot(c){
+  if(!c)return{};
+  return {
+    name:c.name||'',
+    clinic:c.clinic||'UNKNOWN',
+    doctor:c.doctor||'',
+    type:c.type||'',
+    color:c.color||'',
+    implantType:c.implantType||'',
+    amprentaType:c.amprentaType||'',
+    intrata:c.intrata||'',
+    probaDate:c.probaDate||'',
+    finala:c.finala||'',
+    noProba:!!c.noProba,
+    priority:c.priority||'',
+    stage:c.notStarted?'neincepute':(c.stage||''),
+    stageStatuses:auditStageStatusSummary(c),
+    assignee:c.assignee||'',
+    teeth:Array.isArray(c.teeth)?c.teeth.map(t=>`${t.n}:${t.type}`).sort():[],
+    notesCount:_parseNotes(c.notes).length,
+    sentDate:c.sentDate||'',
+    completedDate:c.completedDate||''
+  };
+}
+function auditChange(field,from,to,label){
+  return {field,label:label||AUDIT_FIELD_LABELS[field]||field,from:auditDisplayValue(field,from),to:auditDisplayValue(field,to)};
+}
+function caseAuditChanges(before,after){
+  const keys=[...new Set([...Object.keys(before||{}),...Object.keys(after||{})])];
+  return keys.filter(k=>JSON.stringify(before?.[k])!==JSON.stringify(after?.[k])).map(k=>auditChange(k,before?.[k],after?.[k]));
+}
+function auditCaseAction(c,action,details={}){
+  if(!c?.id)return;
+  if(typeof _sbLog!=='function'||typeof SUPABASE_CONFIGURED==='undefined'||!SUPABASE_CONFIGURED)return;
+  const base={
+    caseNo:c?.seq?`#${c.seq}`:(c?.id?`#${c.id}`:'—'),
+    patient:c?.name||'—',
+    clinic:auditDisplayValue('clinic',c?.clinic||'UNKNOWN'),
+    ...details
+  };
+  _sbLog(action,'case',String(c?.id||''),base).catch(e=>console.warn('[activity log]',e.message));
+}
+function auditCaseChangesFrom(c,before,action,details={}){
+  const changes=caseAuditChanges(before,caseAuditSnapshot(c));
+  if(changes.length)auditCaseAction(c,action,{...details,changes});
 }
 
 // === AVATAR COLOR PICKER ===
@@ -1027,6 +1135,7 @@ function renderKanbanCard(c){
 
 function resetCaseToNotStarted(c){
   if(!c)return;
+  const before=caseAuditSnapshot(c);
   c.stage='design';
   c.notStarted=true;
   c.assignee=null;
@@ -1040,6 +1149,7 @@ function resetCaseToNotStarted(c){
   overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,assignee:c.assignee,assignees:c.assignees,stageStatuses:c.stageStatuses,deadlineUrgent:c.deadlineUrgent,priority:c.priority};
   saveOverrides(overrides);
   _syncCase(c);
+  auditCaseChangesFrom(c,before,'reset_case');
   renderPipeline();
   updateMainSummary();
   if(typeof renderTable==='function')renderTable();
@@ -1050,6 +1160,7 @@ function resetCaseToNotStarted(c){
 // Cazul rămâne în lucru; permite reasignarea facilă a unui alt tehnician.
 function resetStage(c, stageId){
   if(!c || !stageId) return;
+  const before=caseAuditSnapshot(c);
   c.stageStatuses = c.stageStatuses || {};
   c.assignees = c.assignees || {};
   c.stageStatuses[stageId] = 'neincepute';
@@ -1085,6 +1196,7 @@ function resetStage(c, stageId){
   overrides.edits[c.id] = {...overrides.edits[c.id], stage:c.stage, notStarted:c.notStarted, assignee:c.assignee, assignees:c.assignees, stageStatuses:c.stageStatuses, deadlineUrgent:c.deadlineUrgent, priority:c.priority};
   saveOverrides(overrides);
   if(typeof _syncCase === 'function') _syncCase(c);
+  auditCaseChangesFrom(c,before,'reset_stage',{stage:getStage(stageId)?.name||stageId});
   if(typeof renderTable === 'function') renderTable();
   if(typeof renderPipeline === 'function') renderPipeline();
   if(typeof renderClinic === 'function') renderClinic();
@@ -1104,6 +1216,7 @@ function openCollaboratorEditor(c,stageId,onDone){
     </div>
     <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="saveCollaboratorsBtn" type="button">Salvează colaboratori</button></div>`);
   document.getElementById('saveCollaboratorsBtn')?.addEventListener('click',()=>{
+    const before=caseAuditSnapshot(c);
     const ids=Array.from(document.querySelectorAll('.collab-option input:checked')).map(i=>i.value);
     setStageAssignees(c,stageId,ids);
     if(ids.length&&(!c.stageStatuses?.[stageId]||c.stageStatuses[stageId]==='neincepute')){
@@ -1117,6 +1230,7 @@ function openCollaboratorEditor(c,stageId,onDone){
     overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee};
     saveOverrides(overrides);
     _syncCase(c);
+    auditCaseChangesFrom(c,before,'assign_collaborators',{stage:stage?.name||stageId,collaborators:ids.map(id=>getEmployee(id)?.name||id).join(', ')||'—'});
     closeModal();
     if(onDone)onDone();
     else reRenderAll();
@@ -1315,6 +1429,7 @@ function openClinicCaseMenu(anchor,c){
 async function handleClinicAction(action,caseId){
   const c=getCase(caseId);if(!c)return;
   if(action==='approve'){
+    const before=caseAuditSnapshot(c);
     c.stageStatuses=c.stageStatuses||{};
     c.assignees=c.assignees||{};
     const labStage=probaLabStage(c)||resolveLabStageForCase(c);
@@ -1328,14 +1443,17 @@ async function handleClinicAction(action,caseId){
     saveOverrides(overrides);
     try{await syncCaseNow(c)}
     catch(e){alert('Proba a fost aprobată local, dar nu s-a transmis către server: '+e.message);return}
+    auditCaseChangesFrom(c,before,'approve_probe');
     alert(labStage?'Probă aprobată — designerul a fost notificat':'Probă aprobată — lucrarea a trecut la finalizare');renderClinic();updateMainSummary();
   } else if(action==='pickup'){
+    const before=caseAuditSnapshot(c);
     c.stage='trimis';c.sentDate=fmtShortDate(todayLabDate());
     overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';
     overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],sentDate:c.sentDate};
     saveOverrides(overrides);
     try{await syncCaseNow(c)}
     catch(e){alert('Ridicarea a fost marcată local, dar nu s-a transmis către server: '+e.message);return}
+    auditCaseChangesFrom(c,before,'confirm_pickup');
     alert('Expediere confirmată — lucrarea a fost arhivată');renderClinic();
   } else if(action==='note'){
     openModal(`<div class="modal-head"><div class="modal-title">Notă · ${escHTML(c.name)}</div><button class="modal-close" type="button">×</button></div>
@@ -1353,6 +1471,7 @@ async function handleClinicAction(action,caseId){
       c.notes=JSON.stringify(notes);
       overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};
       saveOverrides(overrides);_syncCase(c);closeModal();
+      auditCaseAction(c,'add_note',{note:txt.slice(0,140)});
     });
   } else if(action==='edit'){
     openClinicCaseEdit(caseId);
@@ -1370,6 +1489,10 @@ function openClinicCaseEdit(caseId){
   const selectedStageValue=typeof selectedStageMoveValue==='function'?selectedStageMoveValue(c):c.stage;
   const stageOptions=(typeof stageMoveOptions==='function'?stageMoveOptions(c,{includeTrimis:true}):STAGES.map(s=>({value:s.id,label:s.name}))).map(s=>`<option value="${s.value}" ${s.value===selectedStageValue?'selected':''}>${s.label}</option>`).join('');
   const stageField=canEditWorkflow?`<div class="field"><label>Etapă</label><select id="ceStage">${stageOptions}</select></div>`:'';
+  const clinicOptions=`<option value="UNKNOWN" ${c.clinic==='UNKNOWN'?'selected':''}>UNKNOWN</option>`+CLINICS.map(cl=>`<option value="${escAttr(cl.id)}" ${cl.id===c.clinic?'selected':''}>${escHTML(cl.name||cl.id||'Clinică')}</option>`).join('');
+  const clinicField=canEditWorkflow
+    ? `<select id="ceClinic">${clinicOptions}</select>`
+    : `<input value="${escAttr(clinic.name)}" disabled>`;
   const typeOptions=allWorkTypes().map(t=>`<option value="${escAttr(t)}" ${t===c.type?'selected':''}>${escHTML(t)}</option>`).join('');
   const colorOptions=COLORS_VITA.map(x=>`<option ${x===c.color?'selected':''}>${x}</option>`).join('');
   const amprentaOptions=['Silicon','Polieter','Alginat','Digital','STL'].map(x=>`<option ${x===c.amprentaType?'selected':''}>${x}</option>`).join('');
@@ -1381,7 +1504,7 @@ function openClinicCaseEdit(caseId){
   const notesText=_parseNotes(c.notes).map(n=>n.text).join('\n');
   openModal(`<div class="modal-head"><div><div class="modal-kicker">${editorKicker}</div><div class="modal-title">Editează cazul · #${c.seq||c.id}</div></div><button class="modal-close" type="button">×</button></div>
     <div class="modal-body modal-body-compact">
-      <div class="field-row ${canEditWorkflow?'three':''}"><div class="field"><label>Pacient</label><input id="ceName" value="${safeVal(c.name)}" autofocus></div><div class="field"><label>Clinică</label><input value="${escAttr(clinic.name)}" disabled></div>${stageField}</div>
+      <div class="field-row ${canEditWorkflow?'three':''}"><div class="field"><label>Pacient</label><input id="ceName" value="${safeVal(c.name)}" autofocus></div><div class="field"><label>Clinică</label>${clinicField}</div>${stageField}</div>
       <div class="field-row"><div class="field"><label>Medic</label><input id="ceDoctor" value="${safeVal(c.doctor)}"></div><div class="field"><label>Tip lucrare</label><input id="ceType" list="ceTypeList" value="${escAttr(c.type||'')}" placeholder="ex. ZR FULL — sau scrie alt tip" autocomplete="off"><datalist id="ceTypeList">${typeOptions}</datalist></div></div>
       <div class="field-row three"><div class="field"><label>Culoare</label><select id="ceColor">${colorOptions}</select></div><div class="field"><label>Tip implant</label><input id="ceImplant" value="${safeVal(c.implantType)}"></div><div class="field"><label>Tip amprentă</label><select id="ceAmprenta">${amprentaOptions}</select></div></div>
       <div class="field-row three"><div class="field"><label>Intrată</label><div class="date-edit-btn${c.intrata?'':' is-empty'}" id="ceIntrata" data-val="${escAttr((c.intrata||'').split(' ')[0])}"><span>${(c.intrata||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceIntrataTime" value="${escAttr(extractTime(c.intrata||''))}" placeholder="--:--"></div><div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:4px">Probă<label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:11px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ceNoProba"${c.noProba?' checked':''}> Fără probă</label></label><div class="date-edit-btn${c.noProba?' disabled':(c.probaDate?'':' is-empty')}" id="ceProba" data-val="${escAttr(c.noProba?'':(c.probaDate||'').split(' ')[0])}"><span>${c.noProba?'Fără probă':((c.probaDate||'').split(' ')[0]||'Alege data')}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceProbaTime" value="${escAttr(extractTime(c.probaDate||''))}" placeholder="--:--"></div><div class="field"><label>Finală</label><div class="date-edit-btn${c.finala?'':' is-empty'}" id="ceFinala" data-val="${escAttr((c.finala||'').split(' ')[0])}"><span>${(c.finala||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceFinalaTime" value="${escAttr(extractTime(c.finala||''))}" placeholder="--:--"></div></div>
@@ -1462,10 +1585,12 @@ function openClinicCaseEdit(caseId){
   });
   updateSum();updateAdvisor();
   document.getElementById('ceSave')?.addEventListener('click',()=>{
+    const before=caseAuditSnapshot(c);
     c.name=document.getElementById('ceName').value.trim()||c.name;
     const parts=c.name.split(/\s+/);c.lastName=parts[0]||c.name;c.firstName=parts.slice(1).join(' ');
     c.doctor=document.getElementById('ceDoctor').value.trim();
     c.type=document.getElementById('ceType').value.trim()||c.type;rememberWorkType(c.type);
+    if(canEditWorkflow&&document.getElementById('ceClinic'))c.clinic=document.getElementById('ceClinic').value||'UNKNOWN';
     if(canEditWorkflow&&document.getElementById('ceStage')){
       const nextStageValue=document.getElementById('ceStage').value;
       if(typeof applyCaseStageSelection==='function')applyCaseStageSelection(c,nextStageValue);
@@ -1483,8 +1608,9 @@ function openClinicCaseEdit(caseId){
     c.deadlineUrgent=labDeadlineStatus(c).urgent;
     c.priority=computePriority(c);
     overrides.edits=overrides.edits||{};
-    overrides.edits[c.id]={...overrides.edits[c.id],name:c.name,lastName:c.lastName,firstName:c.firstName,stage:c.stage,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,doctor:c.doctor,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,noProba:c.noProba,finala:c.finala,teeth:c.teeth,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority,finalTech:c.finalTech,completedDate:c.completedDate,sentDate:c.sentDate};
+    overrides.edits[c.id]={...overrides.edits[c.id],name:c.name,lastName:c.lastName,firstName:c.firstName,clinic:c.clinic,stage:c.stage,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,doctor:c.doctor,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,noProba:c.noProba,finala:c.finala,teeth:c.teeth,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority,finalTech:c.finalTech,completedDate:c.completedDate,sentDate:c.sentDate};
     saveOverrides(overrides);_syncCase(c);closeModal();renderClinic();updateMainSummary();
+    auditCaseChangesFrom(c,before,'edit_case');
     if(typeof renderTable==='function')renderTable();renderPipeline();
   });
 }
@@ -1558,6 +1684,7 @@ function renderCaseDetail(){
         if(!assignedStage.includes(emp.id))items.push({value:'tech:'+emp.id,label:'Adaugă colaborator → '+emp.name});
       });
       openInlinePopover(item,items,sel=>{
+        const before=caseAuditSnapshot(c);
         c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
         if(sel.value==='claim'){activateLabStage(c,sId,user.id);}
         else if(sel.value==='collaborators'){
@@ -1593,13 +1720,14 @@ function renderCaseDetail(){
         }
         overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
         Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,assignee:c.assignee,notStarted:c.notStarted,finalTech:c.finalTech,completedDate:c.completedDate});
-        saveOverrides(overrides);_syncCase(c);renderCaseDetail();
+        saveOverrides(overrides);_syncCase(c);auditCaseChangesFrom(c,before,'change_stage_status',{stage:getStage(sId)?.name||sId,selection:sel.value});renderCaseDetail();
       },'Etapă: '+(getStage(sId)?.name||sId),{positionAnchor:item});
     });
   });
   const advance=()=>{
     const next=nextStage(c.stage,c.type);if(next===c.stage){alert('Etapă finală deja');return}
-    c.stage=next;overrides.stages=overrides.stages||{};overrides.stages[c.id]=next;saveOverrides(overrides);_syncCase(c);renderCaseDetail();
+    const before=caseAuditSnapshot(c);
+    c.stage=next;overrides.stages=overrides.stages||{};overrides.stages[c.id]=next;saveOverrides(overrides);_syncCase(c);auditCaseChangesFrom(c,before,'change_stage');renderCaseDetail();
   };
   const input=document.getElementById('caseFileInput');
   const attach=()=>input?.click();
@@ -1646,6 +1774,7 @@ function renderCaseDetail(){
     c.notes=JSON.stringify(notes);
     overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};
     saveOverrides(overrides);_syncCase(c);
+    auditCaseAction(c,'add_note',{note:txt.slice(0,140)});
     ta.value='';renderNoteList();
   });
 }
@@ -2629,18 +2758,134 @@ function _redirectAfterLogin(prof){
 async function renderActivityLog(){
   const root=document.getElementById('activityShell');if(!root)return;
   const user=getCurrentUser();if(user?.role!=='admin'&&user?.role!=='ad'){return}
+  root.style.maxWidth='1180px';
   root.innerHTML=`<h1 style="font-size:20px;font-weight:500;margin:0 0 4px">Istoricul activității</h1><div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Toate acțiunile înregistrate în sistem</div><div id="actLog" style="font-size:13px">Se încarcă...</div>`;
   const logs=await sbLoadActivityLog(300);
   if(!logs.length){document.getElementById('actLog').innerHTML='<div style="color:var(--text-dim);font-style:italic;padding:16px 0">Nicio activitate înregistrată.</div>';return}
-  const actionLabel={add_case:'Adăugat caz',update_case:'Actualizat caz',delete_case:'Șters caz',add_file:'Fișier adăugat',login:'Autentificare'};
+  const actionLabel={
+    add_case:'Adăugat caz',
+    update_case:'Actualizat caz',
+    edit_case:'Editat caz',
+    change_type:'Schimbat tip lucrare',
+    change_clinic:'Schimbat clinică',
+    change_priority:'Schimbat prioritate',
+    change_date:'Schimbat dată',
+    change_stage:'Schimbat etapă',
+    change_stage_status:'Schimbat status etapă',
+    reset_case:'Resetat caz',
+    reset_stage:'Resetat etapă',
+    assign_collaborators:'Schimbat colaboratori',
+    archive_case:'Arhivat caz',
+    confirm_pickup:'Confirmat expediere',
+    approve_probe:'Probă aprobată',
+    delete_case:'Șters caz',
+    add_file:'Fișier adăugat',
+    delete_file:'Fișier șters',
+    add_note:'Notă adăugată',
+    save_clinic:'Salvat clinică',
+    delete_clinic:'Șters clinică',
+    save_employee:'Salvat angajat',
+    delete_employee:'Șters angajat',
+    create_user:'Creat utilizator',
+    login:'Autentificare'
+  };
+  const skipDetailKeys=new Set(['caseNo','patient','clinic','changes']);
+  const detailValue=v=>{
+    if(v===undefined||v===null||v==='')return'—';
+    if(Array.isArray(v))return v.map(detailValue).join(', ');
+    if(typeof v==='object')return JSON.stringify(v);
+    return String(v);
+  };
+  const formatDetails=details=>{
+    if(!details)return'';
+    const pieces=[];
+    if(details.caseNo)pieces.push(escHTML(details.caseNo));
+    if(details.patient)pieces.push(`Pacient: ${escHTML(detailValue(details.patient))}`);
+    if(details.clinic)pieces.push(`Clinică: ${escHTML(detailValue(details.clinic))}`);
+    if(Array.isArray(details.changes)&&details.changes.length){
+      pieces.push(details.changes.map(ch=>`${escHTML(ch.label||ch.field||'Câmp')}: ${escHTML(detailValue(ch.from))} → ${escHTML(detailValue(ch.to))}`).join(' · '));
+    }
+    Object.entries(details).forEach(([k,v])=>{
+      if(skipDetailKeys.has(k))return;
+      const label=AUDIT_FIELD_LABELS[k]||k;
+      pieces.push(`${escHTML(label)}: ${escHTML(detailValue(v))}`);
+    });
+    return pieces.join(' · ');
+  };
+  const userStats=new Map();
+  logs.forEach(l=>{
+    const username=l.username||'?';
+    if(!userStats.has(username)){
+      userStats.set(username,{username,roles:new Set(),count:0,actions:new Map(),last:null});
+    }
+    const s=userStats.get(username);
+    if(l.role)s.roles.add(l.role);
+    s.count++;
+    s.actions.set(l.action,(s.actions.get(l.action)||0)+1);
+    const created=new Date(l.created_at);
+    if(!s.last||created>s.last)s.last=created;
+  });
+  const users=[...userStats.values()].sort((a,b)=>b.count-a.count);
+  const actions=[...new Set(logs.map(l=>l.action).filter(Boolean))].sort((a,b)=>(actionLabel[a]||a).localeCompare(actionLabel[b]||b,'ro'));
+  const userOptions=users.map(u=>`<option value="${escAttr(u.username)}">${escHTML(u.username)} (${u.count})</option>`).join('');
+  const actionOptions=actions.map(a=>`<option value="${escAttr(a)}">${escHTML(actionLabel[a]||a)}</option>`).join('');
+  const userCards=users.map(u=>{
+    const topActions=[...u.actions.entries()].sort((a,b)=>b[1]-a[1]).slice(0,3).map(([a,n])=>`${escHTML(actionLabel[a]||a)}: ${n}`).join(' · ');
+    const roles=[...u.roles].join(', ')||'—';
+    const last=u.last?u.last.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'})+' '+u.last.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}):'—';
+    const initials=u.username.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase()||'?';
+    return `<button class="act-user-card" type="button" data-act-user-card="${escAttr(u.username)}">
+      <span class="act-user-avatar">${escHTML(initials)}</span>
+      <span class="act-user-main"><b>${escHTML(u.username)}</b><em>${escHTML(roles)} · ultima: ${escHTML(last)}</em><small>${topActions||'Fără detalii'}</small></span>
+      <span class="act-user-count">${u.count}</span>
+    </button>`;
+  }).join('');
   const rows=logs.map(l=>{
     const dt=new Date(l.created_at);
     const date=dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'});
     const time=dt.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});
-    const det=l.details?Object.entries(l.details).map(([k,v])=>`${k}: ${v}`).join(' · '):'';
-    return`<div class="act-row"><span class="act-time">${date} ${time}</span><span class="act-user">${l.username||'?'}</span><span class="act-role act-${l.role}">${l.role||''}</span><span class="act-action">${actionLabel[l.action]||l.action}</span><span class="act-detail">${det}</span></div>`;
+    const det=formatDetails(l.details);
+    return`<div class="act-row" data-act-user="${escAttr(l.username||'?')}" data-act-action="${escAttr(l.action||'')}"><span class="act-time">${date} ${time}</span><span class="act-user">${escHTML(l.username||'?')}</span><span class="act-role act-${escAttr(l.role||'')}">${escHTML(l.role||'')}</span><span class="act-action">${escHTML(actionLabel[l.action]||l.action)}</span><span class="act-detail">${det}</span></div>`;
   }).join('');
-  document.getElementById('actLog').innerHTML=`<div class="act-table">${rows}</div>`;
+  document.getElementById('actLog').innerHTML=`
+    <div class="act-panel">
+      <div class="act-filters">
+        <label>Utilizator<select id="actUserFilter"><option value="all">Toți utilizatorii</option>${userOptions}</select></label>
+        <label>Operațiune<select id="actActionFilter"><option value="all">Toate operațiunile</option>${actionOptions}</select></label>
+        <button class="btn" type="button" id="actResetFilters">Reset</button>
+        <span class="act-count" id="actVisibleCount">${logs.length} din ${logs.length}</span>
+      </div>
+      <div class="act-user-grid">${userCards}</div>
+      <div class="act-table">${rows}</div>
+    </div>`;
+  const applyActivityFilters=()=>{
+    const u=document.getElementById('actUserFilter')?.value||'all';
+    const a=document.getElementById('actActionFilter')?.value||'all';
+    let visible=0;
+    document.querySelectorAll('.act-row').forEach(row=>{
+      const show=(u==='all'||row.dataset.actUser===u)&&(a==='all'||row.dataset.actAction===a);
+      row.style.display=show?'':'none';
+      if(show)visible++;
+    });
+    document.querySelectorAll('.act-user-card').forEach(card=>{
+      card.classList.toggle('on',u!=='all'&&card.dataset.actUserCard===u);
+    });
+    const count=document.getElementById('actVisibleCount');
+    if(count)count.textContent=`${visible} din ${logs.length}`;
+  };
+  document.getElementById('actUserFilter')?.addEventListener('change',applyActivityFilters);
+  document.getElementById('actActionFilter')?.addEventListener('change',applyActivityFilters);
+  document.getElementById('actResetFilters')?.addEventListener('click',()=>{
+    const uf=document.getElementById('actUserFilter'),af=document.getElementById('actActionFilter');
+    if(uf)uf.value='all';
+    if(af)af.value='all';
+    applyActivityFilters();
+  });
+  document.querySelectorAll('.act-user-card').forEach(card=>card.addEventListener('click',()=>{
+    const uf=document.getElementById('actUserFilter');
+    if(uf)uf.value=card.dataset.actUserCard||'all';
+    applyActivityFilters();
+  }));
 }
 
 // === SEARCH + FILTERS ===
@@ -2754,16 +2999,19 @@ function openDatePopover(anchor, c, field, onSaved){
   document.body.appendChild(pop);
 
   function saveNoProba(){
+    const before=caseAuditSnapshot(c);
     c.noProba=true;c.probaDate='';
     c.deadlineUrgent=labDeadlineStatus(c).urgent;c.priority=computePriority(c);
     overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
     overrides.edits[c.id].noProba=true;overrides.edits[c.id].probaDate='';
     overrides.edits[c.id].deadlineUrgent=c.deadlineUrgent;overrides.edits[c.id].priority=c.priority;
     saveOverrides(overrides);_syncCase(c);pop.remove();document.removeEventListener('click',outsideClose);
+    auditCaseChangesFrom(c,before,'change_date');
     if(typeof onSaved==='function')onSaved(c,field,'');
     else{if(typeof renderTable==='function')renderTable();if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();if(typeof renderClinic==='function'&&document.getElementById('clinicShell'))renderClinic();}
   }
   function saveDate(dateObj){
+    const before=caseAuditSnapshot(c);
     const t=(pop.querySelector('.date-cal-time-input')?.value||'').trim();
     const value=fmtShortDate(dateObj)+(t?' '+t:'');
     c[field]=value;
@@ -2779,6 +3027,7 @@ function openDatePopover(anchor, c, field, onSaved){
     _syncCase(c);
     pop.remove();
     document.removeEventListener('click',outsideClose);
+    auditCaseChangesFrom(c,before,'change_date');
     if(typeof onSaved==='function')onSaved(c,field,value);
     else{
       if(typeof renderTable==='function')renderTable();
@@ -2788,6 +3037,7 @@ function openDatePopover(anchor, c, field, onSaved){
     }
   }
   function clearDate(){
+    const before=caseAuditSnapshot(c);
     c[field]='';
     overrides.edits=overrides.edits||{};
     overrides.edits[c.id]=overrides.edits[c.id]||{};
@@ -2796,6 +3046,7 @@ function openDatePopover(anchor, c, field, onSaved){
     _syncCase(c);
     pop.remove();
     document.removeEventListener('click',outsideClose);
+    auditCaseChangesFrom(c,before,'change_date');
     if(typeof onSaved==='function')onSaved(c,field,'');
     else{
       if(typeof renderTable==='function')renderTable();
@@ -2951,6 +3202,7 @@ function openInlineNoteEditor(anchor, c) {
     overrides.edits[c.id].notes=c.notes;
     saveOverrides(overrides);
     _syncCase(c);
+    auditCaseAction(c,'add_note',{note:txt.slice(0,140)});
     pop.remove();
     if(typeof renderTable==='function')renderTable();
     if(typeof renderPipeline==='function')renderPipeline();
@@ -2962,6 +3214,7 @@ function openInlineNoteEditor(anchor, c) {
 }
 
 function updateCaseField(c, field, value) {
+  const before=caseAuditSnapshot(c);
   c[field] = value;
   c.deadlineUrgent = labDeadlineStatus(c).urgent;
   c.priority = computePriority(c);
@@ -2973,6 +3226,7 @@ function updateCaseField(c, field, value) {
   overrides.edits[c.id].priority = c.priority;
   saveOverrides(overrides);
   _syncCase(c);
+  auditCaseChangesFrom(c,before,field==='type'?'change_type':'edit_case');
 }
 
 function attachInlineEditors(root) {
@@ -3024,12 +3278,14 @@ function attachInlineEditors(root) {
         { value: 'reusim', label: '🟢 Reusim' }
       ];
       openInlinePopover(el, items, sel => {
+        const before=caseAuditSnapshot(c);
         c.priority = sel.value;
         overrides.edits = overrides.edits || {};
         overrides.edits[c.id] = overrides.edits[c.id] || {};
         overrides.edits[c.id].priority = sel.value;
         saveOverrides(overrides);
         _syncCase(c);
+        auditCaseChangesFrom(c,before,'change_priority');
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
       }, 'Prioritate');
@@ -3083,6 +3339,7 @@ function attachInlineEditors(root) {
         }
       });
       openInlinePopover(el, items, sel => {
+        const before=caseAuditSnapshot(c);
         c.stageStatuses = c.stageStatuses || {};
         c.assignees = c.assignees || {};
         let shouldSyncStage=true;
@@ -3128,6 +3385,7 @@ function attachInlineEditors(root) {
         });
         saveOverrides(overrides);
         _syncCase(c);
+        auditCaseChangesFrom(c,before,'change_stage_status',{stage:getStage(stage)?.name||stage,selection:sel.value});
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
       }, 'Etapă: ' + (getStage(stage)?.name || stage), { positionAnchor: el.closest('td') || el.closest('.flow') || el });
@@ -3155,7 +3413,8 @@ function attachInlineEditors(root) {
     });
   });
 
-  // NUME PACIENT — click on .tbl-name to edit name
+  // NUME PACIENT — click opens the case details. Editing the name stays in
+  // "Editare completă", so the table has one predictable navigation target.
   root.querySelectorAll('.tbl-name').forEach(el => {
     if (el.closest('thead')) return;
     if (el.dataset.editorAttached) return;
@@ -3165,18 +3424,7 @@ function attachInlineEditors(root) {
       e.stopPropagation();
       const tr = el.closest('tr,.kb-card');
       if (!tr) return;
-      const c = getCase(Number(tr.dataset.caseId));
-      if (!c) return;
-      const newName = prompt('Schimbă nume pacient:', c.name);
-      if (newName === null || !newName.trim()) return;
-      c.name = newName.trim();
-      overrides.edits = overrides.edits || {};
-      overrides.edits[c.id] = overrides.edits[c.id] || {};
-      overrides.edits[c.id].name = c.name;
-      saveOverrides(overrides);
-      _syncCase(c);
-      if (typeof renderTable === 'function') renderTable();
-      if (typeof renderPipeline === 'function') renderPipeline();
+      location.href = `case.html?id=${tr.dataset.caseId}`;
     });
   });
 
@@ -3192,14 +3440,16 @@ function attachInlineEditors(root) {
       if (!tr) return;
       const c = getCase(Number(tr.dataset.caseId));
       if (!c) return;
-      const items = CLINICS.map(cl => ({ value: cl.id, label: cl.name }));
+      const items = [{ value: 'UNKNOWN', label: 'UNKNOWN' }, ...CLINICS.map(cl => ({ value: cl.id, label: cl.name }))];
       openInlinePopover(el, items, sel => {
+        const before=caseAuditSnapshot(c);
         c.clinic = sel.value;
         overrides.edits = overrides.edits || {};
         overrides.edits[c.id] = overrides.edits[c.id] || {};
         overrides.edits[c.id].clinic = sel.value;
         saveOverrides(overrides);
         _syncCase(c);
+        auditCaseChangesFrom(c,before,'change_clinic');
         if (typeof renderTable === 'function') renderTable();
         if (typeof renderPipeline === 'function') renderPipeline();
       }, 'Schimbă clinică');

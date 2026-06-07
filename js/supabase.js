@@ -205,11 +205,11 @@ async function sbSaveCase(c) {
     const { data, error } = await _client().from('cases').insert(db).select().single();
     if (error) throw error;
     c.id = data.id;
-    await _sbLog('add_case', 'case', String(c.id), { patient: c.name, clinic: c.clinic });
+    await _sbLog('add_case', 'case', String(c.id), { patient: c.name, clinic: c.clinic, doctor: c.doctor || '', type: c.type || '', finala: c.finala || '' });
   } else {
     const { error } = await _client().from('cases').update(db).eq('id', c.id);
     if (error) throw error;
-    await _sbLog('update_case', 'case', String(c.id), { patient: c.name });
+    await _sbLog('update_case', 'case', String(c.id), { patient: c.name, clinic: c.clinic || '', type: c.type || '', stage: c.stage || '' });
   }
 }
 
