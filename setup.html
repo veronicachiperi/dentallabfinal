@@ -85,7 +85,7 @@ async function checkAdminAuth() {
     return;
   }
   if (prof.role !== 'admin') {
-    guard.innerHTML = '<p>Acces permis doar administratorilor.</p><a class="btn" href="index.html">Înapoi</a>';
+    guard.innerHTML = '<p>Acces permis doar administratorilor.</p><a class="btn" href="dashboard.html">Înapoi</a>';
     return;
   }
   guard.style.display = 'none';

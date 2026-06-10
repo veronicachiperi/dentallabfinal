@@ -4,8 +4,9 @@ Static HTML/CSS/JS prototype of a dental laboratory workflow system. Replaces th
 
 ## What's included
 
+- **Public landing page** (`index.html`, also available as `landing.html`) — first page visitors see at `privatecad.md`
 - **Login screen** (`login.html`) — pick a role (Admin, Tehnician, Clinică) to land on the right starting page
-- **Pipeline board** (`index.html`) — kanban view of all cases by stage, with notification panel, deadline alerts, working filters (Toate / Mele / Întârziere / Săptămâna), drag-and-drop between stages, search, and clickable Probă status pill (La lab → La clinică → Înapoi la lab)
+- **Pipeline board** (`dashboard.html`) — kanban view of all cases by stage, with notification panel, deadline alerts, working filters (Toate / Mele / Întârziere / Săptămâna), drag-and-drop between stages, search, and clickable Probă status pill (La lab → La clinică → Înapoi la lab)
 - **Clinic portal** (`clinic.html?id=crisdent`) — what each clinic sees: their cases only, with Aprobă / Adaugă notă actions, and a "+ Caz nou" button
 - **Case detail** (`case.html?id=141`) — single case page with timeline, notes, fișă upload + auto-generate PDF, attached files, and "Etapă următoare" button
 - **Calendar view** (`calendar.html`) — monthly grid showing cases by deadline, navigate prev/next month
@@ -20,7 +21,7 @@ The whole app collapses gracefully on phone screens: sidebar becomes a hamburger
 
 ## Running locally
 
-Open `index.html` directly in a browser, or serve from a local server:
+Open `index.html` directly in a browser for the public landing page, or serve from a local server:
 
 ```bash
 # any of these works
@@ -28,7 +29,7 @@ python3 -m http.server 8000
 npx serve
 ```
 
-Then visit `http://localhost:8000`.
+Then visit `http://localhost:8000` for the landing page or `http://localhost:8000/dashboard.html` for the internal dashboard.
 
 ## Editing in VS Code
 
@@ -75,7 +76,9 @@ In Netlify: **Domain settings → Add custom domain**. Point your DNS at Netlify
 
 ```
 dental-lab/
-├── index.html          # Pipeline board (employee view)
+├── index.html          # Public landing page served at privatecad.md
+├── landing.html        # Same landing page kept as a direct URL
+├── dashboard.html          # Pipeline board (employee view)
 ├── clinic.html         # Clinic portal
 ├── case.html           # Case detail + fișă section
 ├── css/
