@@ -522,6 +522,27 @@ function getCalendarStatus(c) {
 
 function statsCountsByStage() { return STAGES.map(s => ({ name: s.name, count: casesInStage(s.id).length, color: s.color })); }
 function statsCountsByClinic() { return CLINICS.map(c => ({ name: c.name, count: casesForClinic(c.id).length })); }
+// Numărul de lucrări pe tip (ZR, provizorii, standart etc.) — global sau pentru o listă dată.
+function statsCountsByType(caseList) {
+  const list = caseList || CASES;
+  const valid = list.filter(c => typeof isValidCase === 'function' ? isValidCase(c) : ((c.name||'').trim()||(c.clinic||'').trim()||(c.type||'').trim()));
+  const counts = {};
+  valid.forEach(c => { const t = String(c.type || '').trim() || '—'; counts[t] = (counts[t] || 0) + 1; });
+  return Object.entries(counts).map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count);
+}
+// Pentru fiecare clinică: tipurile de lucrări și câte din fiecare (sortat descrescător).
+function statsTypesByClinic() {
+  return CLINICS.map(cl => {
+    const cases = casesForClinic(cl.id).filter(c => typeof isValidCase === 'function' ? isValidCase(c) : true);
+    const types = statsCountsByType(cases);
+    return { id: cl.id, name: String(cl.name || cl.id || 'Clinică'), total: cases.length, types };
+  }).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
+}
+// Paletă stabilă pentru tipuri de lucrări.
+function workTypeColor(i) {
+  const palette = ['#5B8DEF','#534AB7','#185FA5','#D85A30','#1D9E75','#B07D2A','#444441','#A32D2D','#27500A','#7B5EA7','#BA7517','#2D8C8C','#C2477E','#6B7280','#9C6ADE','#E0A82E','#3D9970','#85144B'];
+  return palette[i % palette.length];
+}
 function statsOnTimeRate() {
   const sent = CASES.filter(c => c.stage === 'trimis');
   const total = sent.length;
