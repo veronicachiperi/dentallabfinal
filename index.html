@@ -15,6 +15,8 @@
       --border:  rgba(255,255,255,0.07);
       --gold:    #c9a96e;
       --gold2:   #e2c38a;
+      --brand-icon-color: #f0ede8;
+      --hero-image: url('assets/gallery/hero.jpg?v=20260610');
       --white:   #f0ede8;
       --muted:   rgba(240,237,232,0.5);
       --dim:     rgba(240,237,232,0.28);
@@ -42,10 +44,16 @@
       display: flex; align-items: center; gap: 12px;
       text-decoration: none;
     }
-    .nav-logo img {
-      height: 38px; width: auto;
-      pointer-events: none; user-select: none;
-      border-radius: 3px;
+    .brand-mark {
+      display: inline-block;
+      width: 36px;
+      height: 38px;
+      background: var(--brand-icon-color);
+      -webkit-mask: url('assets/brand/private-cad-tooth.png?v=20260602') center/contain no-repeat;
+      mask: url('assets/brand/private-cad-tooth.png?v=20260602') center/contain no-repeat;
+      pointer-events: none;
+      user-select: none;
+      flex-shrink: 0;
     }
     .nav-brand-text {
       font-size: 14px; font-weight: 700; letter-spacing: 2px;
@@ -111,10 +119,13 @@
     }
     .hero-bg {
       position: absolute; inset: 0;
-      background:
+      background-image:
         linear-gradient(90deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.70) 42%, rgba(0,0,0,0.58) 100%),
         linear-gradient(0deg, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.25) 45%, rgba(8,8,8,0.70) 100%),
-        url('assets/gallery/hero.jpg?v=20260610') center/cover no-repeat;
+        var(--hero-image);
+      background-position: center, center, center;
+      background-size: cover, cover, cover;
+      background-repeat: no-repeat;
       transform: scale(1.01);
     }
     .hero-lockup {
@@ -129,11 +140,8 @@
     .hero-logo-mark {
       display: none;
       width: 84px;
-      height: auto;
+      height: 90px;
       margin-bottom: 24px;
-      border-radius: 4px;
-      pointer-events: none;
-      user-select: none;
     }
     .hero-label {
       font-size: 11px; letter-spacing: 4px; color: var(--gold);
@@ -475,19 +483,96 @@
       display: flex; align-items: center; gap: 12px;
     }
     .footer-brand img { height: 30px; width: auto; border-radius: 3px; opacity: .82; }
+    .footer-brand .brand-mark { width: 28px; height: 30px; opacity: .82; }
     .footer-note {
       font-size: 11px; color: var(--dim); letter-spacing: 0.3px;
+    }
+
+    /* ── HIDDEN LOCAL EDITOR ── */
+    .landing-editor {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 150;
+      width: min(340px, calc(100vw - 36px));
+      display: none;
+      gap: 12px;
+      padding: 16px;
+      border: 0.5px solid rgba(255,255,255,0.16);
+      border-radius: 6px;
+      background: rgba(8,8,8,0.92);
+      color: var(--white);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.42);
+      backdrop-filter: blur(14px);
+    }
+    body.landing-edit-mode .landing-editor { display: grid; }
+    .landing-editor-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .landing-editor label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+    }
+    .landing-editor input[type="color"] {
+      width: 100%;
+      height: 38px;
+      border: 0.5px solid rgba(255,255,255,0.18);
+      border-radius: 4px;
+      background: transparent;
+      padding: 3px;
+      cursor: pointer;
+    }
+    .landing-editor input[type="file"] {
+      width: 100%;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .landing-editor-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .landing-editor .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 76px;
+      padding: 8px 12px;
+      font-size: 11px;
+    }
+    .landing-editor-note {
+      min-height: 17px;
+      color: var(--dim);
+      font-size: 11px;
+      line-height: 1.4;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 500;
     }
 
     /* ── MOBILE ── */
     @media (max-width: 900px) {
       nav { padding: 16px 20px; }
       .nav-brand-text { display: none; }
-      .nav-logo img { height: 34px; }
+      .brand-mark { width: 32px; height: 34px; }
       .nav-cta { gap: 8px; }
       .btn-ghost { display: none; }
       .btn-gold { padding: 9px 14px; font-size: 11px; }
       .lang-select { width: 74px; padding-left: 10px; padding-right: 24px; }
+      .hero-bg {
+        background-position: center, center, center 42%;
+        background-size: cover, cover, min(1180px, 178vw) auto;
+        transform: none;
+      }
       .hero-lockup { width: min(440px, 92vw); margin-bottom: 28px; }
       .section { padding: 70px 20px; }
       .stats-strip { grid-template-columns: repeat(2, 1fr); }
@@ -503,6 +588,10 @@
     @media (max-width: 480px) {
       .gallery-featured { grid-template-columns: 1fr; }
       .stats-strip { grid-template-columns: 1fr 1fr; }
+      .hero-bg {
+        background-position: center, center, center 38%;
+        background-size: cover, cover, 168vw auto;
+      }
       .hero-lockup { display: none; }
       .hero-logo-mark { display: block; }
       .gallery-track { grid-auto-columns: 86%; }
@@ -517,7 +606,7 @@
 <!-- NAV -->
 <nav>
   <a class="nav-logo" href="index.html">
-    <img src="assets/brand/private-cad-tooth.png?v=20260602" alt="Private CAD">
+    <span class="brand-mark nav-mark" aria-hidden="true"></span>
     <span class="nav-brand-text">Private CAD</span>
   </a>
   <div class="nav-cta">
@@ -537,11 +626,31 @@
   </div>
 </nav>
 
+<aside class="landing-editor" id="landingEditor" aria-label="Editare landing" hidden>
+  <div class="landing-editor-title">Editare landing</div>
+  <label for="landingIconColor">
+    Culoare icon
+    <input id="landingIconColor" type="color" value="#f0ede8">
+  </label>
+  <label for="landingAccentColor">
+    Culoare accent
+    <input id="landingAccentColor" type="color" value="#c9a96e">
+  </label>
+  <label for="landingHeroPhoto">
+    Poză principală
+    <input id="landingHeroPhoto" type="file" accept="image/*">
+  </label>
+  <div class="landing-editor-actions">
+    <button class="btn-ghost" id="landingResetTheme" type="button">Reset</button>
+    <div class="landing-editor-note" id="landingEditorNote">Preview local.</div>
+  </div>
+</aside>
+
 <!-- HERO -->
 <section class="hero">
   <div class="hero-bg"></div>
   <img src="assets/brand/private-cad-lockup.png?v=20260602" alt="Private CAD" class="hero-lockup">
-  <img src="assets/brand/private-cad-tooth.png?v=20260602" alt="Private CAD" class="hero-logo-mark">
+  <span class="brand-mark hero-logo-mark" aria-hidden="true"></span>
   <div class="hero-label" data-i18n="heroLabel">Laborator Stomatologic · Chișinău</div>
   <h1 class="hero-title" data-i18n-html="heroTitle">
     Precizie la nivel de <span>micron</span>.<br>
@@ -762,7 +871,7 @@
 
 <!-- FOOTER -->
 <footer>
-  <div class="footer-brand"><img src="assets/brand/private-cad-tooth.png?v=20260602" alt=""><span data-i18n="footerBrand">Private CAD · Laborator Stomatologic</span></div>
+  <div class="footer-brand"><span class="brand-mark" aria-hidden="true"></span><span data-i18n="footerBrand">Private CAD · Laborator Stomatologic</span></div>
   <div class="footer-note" data-i18n="footerNote">© 2026 Private CAD. Toate drepturile rezervate.</div>
 </footer>
 

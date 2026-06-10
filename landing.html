@@ -111,10 +111,13 @@
     }
     .hero-bg {
       position: absolute; inset: 0;
-      background:
+      background-image:
         linear-gradient(90deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.70) 42%, rgba(0,0,0,0.58) 100%),
         linear-gradient(0deg, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.25) 45%, rgba(8,8,8,0.70) 100%),
-        url('assets/gallery/hero.jpg?v=20260610') center/cover no-repeat;
+        url('assets/gallery/hero.jpg?v=20260610');
+      background-position: center, center, center;
+      background-size: cover, cover, cover;
+      background-repeat: no-repeat;
       transform: scale(1.01);
     }
     .hero-lockup {
@@ -488,6 +491,11 @@
       .btn-ghost { display: none; }
       .btn-gold { padding: 9px 14px; font-size: 11px; }
       .lang-select { width: 74px; padding-left: 10px; padding-right: 24px; }
+      .hero-bg {
+        background-position: center, center, center 42%;
+        background-size: cover, cover, min(1180px, 178vw) auto;
+        transform: none;
+      }
       .hero-lockup { width: min(440px, 92vw); margin-bottom: 28px; }
       .section { padding: 70px 20px; }
       .stats-strip { grid-template-columns: repeat(2, 1fr); }
@@ -503,6 +511,10 @@
     @media (max-width: 480px) {
       .gallery-featured { grid-template-columns: 1fr; }
       .stats-strip { grid-template-columns: 1fr 1fr; }
+      .hero-bg {
+        background-position: center, center, center 38%;
+        background-size: cover, cover, 168vw auto;
+      }
       .hero-lockup { display: none; }
       .hero-logo-mark { display: block; }
       .gallery-track { grid-auto-columns: 86%; }
@@ -704,7 +716,7 @@
       </div>
     </div>
 
-    <form class="contact-form" id="contactForm">
+    <form class="contact-form" id="contactForm" action="mailto:privatecadsrl@gmail.com" method="post" enctype="text/plain">
       <div>
         <div class="contact-form-title" data-i18n="formTitle">Trimite o solicitare</div>
         <p class="contact-form-sub" data-i18n="formSub">Formularul pregătește automat un email către laborator.</p>
