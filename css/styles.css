@@ -291,6 +291,29 @@ button{font-family:inherit;cursor:pointer}
 .notif-body small{font-size:10px;color:var(--text-dim)}
 .notif-foot{margin-top:auto;padding:14px 16px;border-top:0.5px solid var(--border);background:var(--bg-soft)}
 
+/* TODO partajat — drawer cu task-uri rapide */
+.todo-add{display:flex;gap:8px;padding:14px 16px;border-bottom:0.5px solid var(--border)}
+.todo-add input{flex:1;min-width:0;height:36px;padding:0 10px;font-size:14px;border:0.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text)}
+.todo-add input:focus{outline:none;border-color:var(--info)}
+.todo-add .btn.primary{flex:0 0 auto;padding:0 14px;height:36px}
+.todo-tabs{display:flex;gap:0;padding:0 16px;border-bottom:0.5px solid var(--border)}
+.todo-tab{border:none;background:transparent;padding:11px 4px;margin-right:18px;font-size:12px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;font-weight:500}
+.todo-tab.on{color:var(--text);border-bottom-color:var(--text)}
+.todo-list{overflow-y:auto;display:flex;flex-direction:column;flex:1}
+.todo-item{display:flex;align-items:flex-start;gap:11px;padding:13px 16px;border-bottom:0.5px solid var(--border)}
+.todo-item:hover{background:var(--bg-soft)}
+.todo-check{flex:0 0 auto;width:20px;height:20px;margin-top:1px;border:1.5px solid var(--border-strong,var(--text-dim));border-radius:50%;background:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;padding:0;line-height:1}
+.todo-check:hover{border-color:var(--good)}
+.todo-check.checked{background:var(--good);border-color:var(--good)}
+.todo-body{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.todo-text{font-size:13.5px;line-height:1.4;color:var(--text);word-break:break-word}
+.todo-item.done .todo-text{text-decoration:line-through;color:var(--text-muted)}
+.todo-body small{font-size:10px;color:var(--text-dim)}
+.todo-del{flex:0 0 auto;border:none;background:transparent;color:var(--text-dim);font-size:18px;cursor:pointer;padding:0 4px;line-height:1}
+.todo-del:hover{color:var(--late)}
+.todo-empty{padding:30px 16px;text-align:center;font-size:13px;color:var(--text-dim);font-style:italic}
+.todo-count{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--info,#2563eb);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--bg)}
+
 /* Tooth chart */
 .tc-form-wrap{background:var(--bg-soft);border:0.5px solid var(--border);border-radius:var(--radius-md);padding:14px;position:relative}
 .tc-row-form{display:grid;grid-template-columns:repeat(8,1fr) 8px repeat(8,1fr);gap:4px;margin-bottom:4px}

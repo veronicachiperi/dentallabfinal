@@ -265,6 +265,7 @@ function reRenderAll(){
   if(typeof renderTable==='function')renderTable();
   renderPipeline();renderClinic();renderTechnicianPortal();
   attachNotifications();
+  attachTodo();
 }
 async function refreshCasesFromServer(){
   if(typeof sbLoadCases!=='function'||!SUPABASE_CONFIGURED)return;
@@ -1028,6 +1029,97 @@ function attachNotifications(){
     btn.dataset.notifAttached='1';
     btn.addEventListener('click',openNotificationDrawer);
   }
+}
+
+// === TODO PARTAJAT (task-uri rapide ale echipei) ===
+let _todoView='active';
+function _todoFmt(ts){if(!ts)return'';try{return new Date(ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','')}catch{return''}}
+function updateTodoBadge(){
+  const btn=document.getElementById('todoBtn');if(!btn)return;
+  const badge=btn.querySelector('.todo-count');if(!badge)return;
+  const active=QUICK_TASKS.filter(t=>!t.done).length;
+  badge.textContent=active;
+  badge.style.display=active>0?'flex':'none';
+}
+function attachTodo(){
+  const user=getCurrentUser()||{};
+  if(user.role==='clinic')return; // doar echipa (admin + tehnicieni)
+  const bell=document.getElementById('bellBtn');
+  if(!bell)return;
+  let btn=document.getElementById('todoBtn');
+  if(!btn){
+    bell.insertAdjacentHTML('beforebegin','<button class="icon-btn" id="todoBtn" type="button" title="Task-uri rapide ale echipei">✓<span class="todo-count" style="display:none">0</span></button>');
+    btn=document.getElementById('todoBtn');
+    btn.addEventListener('click',()=>openTodoDrawer());
+  }
+  updateTodoBadge();
+}
+function _todoItemHTML(t){
+  if(!t.done){
+    return `<div class="todo-item"><button class="todo-check" data-todo-toggle="${t.id}" type="button" title="Marchează finalizat"></button><div class="todo-body"><span class="todo-text">${escHTML(t.text)}</span><small>${t.created_by?escHTML(t.created_by)+' · ':''}${_todoFmt(t.created_at)}</small></div></div>`;
+  }
+  return `<div class="todo-item done"><button class="todo-check checked" data-todo-toggle="${t.id}" type="button" title="Redeschide">✓</button><div class="todo-body"><span class="todo-text">${escHTML(t.text)}</span><small>Finalizat ${t.completed_by?'de '+escHTML(t.completed_by)+' ':''}${_todoFmt(t.completed_at)}</small></div><button class="todo-del" data-todo-del="${t.id}" type="button" title="Șterge definitiv">×</button></div>`;
+}
+function closeTodoDrawer(){
+  document.querySelector('.todo-scrim')?.remove();
+  document.querySelector('.todo-drawer')?.remove();
+}
+function openTodoDrawer(view){
+  if(view)_todoView=view;
+  closeTodoDrawer();
+  const active=QUICK_TASKS.filter(t=>!t.done);
+  const archived=QUICK_TASKS.filter(t=>t.done);
+  const list=_todoView==='active'?active:archived;
+  const scrim=document.createElement('div');scrim.className='notif-scrim todo-scrim';
+  const drawer=document.createElement('aside');drawer.className='notif-drawer todo-drawer';
+  drawer.innerHTML=`<div class="notif-head"><div><div class="notif-eyebrow">Echipă</div><h2>Task-uri rapide</h2></div><button class="notif-close todo-close" type="button">×</button></div>
+    <div class="todo-add"><input id="todoInput" type="text" placeholder="Adaugă task rapid… (Enter)" maxlength="200"><button class="btn primary" id="todoAddBtn" type="button">Adaugă</button></div>
+    <div class="todo-tabs"><button class="todo-tab ${_todoView==='active'?'on':''}" data-todo-view="active" type="button">Active (${active.length})</button><button class="todo-tab ${_todoView==='archived'?'on':''}" data-todo-view="archived" type="button">Finalizate (${archived.length})</button></div>
+    <div class="notif-list todo-list">${list.length?list.map(_todoItemHTML).join(''):`<div class="todo-empty">${_todoView==='active'?'Niciun task activ. Adaugă unul mai sus.':'Niciun task finalizat încă.'}</div>`}</div>`;
+  document.body.appendChild(scrim);document.body.appendChild(drawer);
+  scrim.addEventListener('click',closeTodoDrawer);
+  drawer.querySelector('.todo-close')?.addEventListener('click',closeTodoDrawer);
+  const input=drawer.querySelector('#todoInput');
+  const doAdd=()=>{const v=input.value.trim();if(!v)return;addQuickTask(v);input.value='';};
+  drawer.querySelector('#todoAddBtn')?.addEventListener('click',doAdd);
+  input?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();doAdd();}});
+  drawer.querySelectorAll('.todo-tab').forEach(t=>t.addEventListener('click',()=>openTodoDrawer(t.dataset.todoView)));
+  drawer.querySelectorAll('[data-todo-toggle]').forEach(b=>b.addEventListener('click',()=>toggleQuickTask(Number(b.dataset.todoToggle))));
+  drawer.querySelectorAll('[data-todo-del]').forEach(b=>b.addEventListener('click',()=>deleteQuickTaskUI(Number(b.dataset.todoDel))));
+  if(_todoView==='active')setTimeout(()=>input?.focus(),60);
+}
+async function addQuickTask(text){
+  const user=getCurrentUser()||{};
+  const who=user.name||user.id||'—';
+  const tmp={id:'tmp-'+Date.now(),text,done:false,created_by:who,created_at:new Date().toISOString()};
+  QUICK_TASKS.unshift(tmp);
+  updateTodoBadge();openTodoDrawer('active');
+  try{
+    if(typeof sbAddQuickTask==='function'){
+      const saved=await sbAddQuickTask(text,who);
+      if(saved){const i=QUICK_TASKS.findIndex(t=>t.id===tmp.id);if(i>=0)QUICK_TASKS[i]=saved;}
+    }
+  }catch(e){
+    const i=QUICK_TASKS.findIndex(t=>t.id===tmp.id);if(i>=0)QUICK_TASKS.splice(i,1);
+    alert('Nu s-a putut salva task-ul: '+e.message);
+  }
+  updateTodoBadge();if(document.querySelector('.todo-drawer'))openTodoDrawer('active');
+}
+async function toggleQuickTask(id){
+  const t=QUICK_TASKS.find(x=>x.id===id);if(!t)return;
+  const newDone=!t.done;const user=getCurrentUser()||{};const who=user.name||user.id||'—';
+  t.done=newDone;t.completed_by=newDone?who:null;t.completed_at=newDone?new Date().toISOString():null;
+  updateTodoBadge();openTodoDrawer(_todoView);
+  try{if(typeof sbSetQuickTaskDone==='function')await sbSetQuickTaskDone(id,newDone,who);}
+  catch(e){t.done=!newDone;alert('Nu s-a putut actualiza: '+e.message);updateTodoBadge();openTodoDrawer(_todoView);}
+}
+async function deleteQuickTaskUI(id){
+  if(!confirm('Ștergi definitiv acest task din arhivă?'))return;
+  const i=QUICK_TASKS.findIndex(x=>x.id===id);const backup=i>=0?QUICK_TASKS[i]:null;
+  if(i>=0)QUICK_TASKS.splice(i,1);
+  openTodoDrawer(_todoView);
+  try{if(typeof sbDeleteQuickTask==='function')await sbDeleteQuickTask(id);}
+  catch(e){if(backup)QUICK_TASKS.push(backup);alert('Nu s-a putut șterge: '+e.message);openTodoDrawer(_todoView);}
 }
 
 // === PIPELINE KANBAN ===
@@ -1902,6 +1994,7 @@ function renderTechnicianPortal(){
     topbarSpacer.insertAdjacentHTML('afterend','<button class="icon-btn" id="bellBtn" type="button" title="Notificări">N<span class="bell-dot"></span></button>');
   }
   attachNotifications();
+  attachTodo();
   // Live search: pacient (nume/prenume), clinică, tip, doctor.
   const tpSearch=root.querySelector('#tpSearch');
   if(tpSearch)tpSearch.addEventListener('input',()=>{
@@ -2271,27 +2364,26 @@ function renderStats(){
   const perClinicHTML=isAdmin?`
     <div style="margin-top:16px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px">
       <div style="font-size:13px;font-weight:500;margin-bottom:4px">Tipuri de lucrări per clinică</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px">Ce tip de lucrare dă fiecare clinică cel mai mult · ${clinicTypeData.length} clinici cu lucrări</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">
-        ${clinicTypeData.map(cl=>{
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:16px">Ce tip de lucrare dă fiecare clinică · ${clinicTypeData.length} clinici cu lucrări</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px">
+        ${clinicTypeData.map((cl,ci)=>{
           const top=cl.types[0];
-          const segs=cl.types.map(t=>`<span style="display:block;width:${Math.round((t.count/cl.total)*100)}%;background:${workTypeColor(typeColorIndex[t.type]??0)}" title="${escAttr(t.type)}: ${t.count}"></span>`).join('');
-          const legend=cl.types.map(t=>`<div style="display:flex;align-items:center;gap:7px;font-size:12px;padding:3px 0"><span style="width:10px;height:10px;border-radius:2px;background:${workTypeColor(typeColorIndex[t.type]??0)};flex:0 0 auto"></span><span style="flex:1;color:var(--text)">${escHTML(t.type)}</span><b style="color:var(--text)">${t.count}</b></div>`).join('');
           return `<div style="border:0.5px solid var(--border);border-radius:8px;padding:14px">
-            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px"><div style="font-size:14px;font-weight:600">${escHTML(cl.name)}</div><div style="font-size:12px;color:var(--text-dim)">${cl.total} lucrări</div></div>
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Cel mai mult: <b style="color:var(--text)">${escHTML(top.type)}</b> (${top.count})</div>
-            <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:12px;background:var(--bg-soft)">${segs}</div>
-            <div>${legend}</div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px"><div style="font-size:14px;font-weight:600">${escHTML(cl.name)}</div><div style="font-size:12px;color:var(--text-dim)">${cl.total} lucrări</div></div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">Cel mai mult: <b style="color:var(--text)">${escHTML(top.type)}</b> (${top.count})</div>
+            <div style="position:relative;height:${Math.max(120,cl.types.length*26)}px"><canvas id="chartClinicType${ci}"></canvas></div>
           </div>`;
         }).join('')||'<div style="color:var(--text-dim);font-size:13px;padding:8px">Nicio lucrare încă.</div>'}
       </div>
     </div>`:'';
 
-  root.innerHTML=`<div class="app">${adminSidebarHTML('stats')}<main class="main"><div style="padding:24px"><h1 style="font-size:22px;font-weight:500;margin:0 0 16px">Statistici</h1><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px"><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${CASES.length}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Total</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:${onTime.late?'#A32D2D':'#1D9E75'}">${onTime.rate}%</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">La timp</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${active}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Active</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:#27500A">${trimise}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Trimise</div></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:13px;font-weight:500;margin-bottom:4px">Lucrări pe tip (per ansamblu)</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">${typeData.length} tipuri de lucrări · ${typeData.reduce((s,t)=>s+t.count,0)} lucrări totale</div><div style="position:relative;height:${Math.max(220,typeData.length*30)}px"><canvas id="chartType"></canvas></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe etapă</div><div style="position:relative;height:240px"><canvas id="chartStage"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe clinică</div><div style="position:relative;height:240px"><canvas id="chartClinic"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Pe tehnician</div><div style="position:relative;height:240px"><canvas id="chartTech"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">La timp vs întârziere</div><div style="position:relative;height:240px"><canvas id="chartOnTime"></canvas></div></div></div>${perClinicHTML}</div></main></div>`;
+  root.innerHTML=`<div class="app">${adminSidebarHTML('stats')}<main class="main"><div id="statsExportArea" style="padding:24px"><div class="stats-export-bar" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap"><h1 style="font-size:22px;font-weight:500;margin:0">Statistici</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="statsExportPng" type="button">Export PNG</button><button class="btn" id="statsExportPdf" type="button">Export PDF</button><button class="btn" id="statsExportCsv" type="button">Export CSV</button></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px"><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${CASES.length}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Total</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:${onTime.late?'#A32D2D':'#1D9E75'}">${onTime.rate}%</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">La timp</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${active}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Active</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:#27500A">${trimise}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Trimise</div></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:13px;font-weight:500;margin-bottom:4px">Lucrări pe tip (per ansamblu)</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">${typeData.length} tipuri de lucrări · ${typeData.reduce((s,t)=>s+t.count,0)} lucrări totale</div><div style="position:relative;height:${Math.max(220,typeData.length*30)}px"><canvas id="chartType"></canvas></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe etapă</div><div style="position:relative;height:240px"><canvas id="chartStage"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe clinică</div><div style="position:relative;height:240px"><canvas id="chartClinic"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Pe tehnician</div><div style="position:relative;height:240px"><canvas id="chartTech"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">La timp vs întârziere</div><div style="position:relative;height:240px"><canvas id="chartOnTime"></canvas></div></div></div>${perClinicHTML}</div></main></div>`;
   setTimeout(()=>{
     if(typeof Chart==='undefined')return;
     Chart.defaults.font.size=11;Chart.defaults.color='#6b7280';
     new Chart(document.getElementById('chartType'),{type:'bar',data:{labels:typeData.map(t=>t.type),datasets:[{data:typeData.map(t=>t.count),backgroundColor:typeData.map((t,i)=>workTypeColor(i))}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{precision:0}}}}});
+    // Bar chart orizontal pe tip pentru fiecare clinică (admin) — aceleași culori per tip ca graficul global.
+    if(isAdmin){clinicTypeData.forEach((cl,ci)=>{const cv=document.getElementById('chartClinicType'+ci);if(!cv)return;new Chart(cv,{type:'bar',data:{labels:cl.types.map(t=>t.type),datasets:[{data:cl.types.map(t=>t.count),backgroundColor:cl.types.map(t=>workTypeColor(typeColorIndex[t.type]??0))}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{precision:0}}}}})});}
     const sd=statsCountsByStage();
     new Chart(document.getElementById('chartStage'),{type:'bar',data:{labels:sd.map(s=>s.name),datasets:[{data:sd.map(s=>s.count),backgroundColor:sd.map(s=>s.color)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
     const cd=statsCountsByClinic();
@@ -2301,6 +2393,44 @@ function renderStats(){
     new Chart(document.getElementById('chartTech'),{type:'bar',data:{labels:EMPLOYEES.map(e=>e.name),datasets:[{data:EMPLOYEES.map(e=>techCnt[e.id]),backgroundColor:EMPLOYEES.map(e=>({tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'})[e.id]||'#8B8B8B')}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
     new Chart(document.getElementById('chartOnTime'),{type:'doughnut',data:{labels:['La timp','Întârziate'],datasets:[{data:[onTime.onTime,onTime.late],backgroundColor:['#1D9E75','#A32D2D'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%'}});
   },50);
+  document.getElementById('statsExportPng')?.addEventListener('click',exportStatsPNG);
+  document.getElementById('statsExportPdf')?.addEventListener('click',exportStatsPDF);
+  document.getElementById('statsExportCsv')?.addEventListener('click',exportStatsCSV);
+}
+
+// Export statistici — PNG și PDF includ TOATE graficele (capturate ca imagine); CSV conține datele.
+async function exportStatsPNG(){
+  const area=document.getElementById('statsExportArea');
+  if(!area||typeof html2canvas==='undefined'){alert('Exportul PNG nu este disponibil (bibliotecă lipsă).');return}
+  const btn=document.getElementById('statsExportPng');const old=btn?btn.textContent:'';if(btn){btn.textContent='Se generează…';btn.disabled=true}
+  try{
+    const bg=getComputedStyle(document.body).backgroundColor||'#ffffff';
+    const canvas=await html2canvas(area,{backgroundColor:bg,scale:2,useCORS:true,ignoreElements:el=>el.classList&&el.classList.contains('stats-export-bar')});
+    const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=`statistici-${new Date().toISOString().slice(0,10)}.png`;document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }catch(e){alert('Eroare la export PNG: '+e.message)}
+  finally{if(btn){btn.textContent=old;btn.disabled=false}}
+}
+function exportStatsPDF(){
+  const area=document.getElementById('statsExportArea');
+  if(!area||typeof html2pdf==='undefined'){alert('Exportul PDF nu este disponibil (bibliotecă lipsă).');return}
+  const btn=document.getElementById('statsExportPdf');const old=btn?btn.textContent:'';if(btn){btn.textContent='Se generează…';btn.disabled=true}
+  html2pdf().set({
+    margin:8,
+    filename:`statistici-${new Date().toISOString().slice(0,10)}.pdf`,
+    image:{type:'jpeg',quality:0.95},
+    html2canvas:{scale:2,useCORS:true,backgroundColor:getComputedStyle(document.body).backgroundColor||'#ffffff',ignoreElements:el=>el.classList&&el.classList.contains('stats-export-bar')},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
+    pagebreak:{mode:['css','legacy']}
+  }).from(area).save().then(()=>{if(btn){btn.textContent=old;btn.disabled=false}}).catch(e=>{alert('Eroare la export PDF: '+e.message);if(btn){btn.textContent=old;btn.disabled=false}});
+}
+function exportStatsCSV(){
+  const isAdmin=(getCurrentUser()||{}).role==='admin';
+  const rows=[['Secțiune','Tip lucrare','Număr lucrări']];
+  statsCountsByType().forEach(t=>rows.push(['TOATE CLINICILE',t.type,t.count]));
+  if(isAdmin){statsTypesByClinic().forEach(cl=>cl.types.forEach(t=>rows.push([cl.name,t.type,t.count])));}
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`statistici-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 
 // === CLINICI LIST ===
@@ -3558,6 +3688,15 @@ async function initApp(){
         }catch{}
       }
       sbSubscribeCases(reRenderAll);
+      // TODO partajat al echipei — încarcă + abonează realtime (doar pentru echipă, nu clinici).
+      try{
+        const _u=getCurrentUser()||{};
+        if(_u.role!=='clinic'&&typeof sbLoadQuickTasks==='function'){
+          const qt=await sbLoadQuickTasks();
+          QUICK_TASKS.length=0;qt.forEach(t=>QUICK_TASKS.push(t));
+          if(typeof sbSubscribeQuickTasks==='function')sbSubscribeQuickTasks(()=>{updateTodoBadge();if(document.querySelector('.todo-drawer'))openTodoDrawer(_todoView);});
+        }
+      }catch(e){console.warn('[quick_tasks]',e.message);}
       setInterval(()=>refreshCasesFromServer().catch(e=>console.warn('[sb refresh]',e.message)),20000);
       document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCasesFromServer().catch(e=>console.warn('[sb refresh]',e.message))});
     }catch(e){
@@ -3597,6 +3736,7 @@ async function initApp(){
   attachSearch();
   attachFilters();
   attachNotifications();
+  attachTodo();
   attachMobileMenu();
   document.getElementById('newCaseBtnGlobal')?.addEventListener('click',()=>openNewCaseModal());
   if(document.getElementById('activityShell'))await renderActivityLog();

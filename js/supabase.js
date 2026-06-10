@@ -263,6 +263,52 @@ async function sbLoadActivityLog(limit = 300) {
   return error ? [] : data;
 }
 
+// ── Quick tasks (TODO partajat al echipei) ───────────────────
+async function sbLoadQuickTasks() {
+  if (!SUPABASE_CONFIGURED) return [];
+  const { data, error } = await _client()
+    .from('quick_tasks')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) { console.error('[supabase] loadQuickTasks:', error.message); return []; }
+  return data || [];
+}
+async function sbAddQuickTask(text, createdBy) {
+  if (!SUPABASE_CONFIGURED) return null;
+  const { data, error } = await _client()
+    .from('quick_tasks')
+    .insert({ text, done: false, created_by: createdBy || null })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+async function sbSetQuickTaskDone(id, done, completedBy) {
+  if (!SUPABASE_CONFIGURED) return;
+  const patch = done
+    ? { done: true, completed_by: completedBy || null, completed_at: new Date().toISOString() }
+    : { done: false, completed_by: null, completed_at: null };
+  const { error } = await _client().from('quick_tasks').update(patch).eq('id', id);
+  if (error) throw error;
+}
+async function sbDeleteQuickTask(id) {
+  if (!SUPABASE_CONFIGURED) return;
+  const { error } = await _client().from('quick_tasks').delete().eq('id', id);
+  if (error) throw error;
+}
+function sbSubscribeQuickTasks(onRefresh) {
+  if (!SUPABASE_CONFIGURED) return;
+  _client()
+    .channel('quick_tasks_live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'quick_tasks' }, async () => {
+      if (typeof QUICK_TASKS !== 'undefined') {
+        const fresh = await sbLoadQuickTasks();
+        QUICK_TASKS.length = 0; fresh.forEach(t => QUICK_TASKS.push(t));
+      }
+      if (onRefresh) onRefresh();
+    })
+    .subscribe();
+}
+
 // ── Clinics CRUD ─────────────────────────────────────────────
 async function sbLoadClinics() {
   if (!SUPABASE_CONFIGURED) return null;

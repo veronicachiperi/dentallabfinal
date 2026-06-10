@@ -79,6 +79,8 @@ let EMPLOYEES = [
 const CASES = [];
 
 const NOTIFICATIONS = [];
+// TODO partajat al echipei (task-uri rapide). Sincronizat din Supabase (tabel quick_tasks).
+const QUICK_TASKS = [];
 
 const LAB_TERMS_KEY = 'dental-lab-terms-v1';
 const DEFAULT_LAB_TERMS = [
