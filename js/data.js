@@ -238,7 +238,7 @@ function setLabStageStatus(c, stageId, status, assigneeId) {
   });
   c.notStarted = false;
   c.stage = status === 'la_proba' ? 'proba' : stageId;
-  const assignee = assigneeId || primaryStageAssignee(c, stageId) || STAGE_ASSIGNEE_DEFAULTS[stageId] || null;
+  const assignee = assigneeId || primaryStageAssignee(c, stageId) || null;
   if (assignee && !stageAssignees(c, stageId).includes(assignee)) addStageAssignee(c, stageId, assignee);
   c.assignee = primaryStageAssignee(c, stageId) || assignee || c.assignee || null;
   return stageId;
@@ -342,7 +342,6 @@ function completeLabStage(c, stageId) {
     const next = stages[nextIdx];
     c.stage = next;
     if (!c.stageStatuses[next]) c.stageStatuses[next] = 'neincepute';
-    if (!stageAssignees(c,next).length && STAGE_ASSIGNEE_DEFAULTS[next]) addStageAssignee(c,next,STAGE_ASSIGNEE_DEFAULTS[next]);
     c.assignee = primaryStageAssignee(c,next);
   } else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) {
     if (c.stage !== 'terminat' && c.stage !== 'trimis') {
@@ -468,9 +467,9 @@ function assignCaseNumbers() {
   sorted.forEach((c, i) => c.seq = i + 1);
 }
 
-// CAM și La print sunt operate de utilaj (3D printer, mașină CAM) — fără
-// tehnician asignat automat. Etapele cu lucru manual păstrează defaultul.
-const STAGE_ASSIGNEE_DEFAULTS = { design:'tchi', prelucrare:'amoi', ceramica:'acur', proba:'acur', terminat:'acur', trimis:'acur' };
+// Nu asignăm tehnicieni automat. Cazurile primesc responsabil doar printr-o
+// acțiune explicită: „Preia”, „Colaboratori” sau alegere manuală.
+const STAGE_ASSIGNEE_DEFAULTS = {};
 
 CASES.forEach(c => {
   c.assignees = c.assignees || {};
@@ -484,18 +483,15 @@ CASES.forEach(c => {
   stages.forEach((s, i) => {
     if (currentIdx === -1) {
       // Stage not in the lab stages (e.g., 'proba', 'terminat', 'trimis') — mark all earlier as done
-      if (!c.assignees[s]) c.assignees[s] = STAGE_ASSIGNEE_DEFAULTS[s];
       if (!c.stageStatuses[s]) c.stageStatuses[s] = 'finalizat';
     } else if (i < currentIdx) {
-      if (!c.assignees[s]) c.assignees[s] = STAGE_ASSIGNEE_DEFAULTS[s];
       if (!c.stageStatuses[s]) c.stageStatuses[s] = 'finalizat';
     } else if (i === currentIdx) {
-      if (!c.assignees[s]) c.assignees[s] = STAGE_ASSIGNEE_DEFAULTS[s];
       if (!c.stageStatuses[s]) c.stageStatuses[s] = 'in_lucru';
     }
   });
   // Set primary assignee for backwards compat
-  if (!c.assignee) c.assignee = primaryStageAssignee(c,c.stage) || primaryStageAssignee(c,stages[0]);
+  if (!c.assignee) c.assignee = primaryStageAssignee(c,c.stage) || null;
 });
 
 function computePriority(c) {
