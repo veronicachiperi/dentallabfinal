@@ -54,6 +54,33 @@
     .nav-cta {
       display: flex; align-items: center; gap: 12px;
     }
+    .lang-select {
+      height: 38px;
+      padding: 0 34px 0 12px;
+      border: 0.5px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      background: rgba(8,8,8,0.62);
+      color: var(--white);
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .lang-select:focus {
+      outline: 1px solid rgba(201,169,110,0.8);
+      outline-offset: 2px;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
     .btn-ghost {
       padding: 9px 20px; border: 0.5px solid rgba(255,255,255,0.2);
       border-radius: 4px; font-size: 12px; letter-spacing: 0.8px;
@@ -183,10 +210,10 @@
 
     /* ── GALLERY ── */
     .gallery-section { background: var(--black); padding: 80px 24px 100px; }
-    .gallery-grid {
+    .gallery-featured {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
-      grid-template-rows: auto;
+      grid-auto-rows: 260px;
       gap: 10px;
       max-width: 1300px; margin: 0 auto;
     }
@@ -197,15 +224,12 @@
       -webkit-user-select: none;
       -webkit-touch-callout: none;
     }
-    /* Layout spans */
-    .gp:nth-child(1) { grid-column: span 5; grid-row: span 2; }
-    .gp:nth-child(2) { grid-column: span 7; grid-row: span 1; }
-    .gp:nth-child(3) { grid-column: span 4; }
-    .gp:nth-child(4) { grid-column: span 3; }
-    .gp:nth-child(5) { grid-column: span 4; grid-row: span 2; }
-    .gp:nth-child(6) { grid-column: span 4; }
-    .gp:nth-child(7) { grid-column: span 4; }
-    .gp:nth-child(8) { grid-column: span 4; }
+    .gallery-featured .gp:nth-child(1) { grid-column: span 7; grid-row: span 2; }
+    .gallery-featured .gp:nth-child(2) { grid-column: span 5; }
+    .gallery-featured .gp:nth-child(3) { grid-column: span 5; }
+    .gallery-featured .gp:nth-child(4),
+    .gallery-featured .gp:nth-child(5),
+    .gallery-featured .gp:nth-child(6) { grid-column: span 4; }
 
     .gp-inner {
       width: 100%; height: 100%; min-height: 260px;
@@ -244,6 +268,42 @@
       background: transparent;
       pointer-events: all; /* intercepts right-click */
     }
+    .gallery-more {
+      max-width: 1300px;
+      margin: 14px auto 0;
+    }
+    .gallery-more-head {
+      display: flex; align-items: center; justify-content: flex-end;
+      gap: 8px; margin-bottom: 10px;
+    }
+    .gallery-arrow {
+      width: 42px; height: 42px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 0.5px solid rgba(255,255,255,0.22);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.03);
+      color: var(--white);
+      font-size: 24px; line-height: 1;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .gallery-arrow:hover { border-color: rgba(201,169,110,0.65); background: rgba(201,169,110,0.12); }
+    .gallery-track {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(280px, 32%);
+      gap: 10px;
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      scroll-snap-type: inline mandatory;
+      scrollbar-color: rgba(201,169,110,0.55) rgba(255,255,255,0.06);
+      padding-bottom: 12px;
+    }
+    .gallery-track .gp {
+      min-height: 230px;
+      scroll-snap-align: start;
+    }
+    .gallery-track .gp-inner { min-height: 230px; }
 
     /* ── SERVICES ── */
     .services-section { background: var(--dark); }
@@ -272,6 +332,123 @@
     .service-line {
       width: 24px; height: 1.5px; background: var(--gold);
       margin-bottom: 20px;
+    }
+
+    /* ── CONTACT ── */
+    .contact-section {
+      background:
+        linear-gradient(180deg, rgba(8,8,8,0.16), rgba(8,8,8,0.62)),
+        var(--black);
+      border-top: 0.5px solid var(--border);
+    }
+    .contact-shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1fr);
+      gap: 52px;
+      align-items: start;
+    }
+    .contact-list {
+      display: grid;
+      gap: 14px;
+      margin-top: 34px;
+    }
+    .contact-item {
+      display: grid;
+      gap: 6px;
+      padding-bottom: 18px;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .contact-item span {
+      color: var(--dim);
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .contact-item a {
+      color: var(--white);
+      text-decoration: none;
+      font-size: clamp(19px, 2.5vw, 28px);
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+    .contact-item a:hover { color: var(--gold2); }
+    .contact-form {
+      background: rgba(255,255,255,0.035);
+      border: 0.5px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      padding: 28px;
+      display: grid;
+      gap: 16px;
+      box-shadow: 0 28px 70px rgba(0,0,0,0.22);
+    }
+    .contact-form-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 2px;
+    }
+    .contact-form-sub {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .form-field {
+      display: grid;
+      gap: 7px;
+    }
+    .form-field.full { grid-column: 1 / -1; }
+    .form-field label {
+      color: var(--dim);
+      font-size: 10px;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+      width: 100%;
+      border: 0.5px solid rgba(255,255,255,0.16);
+      border-radius: 4px;
+      background: rgba(0,0,0,0.28);
+      color: var(--white);
+      font: 500 14px/1.45 var(--font);
+      padding: 13px 14px;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .form-field textarea {
+      min-height: 128px;
+      resize: vertical;
+    }
+    .form-field input::placeholder,
+    .form-field textarea::placeholder { color: rgba(240,237,232,0.34); }
+    .form-field input:focus,
+    .form-field select:focus,
+    .form-field textarea:focus {
+      border-color: rgba(201,169,110,0.75);
+      background: rgba(0,0,0,0.42);
+    }
+    .form-submit-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 4px;
+    }
+    .form-status {
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     /* ── CTA STRIP ── */
@@ -307,20 +484,31 @@
       nav { padding: 16px 20px; }
       .nav-brand-text { display: none; }
       .nav-logo img { height: 34px; }
+      .nav-cta { gap: 8px; }
+      .btn-ghost { display: none; }
+      .btn-gold { padding: 9px 14px; font-size: 11px; }
+      .lang-select { width: 74px; padding-left: 10px; padding-right: 24px; }
       .hero-lockup { width: min(440px, 92vw); margin-bottom: 28px; }
       .section { padding: 70px 20px; }
       .stats-strip { grid-template-columns: repeat(2, 1fr); }
       .stat-cell:nth-child(2) { border-right: none; }
-      .gallery-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+      .gallery-featured { grid-template-columns: 1fr 1fr; grid-auto-rows: 210px; gap: 6px; }
       .gp { grid-column: span 1 !important; grid-row: span 1 !important; }
       .gp-inner { min-height: 200px; }
+      .gallery-track { grid-auto-columns: minmax(230px, 78%); }
+      .contact-shell { grid-template-columns: 1fr; gap: 34px; }
+      .contact-form { padding: 22px; }
       footer { flex-direction: column; padding: 28px 20px; }
     }
     @media (max-width: 480px) {
-      .gallery-grid { grid-template-columns: 1fr; }
+      .gallery-featured { grid-template-columns: 1fr; }
       .stats-strip { grid-template-columns: 1fr 1fr; }
       .hero-lockup { display: none; }
       .hero-logo-mark { display: block; }
+      .gallery-track { grid-auto-columns: 86%; }
+      .form-grid { grid-template-columns: 1fr; }
+      .form-submit-row { align-items: stretch; flex-direction: column; }
+      .form-submit-row .btn-lg { width: 100%; text-align: center; }
     }
   </style>
 </head>
@@ -333,8 +521,19 @@
     <span class="nav-brand-text">Private CAD</span>
   </a>
   <div class="nav-cta">
-    <a class="btn-ghost" href="#lucrari">Lucrările noastre</a>
-    <a class="btn-gold" href="login.html">Autentificare →</a>
+    <a class="btn-ghost" href="#lucrari" data-i18n="navWork">Lucrările noastre</a>
+    <a class="btn-ghost" href="#contact" data-i18n="navContact">Contact</a>
+    <label>
+      <span class="sr-only" data-i18n="languageLabel">Limbă</span>
+      <select class="lang-select" id="languageSelect" aria-label="Limbă">
+        <option value="ro">RO</option>
+        <option value="en">EN</option>
+        <option value="de">DE</option>
+        <option value="fr">FR</option>
+        <option value="ru">RU</option>
+      </select>
+    </label>
+    <a class="btn-gold" href="login.html" data-i18n="navLogin">Autentificare →</a>
   </div>
 </nav>
 
@@ -343,22 +542,22 @@
   <div class="hero-bg"></div>
   <img src="assets/brand/private-cad-lockup.png?v=20260602" alt="Private CAD" class="hero-lockup">
   <img src="assets/brand/private-cad-tooth.png?v=20260602" alt="Private CAD" class="hero-logo-mark">
-  <div class="hero-label">Laborator Stomatologic · Chișinău</div>
-  <h1 class="hero-title">
+  <div class="hero-label" data-i18n="heroLabel">Laborator Stomatologic · Chișinău</div>
+  <h1 class="hero-title" data-i18n-html="heroTitle">
     Precizie la nivel de <span>micron</span>.<br>
     Estetică fără compromis.
   </h1>
-  <p class="hero-sub">
+  <p class="hero-sub" data-i18n="heroSub">
     Lucrări protetice CAD/CAM, ceramică stratificată și soluții pe implanturi,
     realizate cu tehnologie de ultimă generație pentru clinicile partenere.
   </p>
   <div class="hero-actions">
-    <a class="btn-lg gold" href="#lucrari">Descoperă lucrările noastre</a>
-    <a class="btn-lg outline" href="login.html">Portal clinică →</a>
+    <a class="btn-lg gold" href="#lucrari" data-i18n="heroPrimary">Descoperă lucrările noastre</a>
+    <a class="btn-lg outline" href="login.html" data-i18n="heroSecondary">Portal clinică →</a>
   </div>
   <div class="hero-scroll">
     <div class="hero-scroll-line"></div>
-    Scroll
+    <span data-i18n="scroll">Scroll</span>
   </div>
 </section>
 
@@ -366,51 +565,45 @@
 <div class="stats-strip">
   <div class="stat-cell">
     <div class="stat-num">2000+</div>
-    <div class="stat-lbl">Cazuri anual</div>
+    <div class="stat-lbl" data-i18n="statCases">Cazuri anual</div>
   </div>
   <div class="stat-cell">
     <div class="stat-num">7</div>
-    <div class="stat-lbl">Clinici partenere</div>
+    <div class="stat-lbl" data-i18n="statClinics">Clinici partenere</div>
   </div>
   <div class="stat-cell">
     <div class="stat-num">CAD/CAM</div>
-    <div class="stat-lbl">Tehnologie digitală</div>
+    <div class="stat-lbl" data-i18n="statTech">Tehnologie digitală</div>
   </div>
   <div class="stat-cell">
     <div class="stat-num">48h</div>
-    <div class="stat-lbl">Timp mediu de execuție</div>
+    <div class="stat-lbl" data-i18n="statTime">Timp mediu de execuție</div>
   </div>
 </div>
 
 <!-- GALLERY -->
 <section class="gallery-section" id="lucrari">
   <div class="section-head section-head-center" style="max-width:1300px;margin:0 auto 48px">
-    <div class="section-label">Portofoliu</div>
-    <h2 class="section-title">Lucrările noastre</h2>
-    <p class="section-sub">
+    <div class="section-label" data-i18n="portfolioLabel">Portofoliu</div>
+    <h2 class="section-title" data-i18n="portfolioTitle">Lucrările noastre</h2>
+    <p class="section-sub" data-i18n="portfolioSub">
       Fiecare lucrare reflectă standarde ridicate de estetică și funcționalitate,
       realizată cu materiale premium și tehnologie digitală.
     </p>
   </div>
 
-  <div class="gallery-grid" id="galleryGrid">
-    <div class="gp">
-      <div class="gp-inner" style="background-image:url('assets/gallery/g1.jpg')"></div>
-    </div>
+  <div class="gallery-featured" id="galleryGrid">
     <div class="gp">
       <div class="gp-inner" style="background-image:url('assets/gallery/g2.jpg')"></div>
     </div>
     <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/old2.jpg')"></div>
+    </div>
+    <div class="gp">
+      <div class="gp-inner" style="background-image:url('assets/gallery/old3.jpg')"></div>
+    </div>
+    <div class="gp">
       <div class="gp-inner" style="background-image:url('assets/gallery/g3.jpg')"></div>
-    </div>
-    <div class="gp">
-      <div class="gp-inner" style="background-image:url('assets/gallery/g4.jpg')"></div>
-    </div>
-    <div class="gp">
-      <div class="gp-inner" style="background-image:url('assets/gallery/g5.jpg')"></div>
-    </div>
-    <div class="gp">
-      <div class="gp-inner" style="background-image:url('assets/gallery/g6.jpg')"></div>
     </div>
     <div class="gp">
       <div class="gp-inner" style="background-image:url('assets/gallery/g7.jpg')"></div>
@@ -419,59 +612,560 @@
       <div class="gp-inner" style="background-image:url('assets/gallery/g8.jpg')"></div>
     </div>
   </div>
+
+  <div class="gallery-more">
+    <div class="gallery-more-head">
+      <button class="gallery-arrow" type="button" data-gallery-scroll="-1" aria-label="Scroll stânga" data-i18n-aria-label="galleryLeft">‹</button>
+      <button class="gallery-arrow" type="button" data-gallery-scroll="1" aria-label="Scroll dreapta" data-i18n-aria-label="galleryRight">›</button>
+    </div>
+    <div class="gallery-track" id="galleryTrack">
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/g1.jpg')"></div>
+      </div>
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/g4.jpg')"></div>
+      </div>
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/g5.jpg')"></div>
+      </div>
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/g6.jpg')"></div>
+      </div>
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/old1.jpg')"></div>
+      </div>
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/old4.jpg')"></div>
+      </div>
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/old5.jpg')"></div>
+      </div>
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/old6.jpg')"></div>
+      </div>
+      <div class="gp">
+        <div class="gp-inner" style="background-image:url('assets/gallery/old7.jpg')"></div>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- SERVICES -->
 <section class="section services-section">
   <div style="max-width:1200px;margin:0 auto">
     <div class="section-head">
-      <div class="section-label">Servicii</div>
-      <h2 class="section-title">Ce realizăm</h2>
-      <p class="section-sub">Acoperim întreg spectrul de lucrări protetice, de la design digital la lucrarea finală.</p>
+      <div class="section-label" data-i18n="servicesLabel">Servicii</div>
+      <h2 class="section-title" data-i18n="servicesTitle">Ce realizăm</h2>
+      <p class="section-sub" data-i18n="servicesSub">Acoperim întreg spectrul de lucrări protetice, de la design digital la lucrarea finală.</p>
     </div>
     <div class="services-grid">
       <div class="service-card">
         <div class="service-line"></div>
-        <div class="service-name">Design CAD</div>
-        <div class="service-desc">Proiectare digitală 3D cu software specializat pentru coroane, punți și proteze totale.</div>
+        <div class="service-name" data-i18n="serviceDesignName">Design CAD</div>
+        <div class="service-desc" data-i18n="serviceDesignDesc">Proiectare digitală 3D cu software specializat pentru coroane, punți și proteze totale.</div>
       </div>
       <div class="service-card">
         <div class="service-line"></div>
-        <div class="service-name">Prelucrare CAM</div>
-        <div class="service-desc">Frezare de precizie din blocuri de zirconiu, PMMA și titan pe mașini CNC de ultimă generație.</div>
+        <div class="service-name" data-i18n="serviceCamName">Prelucrare CAM</div>
+        <div class="service-desc" data-i18n="serviceCamDesc">Frezare de precizie din blocuri de zirconiu, PMMA și titan pe mașini CNC de ultimă generație.</div>
       </div>
       <div class="service-card">
         <div class="service-line"></div>
-        <div class="service-name">Ceramică stratificată</div>
-        <div class="service-desc">Aplicare manuală de ceramică pentru estetică superioară în zona frontală și laterală.</div>
+        <div class="service-name" data-i18n="serviceCeramicName">Ceramică stratificată</div>
+        <div class="service-desc" data-i18n="serviceCeramicDesc">Aplicare manuală de ceramică pentru estetică superioară în zona frontală și laterală.</div>
       </div>
       <div class="service-card">
         <div class="service-line"></div>
-        <div class="service-name">Soluții pe implanturi</div>
-        <div class="service-desc">Suprastructuri pe implanturi: coroane individuale, punți full-arch și proteze hibride.</div>
+        <div class="service-name" data-i18n="serviceImplantName">Soluții pe implanturi</div>
+        <div class="service-desc" data-i18n="serviceImplantDesc">Suprastructuri pe implanturi: coroane individuale, punți full-arch și proteze hibride.</div>
       </div>
     </div>
   </div>
 </section>
 
+<!-- CONTACT -->
+<section class="section contact-section" id="contact">
+  <div class="contact-shell">
+    <div>
+      <div class="section-label" data-i18n="contactLabel">Contact</div>
+      <h2 class="section-title" data-i18n="contactTitle">Solicitări și colaborări</h2>
+      <p class="section-sub" data-i18n="contactSub">
+        Pentru colaborări cu clinici, lucrări All-on-X sau acces în portal, transmiteți-ne câteva detalii și revenim cu răspuns.
+      </p>
+      <div class="contact-list" aria-label="Contact Private CAD">
+        <div class="contact-item">
+          <span data-i18n="contactEmailLabel">Email</span>
+          <a href="mailto:privatecadsrl@gmail.com">privatecadsrl@gmail.com</a>
+        </div>
+        <div class="contact-item">
+          <span data-i18n="contactPhoneLabel">Telefon</span>
+          <a href="tel:+37360485048">+373 60 48 50 48</a>
+        </div>
+      </div>
+    </div>
+
+    <form class="contact-form" id="contactForm">
+      <div>
+        <div class="contact-form-title" data-i18n="formTitle">Trimite o solicitare</div>
+        <p class="contact-form-sub" data-i18n="formSub">Formularul pregătește automat un email către laborator.</p>
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="contactName" data-i18n="formName">Nume</label>
+          <input id="contactName" name="name" type="text" autocomplete="name" required data-i18n-placeholder="formNamePlaceholder" placeholder="Nume și prenume">
+        </div>
+        <div class="form-field">
+          <label for="contactClinic" data-i18n="formClinic">Clinică</label>
+          <input id="contactClinic" name="clinic" type="text" autocomplete="organization" data-i18n-placeholder="formClinicPlaceholder" placeholder="Numele clinicii">
+        </div>
+        <div class="form-field">
+          <label for="contactEmail" data-i18n="formEmail">Email</label>
+          <input id="contactEmail" name="email" type="email" autocomplete="email" required data-i18n-placeholder="formEmailPlaceholder" placeholder="email@clinica.md">
+        </div>
+        <div class="form-field">
+          <label for="contactPhone" data-i18n="formPhone">Telefon</label>
+          <input id="contactPhone" name="phone" type="tel" autocomplete="tel" data-i18n-placeholder="formPhonePlaceholder" placeholder="+373 ...">
+        </div>
+        <div class="form-field full">
+          <label for="contactRequest" data-i18n="formRequest">Tip solicitare</label>
+          <select id="contactRequest" name="request">
+            <option value="partnership" data-i18n="requestPartnership">Colaborare clinică</option>
+            <option value="case" data-i18n="requestCase">Caz nou / ofertă</option>
+            <option value="all-on-x" data-i18n="requestAllOnX">All-on-X</option>
+            <option value="portal" data-i18n="requestPortal">Acces portal</option>
+            <option value="general" data-i18n="requestGeneral">Altă solicitare</option>
+          </select>
+        </div>
+        <div class="form-field full">
+          <label for="contactMessage" data-i18n="formMessage">Mesaj</label>
+          <textarea id="contactMessage" name="message" required data-i18n-placeholder="formMessagePlaceholder" placeholder="Descrieți pe scurt solicitarea..."></textarea>
+        </div>
+      </div>
+      <div class="form-submit-row">
+        <div class="form-status" id="contactFormStatus" data-i18n="formStatusReady">Răspundem cât mai curând posibil.</div>
+        <button class="btn-lg gold" type="submit" data-i18n="formSend">Trimite email →</button>
+      </div>
+    </form>
+  </div>
+</section>
+
 <!-- CTA -->
 <section class="cta-strip">
-  <div class="section-label">Acces securizat</div>
-  <h2 class="section-title">Portal dedicat clinicilor partenere</h2>
-  <p class="section-sub" style="max-width:440px;margin:0 auto 36px">
+  <div class="section-label" data-i18n="ctaLabel">Acces securizat</div>
+  <h2 class="section-title" data-i18n="ctaTitle">Portal dedicat clinicilor partenere</h2>
+  <p class="section-sub" style="max-width:440px;margin:0 auto 36px" data-i18n="ctaSub">
     Urmăriți stadiul lucrărilor în timp real, comunicați cu laboratorul
     și accesați istoricul complet al cazurilor.
   </p>
-  <a class="btn-lg gold" href="login.html">Intră în portal →</a>
+  <a class="btn-lg gold" href="login.html" data-i18n="ctaButton">Intră în portal →</a>
 </section>
 
 <!-- FOOTER -->
 <footer>
-  <div class="footer-brand"><img src="assets/brand/private-cad-tooth.png?v=20260602" alt="">Private CAD · Laborator Stomatologic</div>
-  <div class="footer-note">© 2026 Private CAD. Toate drepturile rezervate.</div>
+  <div class="footer-brand"><img src="assets/brand/private-cad-tooth.png?v=20260602" alt=""><span data-i18n="footerBrand">Private CAD · Laborator Stomatologic</span></div>
+  <div class="footer-note" data-i18n="footerNote">© 2026 Private CAD. Toate drepturile rezervate.</div>
 </footer>
 
 <script>
+  const landingTranslations = {
+    ro: {
+      pageTitle: 'PRIVATE CAD — Laborator Stomatologic',
+      metaDescription: 'Laborator stomatologic de înaltă performanță. Lucrări CAD/CAM, ceramică, implanturi.',
+      languageLabel: 'Limbă',
+      navWork: 'Lucrările noastre',
+      navContact: 'Contact',
+      navLogin: 'Autentificare →',
+      heroLabel: 'Laborator Stomatologic · Chișinău',
+      heroTitle: 'Precizie la nivel de <span>micron</span>.<br>Estetică fără compromis.',
+      heroSub: 'Lucrări protetice CAD/CAM, ceramică stratificată și soluții pe implanturi, realizate cu tehnologie de ultimă generație pentru clinicile partenere.',
+      heroPrimary: 'Descoperă lucrările noastre',
+      heroSecondary: 'Portal clinică →',
+      scroll: 'Scroll',
+      statCases: 'Cazuri anual',
+      statClinics: 'Clinici partenere',
+      statTech: 'Tehnologie digitală',
+      statTime: 'Timp mediu de execuție',
+      portfolioLabel: 'Portofoliu',
+      portfolioTitle: 'Lucrările noastre',
+      portfolioSub: 'Fiecare lucrare reflectă standarde ridicate de estetică și funcționalitate, realizată cu materiale premium și tehnologie digitală.',
+      galleryLeft: 'Scroll stânga',
+      galleryRight: 'Scroll dreapta',
+      servicesLabel: 'Servicii',
+      servicesTitle: 'Ce realizăm',
+      servicesSub: 'Acoperim întreg spectrul de lucrări protetice, de la design digital la lucrarea finală.',
+      serviceDesignName: 'Design CAD',
+      serviceDesignDesc: 'Proiectare digitală 3D cu software specializat pentru coroane, punți și proteze totale.',
+      serviceCamName: 'Prelucrare CAM',
+      serviceCamDesc: 'Frezare de precizie din blocuri de zirconiu, PMMA și titan pe mașini CNC de ultimă generație.',
+      serviceCeramicName: 'Ceramică stratificată',
+      serviceCeramicDesc: 'Aplicare manuală de ceramică pentru estetică superioară în zona frontală și laterală.',
+      serviceImplantName: 'Soluții pe implanturi',
+      serviceImplantDesc: 'Suprastructuri pe implanturi: coroane individuale, punți full-arch și proteze hibride.',
+      contactLabel: 'Contact',
+      contactTitle: 'Solicitări și colaborări',
+      contactSub: 'Pentru colaborări cu clinici, lucrări All-on-X sau acces în portal, transmiteți-ne câteva detalii și revenim cu răspuns.',
+      contactEmailLabel: 'Email',
+      contactPhoneLabel: 'Telefon',
+      formTitle: 'Trimite o solicitare',
+      formSub: 'Formularul pregătește automat un email către laborator.',
+      formName: 'Nume',
+      formNamePlaceholder: 'Nume și prenume',
+      formClinic: 'Clinică',
+      formClinicPlaceholder: 'Numele clinicii',
+      formEmail: 'Email',
+      formEmailPlaceholder: 'email@clinica.md',
+      formPhone: 'Telefon',
+      formPhonePlaceholder: '+373 ...',
+      formRequest: 'Tip solicitare',
+      requestPartnership: 'Colaborare clinică',
+      requestCase: 'Caz nou / ofertă',
+      requestAllOnX: 'All-on-X',
+      requestPortal: 'Acces portal',
+      requestGeneral: 'Altă solicitare',
+      formMessage: 'Mesaj',
+      formMessagePlaceholder: 'Descrieți pe scurt solicitarea...',
+      formStatusReady: 'Răspundem cât mai curând posibil.',
+      formStatusMailOpened: 'Am deschis aplicația de email cu solicitarea completată.',
+      ctaLabel: 'Acces securizat',
+      ctaTitle: 'Portal dedicat clinicilor partenere',
+      ctaSub: 'Urmăriți stadiul lucrărilor în timp real, comunicați cu laboratorul și accesați istoricul complet al cazurilor.',
+      ctaButton: 'Intră în portal →',
+      footerBrand: 'Private CAD · Laborator Stomatologic',
+      footerNote: '© 2026 Private CAD. Toate drepturile rezervate.'
+    },
+    en: {
+      pageTitle: 'PRIVATE CAD — Dental Laboratory',
+      metaDescription: 'High-performance dental laboratory. CAD/CAM work, ceramics, implants.',
+      languageLabel: 'Language',
+      navWork: 'Our Work',
+      navContact: 'Contact',
+      navLogin: 'Sign in →',
+      heroLabel: 'Dental Laboratory · Chișinău',
+      heroTitle: 'Micron-level <span>precision</span>.<br>Aesthetics without compromise.',
+      heroSub: 'CAD/CAM prosthetic restorations, layered ceramics and implant solutions, produced with advanced technology for partner clinics.',
+      heroPrimary: 'Explore our work',
+      heroSecondary: 'Clinic portal →',
+      scroll: 'Scroll',
+      statCases: 'Cases per year',
+      statClinics: 'Partner clinics',
+      statTech: 'Digital technology',
+      statTime: 'Average turnaround time',
+      portfolioLabel: 'Portfolio',
+      portfolioTitle: 'Our Work',
+      portfolioSub: 'Every restoration reflects high standards of aesthetics and function, made with premium materials and digital technology.',
+      galleryLeft: 'Scroll left',
+      galleryRight: 'Scroll right',
+      servicesLabel: 'Services',
+      servicesTitle: 'What we make',
+      servicesSub: 'We cover the full spectrum of prosthetic work, from digital design to the final restoration.',
+      serviceDesignName: 'CAD Design',
+      serviceDesignDesc: '3D digital design with specialized software for crowns, bridges and full-arch prosthetics.',
+      serviceCamName: 'CAM Processing',
+      serviceCamDesc: 'Precision milling from zirconia, PMMA and titanium blocks on advanced CNC machines.',
+      serviceCeramicName: 'Layered ceramics',
+      serviceCeramicDesc: 'Hand-layered ceramics for superior aesthetics in the anterior and posterior areas.',
+      serviceImplantName: 'Implant solutions',
+      serviceImplantDesc: 'Implant-supported structures: single crowns, full-arch bridges and hybrid prosthetics.',
+      contactLabel: 'Contact',
+      contactTitle: 'Requests and partnerships',
+      contactSub: 'For clinic partnerships, All-on-X restorations or portal access, send us a few details and we will get back to you.',
+      contactEmailLabel: 'Email',
+      contactPhoneLabel: 'Phone',
+      formTitle: 'Send a request',
+      formSub: 'The form automatically prepares an email to the laboratory.',
+      formName: 'Name',
+      formNamePlaceholder: 'Full name',
+      formClinic: 'Clinic',
+      formClinicPlaceholder: 'Clinic name',
+      formEmail: 'Email',
+      formEmailPlaceholder: 'email@clinic.com',
+      formPhone: 'Phone',
+      formPhonePlaceholder: '+373 ...',
+      formRequest: 'Request type',
+      requestPartnership: 'Clinic partnership',
+      requestCase: 'New case / quote',
+      requestAllOnX: 'All-on-X',
+      requestPortal: 'Portal access',
+      requestGeneral: 'General request',
+      formMessage: 'Message',
+      formMessagePlaceholder: 'Briefly describe your request...',
+      formStatusReady: 'We will reply as soon as possible.',
+      formStatusMailOpened: 'Your email app opened with the request filled in.',
+      ctaLabel: 'Secure access',
+      ctaTitle: 'Portal for partner clinics',
+      ctaSub: 'Track case progress in real time, communicate with the laboratory and access the full case history.',
+      ctaButton: 'Enter portal →',
+      footerBrand: 'Private CAD · Dental Laboratory',
+      footerNote: '© 2026 Private CAD. All rights reserved.'
+    },
+    de: {
+      pageTitle: 'PRIVATE CAD — Dentallabor',
+      metaDescription: 'Hochleistungs-Dentallabor. CAD/CAM-Arbeiten, Keramik, Implantate.',
+      languageLabel: 'Sprache',
+      navWork: 'Unsere Arbeiten',
+      navContact: 'Kontakt',
+      navLogin: 'Anmelden →',
+      heroLabel: 'Dentallabor · Chișinău',
+      heroTitle: 'Präzision im <span>Mikronbereich</span>.<br>Ästhetik ohne Kompromisse.',
+      heroSub: 'CAD/CAM-Prothetik, geschichtete Keramik und Implantatlösungen, gefertigt mit moderner Technologie für Partnerkliniken.',
+      heroPrimary: 'Unsere Arbeiten ansehen',
+      heroSecondary: 'Klinikportal →',
+      scroll: 'Scrollen',
+      statCases: 'Fälle pro Jahr',
+      statClinics: 'Partnerkliniken',
+      statTech: 'Digitale Technologie',
+      statTime: 'Durchschnittliche Fertigungszeit',
+      portfolioLabel: 'Portfolio',
+      portfolioTitle: 'Unsere Arbeiten',
+      portfolioSub: 'Jede Arbeit steht für hohe ästhetische und funktionelle Standards, gefertigt mit Premium-Materialien und digitaler Technologie.',
+      galleryLeft: 'Nach links scrollen',
+      galleryRight: 'Nach rechts scrollen',
+      servicesLabel: 'Leistungen',
+      servicesTitle: 'Was wir fertigen',
+      servicesSub: 'Wir decken das gesamte Spektrum prothetischer Arbeiten ab, vom digitalen Design bis zur finalen Restauration.',
+      serviceDesignName: 'CAD-Design',
+      serviceDesignDesc: 'Digitales 3D-Design mit spezialisierter Software für Kronen, Brücken und Totalprothesen.',
+      serviceCamName: 'CAM-Bearbeitung',
+      serviceCamDesc: 'Präzisionsfräsen aus Zirkon, PMMA und Titanblöcken auf modernen CNC-Maschinen.',
+      serviceCeramicName: 'Geschichtete Keramik',
+      serviceCeramicDesc: 'Manuelle Keramikschichtung für überlegene Ästhetik im Front- und Seitenzahnbereich.',
+      serviceImplantName: 'Implantatlösungen',
+      serviceImplantDesc: 'Implantatgetragene Strukturen: Einzelkronen, Full-Arch-Brücken und Hybridprothesen.',
+      contactLabel: 'Kontakt',
+      contactTitle: 'Anfragen und Kooperationen',
+      contactSub: 'Für Klinikpartnerschaften, All-on-X-Arbeiten oder Portalzugang senden Sie uns einige Details und wir melden uns zurück.',
+      contactEmailLabel: 'Email',
+      contactPhoneLabel: 'Telefon',
+      formTitle: 'Anfrage senden',
+      formSub: 'Das Formular bereitet automatisch eine Email an das Labor vor.',
+      formName: 'Name',
+      formNamePlaceholder: 'Vor- und Nachname',
+      formClinic: 'Klinik',
+      formClinicPlaceholder: 'Name der Klinik',
+      formEmail: 'Email',
+      formEmailPlaceholder: 'email@klinik.de',
+      formPhone: 'Telefon',
+      formPhonePlaceholder: '+373 ...',
+      formRequest: 'Art der Anfrage',
+      requestPartnership: 'Klinikpartnerschaft',
+      requestCase: 'Neuer Fall / Angebot',
+      requestAllOnX: 'All-on-X',
+      requestPortal: 'Portalzugang',
+      requestGeneral: 'Allgemeine Anfrage',
+      formMessage: 'Nachricht',
+      formMessagePlaceholder: 'Beschreiben Sie kurz Ihre Anfrage...',
+      formStatusReady: 'Wir antworten so schnell wie möglich.',
+      formStatusMailOpened: 'Ihre Email-App wurde mit der ausgefüllten Anfrage geöffnet.',
+      ctaLabel: 'Sicherer Zugang',
+      ctaTitle: 'Portal für Partnerkliniken',
+      ctaSub: 'Verfolgen Sie den Arbeitsfortschritt in Echtzeit, kommunizieren Sie mit dem Labor und greifen Sie auf die vollständige Fallhistorie zu.',
+      ctaButton: 'Portal öffnen →',
+      footerBrand: 'Private CAD · Dentallabor',
+      footerNote: '© 2026 Private CAD. Alle Rechte vorbehalten.'
+    },
+    fr: {
+      pageTitle: 'PRIVATE CAD — Laboratoire Dentaire',
+      metaDescription: 'Laboratoire dentaire haute performance. Travaux CAD/CAM, céramique, implants.',
+      languageLabel: 'Langue',
+      navWork: 'Nos réalisations',
+      navContact: 'Contact',
+      navLogin: 'Connexion →',
+      heroLabel: 'Laboratoire Dentaire · Chișinău',
+      heroTitle: 'Précision au niveau du <span>micron</span>.<br>Esthétique sans compromis.',
+      heroSub: 'Restaurations prothétiques CAD/CAM, céramique stratifiée et solutions implantaires, réalisées avec une technologie avancée pour les cliniques partenaires.',
+      heroPrimary: 'Découvrir nos réalisations',
+      heroSecondary: 'Portail clinique →',
+      scroll: 'Défiler',
+      statCases: 'Cas par an',
+      statClinics: 'Cliniques partenaires',
+      statTech: 'Technologie numérique',
+      statTime: 'Délai moyen de réalisation',
+      portfolioLabel: 'Portfolio',
+      portfolioTitle: 'Nos réalisations',
+      portfolioSub: 'Chaque restauration reflète des standards élevés d’esthétique et de fonctionnalité, avec des matériaux premium et une technologie numérique.',
+      galleryLeft: 'Faire défiler à gauche',
+      galleryRight: 'Faire défiler à droite',
+      servicesLabel: 'Services',
+      servicesTitle: 'Ce que nous réalisons',
+      servicesSub: 'Nous couvrons tout le spectre des travaux prothétiques, de la conception numérique à la restauration finale.',
+      serviceDesignName: 'Design CAD',
+      serviceDesignDesc: 'Conception numérique 3D avec logiciel spécialisé pour couronnes, bridges et prothèses complètes.',
+      serviceCamName: 'Usinage CAM',
+      serviceCamDesc: 'Fraisage de précision de blocs en zircone, PMMA et titane sur machines CNC avancées.',
+      serviceCeramicName: 'Céramique stratifiée',
+      serviceCeramicDesc: 'Application manuelle de céramique pour une esthétique supérieure en zone antérieure et postérieure.',
+      serviceImplantName: 'Solutions implantaires',
+      serviceImplantDesc: 'Structures sur implants : couronnes unitaires, bridges full-arch et prothèses hybrides.',
+      contactLabel: 'Contact',
+      contactTitle: 'Demandes et collaborations',
+      contactSub: 'Pour les collaborations avec des cliniques, les restaurations All-on-X ou l’accès au portail, envoyez-nous quelques détails et nous vous répondrons.',
+      contactEmailLabel: 'Email',
+      contactPhoneLabel: 'Téléphone',
+      formTitle: 'Envoyer une demande',
+      formSub: 'Le formulaire prépare automatiquement un email au laboratoire.',
+      formName: 'Nom',
+      formNamePlaceholder: 'Nom et prénom',
+      formClinic: 'Clinique',
+      formClinicPlaceholder: 'Nom de la clinique',
+      formEmail: 'Email',
+      formEmailPlaceholder: 'email@clinique.fr',
+      formPhone: 'Téléphone',
+      formPhonePlaceholder: '+373 ...',
+      formRequest: 'Type de demande',
+      requestPartnership: 'Collaboration clinique',
+      requestCase: 'Nouveau cas / devis',
+      requestAllOnX: 'All-on-X',
+      requestPortal: 'Accès au portail',
+      requestGeneral: 'Autre demande',
+      formMessage: 'Message',
+      formMessagePlaceholder: 'Décrivez brièvement votre demande...',
+      formStatusReady: 'Nous répondrons dès que possible.',
+      formStatusMailOpened: 'Votre application email s’est ouverte avec la demande préremplie.',
+      ctaLabel: 'Accès sécurisé',
+      ctaTitle: 'Portail dédié aux cliniques partenaires',
+      ctaSub: 'Suivez l’avancement des cas en temps réel, communiquez avec le laboratoire et accédez à l’historique complet des cas.',
+      ctaButton: 'Entrer dans le portail →',
+      footerBrand: 'Private CAD · Laboratoire Dentaire',
+      footerNote: '© 2026 Private CAD. Tous droits réservés.'
+    },
+    ru: {
+      pageTitle: 'PRIVATE CAD — Зуботехническая лаборатория',
+      metaDescription: 'Высокотехнологичная зуботехническая лаборатория. CAD/CAM работы, керамика, импланты.',
+      languageLabel: 'Язык',
+      navWork: 'Наши работы',
+      navContact: 'Контакты',
+      navLogin: 'Войти →',
+      heroLabel: 'Зуботехническая лаборатория · Кишинёв',
+      heroTitle: 'Точность до <span>микрона</span>.<br>Эстетика без компромиссов.',
+      heroSub: 'Протетические работы CAD/CAM, послойная керамика и решения на имплантах, выполненные на современном оборудовании для партнерских клиник.',
+      heroPrimary: 'Посмотреть наши работы',
+      heroSecondary: 'Портал клиники →',
+      scroll: 'Прокрутить',
+      statCases: 'Случаев в год',
+      statClinics: 'Партнерских клиник',
+      statTech: 'Цифровые технологии',
+      statTime: 'Средний срок выполнения',
+      portfolioLabel: 'Портфолио',
+      portfolioTitle: 'Наши работы',
+      portfolioSub: 'Каждая работа отражает высокие стандарты эстетики и функциональности, выполнена из премиальных материалов с использованием цифровых технологий.',
+      galleryLeft: 'Прокрутить влево',
+      galleryRight: 'Прокрутить вправо',
+      servicesLabel: 'Услуги',
+      servicesTitle: 'Что мы изготавливаем',
+      servicesSub: 'Мы выполняем полный спектр протетических работ: от цифрового дизайна до финальной реставрации.',
+      serviceDesignName: 'CAD-дизайн',
+      serviceDesignDesc: 'Цифровое 3D-проектирование в специализированном ПО для коронок, мостов и полных протезов.',
+      serviceCamName: 'CAM-обработка',
+      serviceCamDesc: 'Точное фрезерование из блоков циркония, PMMA и титана на современных CNC-станках.',
+      serviceCeramicName: 'Послойная керамика',
+      serviceCeramicDesc: 'Ручное нанесение керамики для высокой эстетики во фронтальной и боковой зоне.',
+      serviceImplantName: 'Решения на имплантах',
+      serviceImplantDesc: 'Конструкции на имплантах: одиночные коронки, full-arch мосты и гибридные протезы.',
+      contactLabel: 'Контакты',
+      contactTitle: 'Заявки и сотрудничество',
+      contactSub: 'Для сотрудничества с клиниками, работ All-on-X или доступа к порталу отправьте нам несколько деталей, и мы свяжемся с вами.',
+      contactEmailLabel: 'Email',
+      contactPhoneLabel: 'Телефон',
+      formTitle: 'Отправить заявку',
+      formSub: 'Форма автоматически подготовит email в лабораторию.',
+      formName: 'Имя',
+      formNamePlaceholder: 'Имя и фамилия',
+      formClinic: 'Клиника',
+      formClinicPlaceholder: 'Название клиники',
+      formEmail: 'Email',
+      formEmailPlaceholder: 'email@clinic.md',
+      formPhone: 'Телефон',
+      formPhonePlaceholder: '+373 ...',
+      formRequest: 'Тип заявки',
+      requestPartnership: 'Сотрудничество с клиникой',
+      requestCase: 'Новый случай / расчет',
+      requestAllOnX: 'All-on-X',
+      requestPortal: 'Доступ к порталу',
+      requestGeneral: 'Другая заявка',
+      formMessage: 'Сообщение',
+      formMessagePlaceholder: 'Кратко опишите ваш запрос...',
+      formStatusReady: 'Мы ответим как можно скорее.',
+      formStatusMailOpened: 'Почтовое приложение открылось с заполненной заявкой.',
+      ctaLabel: 'Защищенный доступ',
+      ctaTitle: 'Портал для партнерских клиник',
+      ctaSub: 'Отслеживайте этапы работ в реальном времени, общайтесь с лабораторией и просматривайте полную историю случаев.',
+      ctaButton: 'Войти в портал →',
+      footerBrand: 'Private CAD · Зуботехническая лаборатория',
+      footerNote: '© 2026 Private CAD. Все права защищены.'
+    }
+  };
+
+  function savedLanguage() {
+    try { return localStorage.getItem('privateCadLanguage') || 'ro'; }
+    catch (_) { return 'ro'; }
+  }
+
+  function applyLanguage(lang) {
+    const activeLang = landingTranslations[lang] ? lang : 'ro';
+    const dict = landingTranslations[activeLang];
+    document.documentElement.lang = activeLang;
+    document.title = dict.pageTitle;
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) metaDescription.setAttribute('content', dict.metaDescription);
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.dataset.i18n;
+      if (dict[key] !== undefined) el.textContent = dict[key];
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+      const key = el.dataset.i18nHtml;
+      if (dict[key] !== undefined) el.innerHTML = dict[key];
+    });
+    document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
+      const key = el.dataset.i18nAriaLabel;
+      if (dict[key] !== undefined) el.setAttribute('aria-label', dict[key]);
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+      const key = el.dataset.i18nPlaceholder;
+      if (dict[key] !== undefined) el.setAttribute('placeholder', dict[key]);
+    });
+    const select = document.getElementById('languageSelect');
+    if (select) {
+      select.value = activeLang;
+      select.setAttribute('aria-label', dict.languageLabel);
+    }
+    try { localStorage.setItem('privateCadLanguage', activeLang); } catch (_) {}
+  }
+
+  const languageSelect = document.getElementById('languageSelect');
+  if (languageSelect) {
+    languageSelect.addEventListener('change', e => applyLanguage(e.target.value));
+    applyLanguage(savedLanguage());
+  }
+
+  const contactForm = document.getElementById('contactForm');
+  const contactFormStatus = document.getElementById('contactFormStatus');
+  if (contactForm) {
+    contactForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const activeLang = savedLanguage();
+      const dict = landingTranslations[activeLang] || landingTranslations.ro;
+      const formData = new FormData(contactForm);
+      const selectedRequest = document.getElementById('contactRequest');
+      const requestText = selectedRequest
+        ? selectedRequest.options[selectedRequest.selectedIndex].textContent.trim()
+        : String(formData.get('request') || '');
+      const lines = [
+        `${dict.formName}: ${formData.get('name') || '-'}`,
+        `${dict.formClinic}: ${formData.get('clinic') || '-'}`,
+        `${dict.formEmail}: ${formData.get('email') || '-'}`,
+        `${dict.formPhone}: ${formData.get('phone') || '-'}`,
+        `${dict.formRequest}: ${requestText}`,
+        '',
+        `${dict.formMessage}:`,
+        formData.get('message') || '-'
+      ];
+      const subject = `PRIVATE CAD - ${requestText}`;
+      const mailto = `mailto:privatecadsrl@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
+      window.location.href = mailto;
+      if (contactFormStatus) contactFormStatus.textContent = dict.formStatusMailOpened;
+    });
+  }
+
   // Block right-click on entire page
   document.addEventListener('contextmenu', e => e.preventDefault());
   // Block drag (prevent saving images by drag-and-drop)
@@ -492,6 +1186,18 @@
       ? 'rgba(8,8,8,0.92)'
       : 'linear-gradient(to bottom, rgba(8,8,8,0.95), transparent)';
   }, { passive: true });
+
+  const galleryTrack = document.getElementById('galleryTrack');
+  document.querySelectorAll('[data-gallery-scroll]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!galleryTrack) return;
+      const direction = Number(btn.dataset.galleryScroll || 1);
+      galleryTrack.scrollBy({
+        left: direction * Math.max(320, galleryTrack.clientWidth * 0.82),
+        behavior: 'smooth'
+      });
+    });
+  });
 
   // Lazy fade-in for gallery items
   const observer = new IntersectionObserver(entries => {
