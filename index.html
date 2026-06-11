@@ -49,8 +49,8 @@
       width: 36px;
       height: 38px;
       background: var(--brand-icon-color);
-      -webkit-mask: url('assets/brand/private-cad-tooth-mask.png?v=202606101221') center/contain no-repeat;
-      mask: url('assets/brand/private-cad-tooth-mask.png?v=202606101221') center/contain no-repeat;
+      -webkit-mask: url('assets/brand/private-cad-tooth-mask.png?v=202606101236') center/contain no-repeat;
+      mask: url('assets/brand/private-cad-tooth-mask.png?v=202606101236') center/contain no-repeat;
       pointer-events: none;
       user-select: none;
       flex-shrink: 0;
@@ -142,6 +142,27 @@
       width: 84px;
       height: 90px;
       margin-bottom: 24px;
+    }
+    /* Bloc de brand centrat (tooth + PRIVATE CAD) — afișat pe mobil în loc de lockup */
+    .hero-brand-block {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    .hero-brand-block .hero-logo-mark {
+      display: block;
+      width: 92px;
+      height: 98px;
+      margin-bottom: 0;
+    }
+    .hero-brand-text {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: var(--white);
     }
     .hero-label {
       font-size: 11px; letter-spacing: 4px; color: var(--gold);
@@ -593,14 +614,16 @@
         background-size: cover, cover, 168vw auto;
       }
       .hero-lockup { display: none; }
-      .hero-logo-mark { display: block; }
+      .hero-brand-block { display: flex; }
+      .hero-actions { flex-direction: column; width: 100%; max-width: 360px; align-items: stretch; gap: 10px; }
+      .hero-actions .btn-lg { width: 100%; text-align: center; padding: 15px 18px; }
       .gallery-track { grid-auto-columns: 86%; }
       .form-grid { grid-template-columns: 1fr; }
       .form-submit-row { align-items: stretch; flex-direction: column; }
       .form-submit-row .btn-lg { width: 100%; text-align: center; }
     }
   </style>
-<link rel="icon" type="image/x-icon" href="favicon.ico?v=202606101221"><link rel="icon" type="image/png" sizes="32x32" href="assets/brand/favicon-32.png?v=202606101221"><link rel="icon" type="image/png" sizes="512x512" href="assets/brand/favicon-512.png?v=202606101221"><link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png?v=202606101221"></head>
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=202606101236"><link rel="icon" type="image/png" sizes="32x32" href="assets/brand/favicon-32.png?v=202606101236"><link rel="icon" type="image/png" sizes="512x512" href="assets/brand/favicon-512.png?v=202606101236"><link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png?v=202606101236"></head>
 <body>
 
 <!-- NAV -->
@@ -650,7 +673,7 @@
 <section class="hero">
   <div class="hero-bg"></div>
   <img src="assets/brand/private-cad-lockup.png?v=20260602" alt="Private CAD" class="hero-lockup">
-  <span class="brand-mark hero-logo-mark" aria-hidden="true"></span>
+  <div class="hero-brand-block" aria-hidden="true"><span class="brand-mark hero-logo-mark"></span><span class="hero-brand-text">PRIVATE CAD</span></div>
   <div class="hero-label" data-i18n="heroLabel">Laborator Stomatologic · Chișinău</div>
   <h1 class="hero-title" data-i18n-html="heroTitle">
     Precizie la nivel de <span>micron</span>.<br>
