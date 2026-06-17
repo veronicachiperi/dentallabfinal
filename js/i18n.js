@@ -21,7 +21,9 @@
   var LANG_KEY = 'dental-lab-lang';
   var lang = localStorage.getItem(LANG_KEY) || 'ro';
   var applying = false;
+  var obs = null;                 // MutationObserver (deconectat în timpul scrierilor proprii)
   var origText = new WeakMap();   // textNode -> șir RO original
+  var lastSet = new WeakMap();    // textNode -> ultima valoare scrisă de noi
   var origAttr = new WeakMap();   // element -> { attr: șir RO original }
 
   // ── Plural rusesc: 1 → one, 2-4 → few, 5-20/0 → many ─────────
@@ -340,10 +342,17 @@
   var SKIP_DESCEND = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEXTAREA: 1 };
 
   function translateTextNode(node) {
-    if (!origText.has(node)) origText.set(node, node.nodeValue);
+    var cur = node.nodeValue;
     var raw = origText.get(node);
+    if (raw === undefined) {
+      raw = cur; origText.set(node, cur);
+    } else if (cur !== raw && cur !== lastSet.get(node)) {
+      // Aplicația a schimbat acest nod (valoare nouă) — re-stabilim originalul.
+      raw = cur; origText.set(node, cur);
+    }
     var target = lang === 'ru' ? translateString(raw) : raw;
     if (node.nodeValue !== target) node.nodeValue = target;
+    lastSet.set(node, target);
   }
 
   function translateAttr(el, attr) {
@@ -367,29 +376,61 @@
     for (var c = node.firstChild; c; c = c.nextSibling) walk(c);
   }
 
-  function retranslate() {
+  function retranslate(skipWalk) {
     if (!document.body) return;
     applying = true;
-    try { walk(document.body); } finally { applying = false; }
+    if (obs) obs.disconnect();                 // nu reacționăm la propriile scrieri
+    try { if (!skipWalk) walk(document.body); buildToggle(); }
+    finally {
+      if (obs) obs.observe(document.body, { childList: true, characterData: true, subtree: true });
+      applying = false;
+    }
   }
 
   // ── Comutator RO/RU ──────────────────────────────────────────
+  var FLOAT_CSS = 'position:fixed;right:14px;bottom:14px;z-index:99999;display:flex;gap:2px;' +
+    'align-items:center;padding:6px 4px;border-radius:999px;border:1px solid rgba(0,0,0,.18);' +
+    'background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);font:600 12px system-ui,sans-serif;' +
+    'cursor:pointer;user-select:none;color:#111';
+  var INLINE_CSS = 'display:inline-flex;gap:2px;align-items:center;vertical-align:middle;' +
+    'margin-left:8px;padding:5px 4px;border-radius:999px;border:1px solid rgba(0,0,0,.18);' +
+    'background:#fff;font:600 12px system-ui,sans-serif;cursor:pointer;user-select:none;color:#111';
+
   function buildToggle() {
-    if (document.getElementById('i18nToggle')) return;
-    var b = document.createElement('button');
-    b.id = 'i18nToggle';
-    b.type = 'button';
-    b.setAttribute('aria-label', 'Limbă / Язык');
-    b.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:99999;display:flex;gap:2px;' +
-      'align-items:center;padding:6px 4px;border-radius:999px;border:1px solid rgba(0,0,0,.18);' +
-      'background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);font:600 12px system-ui,sans-serif;' +
-      'cursor:pointer;user-select:none;color:#111';
-    document.body.appendChild(b);
-    renderToggle(b);
-    b.addEventListener('click', function () {
-      setLang(lang === 'ru' ? 'ro' : 'ru');
+    var b = document.getElementById('i18nToggle');
+    if (!b) {
+      b = document.createElement('button');
+      b.id = 'i18nToggle';
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Limbă / Язык');
+      b.addEventListener('click', function () {
+        setLang(lang === 'ru' ? 'ro' : 'ru');
+        renderToggle(b);
+      });
+      document.body.appendChild(b);
       renderToggle(b);
-    });
+    }
+    placeToggle(b);
+    return b;
+  }
+
+  // Lângă butonul Export CSV (dashboard / arhivă / statistici) dacă există;
+  // altfel rămâne plutitor în colțul din dreapta-jos.
+  function placeToggle(b) {
+    b = b || document.getElementById('i18nToggle');
+    if (!b) return;
+    var anchor = document.getElementById('exportCsvBtn') ||
+                 document.getElementById('arExport') ||
+                 document.getElementById('statsExportCsv');
+    if (anchor) {
+      if (anchor.nextElementSibling !== b || b.parentNode !== anchor.parentNode) {
+        b.style.cssText = INLINE_CSS;
+        anchor.insertAdjacentElement('afterend', b);
+      }
+    } else if (b.parentNode !== document.body || b.style.position !== 'fixed') {
+      b.style.cssText = FLOAT_CSS;
+      document.body.appendChild(b);
+    }
   }
   function renderToggle(b) {
     var on = 'background:#111;color:#fff', off = 'background:transparent;color:#666';
@@ -406,25 +447,26 @@
   }
 
   // ── Observator pentru conținut redat dinamic de app.js ───────
-  var pending = null;
-  function scheduleRetranslate() {
+  // Rulăm SINCRON (microtask, înainte de paint) ca să nu se vadă textul RO
+  // pâlpâind înainte de traducere. retranslate() deconectează observatorul
+  // pe durata scrierilor proprii, deci nu există buclă.
+  function onMutations(muts) {
     if (applying) return;
-    if (pending) return;
-    pending = setTimeout(function () { pending = null; retranslate(); }, 60);
+    for (var i = 0; i < muts.length; i++) {
+      if ((muts[i].addedNodes && muts[i].addedNodes.length) || muts[i].type === 'characterData') {
+        // În RO nu e nimic de tradus (conținutul e deja RO) — doar repoziționăm
+        // comutatorul. În RU traducem conținutul nou redat.
+        retranslate(lang !== 'ru');
+        return;
+      }
+    }
   }
 
   function init() {
     document.documentElement.lang = lang;
-    buildToggle();
-    if (lang === 'ru') retranslate();
-    var obs = new MutationObserver(function (muts) {
-      if (applying) return;
-      for (var i = 0; i < muts.length; i++) {
-        if (muts[i].addedNodes && muts[i].addedNodes.length) { scheduleRetranslate(); return; }
-        if (muts[i].type === 'characterData') { scheduleRetranslate(); return; }
-      }
-    });
-    obs.observe(document.body, { childList: true, characterData: true, subtree: true });
+    obs = new MutationObserver(onMutations);
+    // buildToggle + traducere inițială (retranslate gestionează observatorul)
+    retranslate();
   }
 
   if (document.readyState === 'loading') {
