@@ -844,6 +844,16 @@ button{font-family:inherit;cursor:pointer}
 .pc-row-grid.not-started{background:var(--bg-soft);opacity:.72}
 .pc-row-grid.not-started:hover{opacity:1}
 .pc-row-grid.proba-row{background:rgba(234,192,74,.10)}
+.pc-row-grid.blocked{background:rgba(163,45,45,.06);opacity:.65}
+.pc-row-grid.blocked:hover{opacity:1;background:rgba(163,45,45,.08)}
+.pc-row-grid.blocked .tbl-name,
+.pc-row-grid.blocked .tag,
+.pc-row-grid.blocked .pc-progress-label,
+.pc-row-grid.blocked .pc-stage-trail,
+.pc-row-grid.blocked .tbl-due-bold{text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:rgba(122,31,31,.72)}
+.case-shell.blocked .cd-title,
+.case-shell.blocked .cd-clinic-line,
+.case-shell.blocked .cd-doctor{text-decoration:line-through;text-decoration-thickness:1px;text-decoration-color:rgba(122,31,31,.72)}
 
 /* Modificare grid pc-row-grid (era 7 coloane, acum 6) */
 .pc-row-grid {
