@@ -261,6 +261,17 @@
     'Astăzi': 'Сегодня', 'Toate': 'Все', 'Neincepute': 'Не начатые',
     'În proces': 'В процессе', 'azi': 'сегодня', 'mâine': 'завтра',
 
+    // View tabs + subbar (dashboard)
+    'Tabel': 'Таблица', 'Lucrările mele': 'Мои работы', 'Săptămâna asta': 'Эта неделя',
+    'Toate': 'Все', 'În întârziere': 'Просрочено',
+
+    // Meniuri sortare (dropdown)
+    'Pe luni (implicit)': 'По месяцам (по умолчанию)',
+    'Data probei — crescător': 'Дата примерки — по возрастанию',
+    'Data probei — descrescător': 'Дата примерки — по убыванию',
+    'Data finală — crescător': 'Финальная дата — по возрастанию',
+    'Data finală — descrescător': 'Финальная дата — по убыванию',
+
     // Diverse / filtre
     'Toate clinicile': 'Все клиники', 'pe luni': 'по месяцам',
     'data probei crescător': 'дата примерки по возрастанию',
@@ -295,6 +306,12 @@
     'trimise la probă': 'отправлено на примерку', 'în așteptarea barelor': 'в ожидании балок',
     'lucrări în curs': 'работ в процессе', 'probe aprobate': 'одобренных примерок',
     'Portalul clinicii': 'Портал клиники', 'de revendicat': 'можно взять',
+    // chip-uri filtre (text compus: „Clinică: toate", „Sortare: pe luni")
+    'data probei crescător': 'дата примерки по возрастанию',
+    'data probei descrescător': 'дата примерки по убыванию',
+    'data finală crescător': 'финальная дата по возрастанию',
+    'data finală descrescător': 'финальная дата по убыванию',
+    'Sortare:': 'Сортировка:', 'pe luni': 'по месяцам', 'toate': 'все',
     'în curs': 'в процессе', 'active': 'активных', 'expediate': 'отправлено',
     'lucrări': 'работ', 'lucrare': 'работа',
     'tehnicieni': 'техников', 'clinici': 'клиник', 'cazuri legate': 'связанных дел',
