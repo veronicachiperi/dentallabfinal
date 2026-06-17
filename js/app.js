@@ -1748,8 +1748,13 @@ function openClinicCaseEdit(caseId){
     if(canEditWorkflow&&document.getElementById('ceClinic'))c.clinic=document.getElementById('ceClinic').value||'UNKNOWN';
     if(canEditWorkflow&&document.getElementById('ceStage')){
       const nextStageValue=document.getElementById('ceStage').value;
-      if(typeof applyCaseStageSelection==='function')applyCaseStageSelection(c,nextStageValue);
-      else c.stage=nextStageValue;
+      // Aplicăm etapa DOAR dacă utilizatorul a schimbat-o efectiv. Altfel, la
+      // editarea altor câmpuri (nume, date), un caz neînceput era marcat greșit
+      // „în lucru" la Design, fără colaborator.
+      if(nextStageValue!==selectedStageValue){
+        if(typeof applyCaseStageSelection==='function')applyCaseStageSelection(c,nextStageValue);
+        else c.stage=nextStageValue;
+      }
     }
     c.color=document.getElementById('ceColor').value;
     c.implantType=document.getElementById('ceImplant').value.trim();
