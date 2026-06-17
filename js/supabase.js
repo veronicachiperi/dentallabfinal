@@ -413,6 +413,10 @@ function sbSubscribeCases(onRefresh) {
 function postProcessCase(c) {
   c.assignees      = c.assignees      || {};
   c.stageStatuses  = c.stageStatuses  || {};
+  // La nivel de funcție: folosit atât mai jos (etape), cât și la calculul de termen.
+  // Era declarat doar în blocul de mai jos → arunca „archived is not defined" pentru
+  // orice caz cu dată finală, blocând încărcarea tuturor cazurilor.
+  const archived = typeof isCaseArchived === 'function' ? isCaseArchived(c) : c.stage === 'trimis';
   if (!c.notStarted && typeof getEtapeLabStages === 'function') {
     const stages  = getEtapeLabStages(c.type);
     let curIdx   = stages.indexOf(c.stage);
@@ -420,7 +424,6 @@ function postProcessCase(c) {
     if (curIdx === -1 && c.stage === 'proba') {
       curIdx = stages.findIndex(s => c.stageStatuses[s] === 'la_proba');
     }
-    const archived = typeof isCaseArchived === 'function' ? isCaseArchived(c) : c.stage === 'trimis';
     if (c.stage === 'terminat' || archived) {
       // Lucrare terminată/expediată → toate etapele sunt finalizate.
       stages.forEach(s => {
