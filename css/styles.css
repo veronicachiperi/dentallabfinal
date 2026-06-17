@@ -1407,6 +1407,14 @@ button{font-family:inherit;cursor:pointer}
   .date-cal-day{height:38px;font-size:13px}
   .inline-note-editor textarea,
   .note-form-input{font-size:16px}
+
+  /* Comutatorul de limbă plutitor (pe ecrane fără buton Export CSV, ex. portal
+     tehnician) nu trebuie să acopere conținutul de jos. */
+  #i18nToggle{bottom:max(12px, env(safe-area-inset-bottom)) !important; z-index:2300 !important}
+  .tp-shell,.case-shell,.cal-shell,.ar-shell,.pc-shell{padding-bottom:88px}
+
+  /* Etichete KPI puțin mai lizibile pe telefon */
+  .dash-kpi-hint{font-size:10.5px}
 }
 
 @media (max-width: 480px){
