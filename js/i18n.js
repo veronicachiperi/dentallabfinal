@@ -263,7 +263,7 @@
 
     // View tabs + subbar (dashboard)
     'Tabel': 'Таблица', 'Lucrările mele': 'Мои работы', 'Săptămâna asta': 'Эта неделя',
-    'Toate': 'Все', 'În întârziere': 'Просрочено',
+    'Toate': 'Все', 'În întârziere': 'Просрочено', 'Probe azi/mâine': 'Примерки сегодня/завтра',
 
     // Meniuri sortare (dropdown)
     'Pe luni (implicit)': 'По месяцам (по умолчанию)',

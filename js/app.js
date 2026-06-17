@@ -182,6 +182,7 @@ function applyFilter(cases){
     if(activeFilter.tab==='late'&&!c.late)return false;
     if(activeFilter.tab==='today'){const f=parseShortDate(c.finala);if(!f||f.toDateString()!==today.toDateString())return false}
     if(activeFilter.tab==='week'){const f=parseShortDate(c.finala);if(!f||f<today||f>weekEnd)return false}
+    if(activeFilter.tab==='probasoon'){if(c.noProba)return false;const pd=parseShortDate(c.probaDate);if(!pd)return false;const tmr=new Date(today);tmr.setDate(today.getDate()+1);const ds=pd.toDateString();if(ds!==today.toDateString()&&ds!==tmr.toDateString())return false}
     if(activeFilter.tab==='notstarted'&&!isCaseNotStarted(c))return false;
     if(activeFilter.tab==='proba'&&!isCaseAtProba(c))return false;
     if(activeFilter.tab==='approved'&&!isCaseProbaApproved(c))return false;
@@ -909,7 +910,7 @@ function printAttachment(c,index){
 function setDashboardFilter(tab){
   activeFilter.tab=tab;
   document.querySelectorAll('.subbar .tab').forEach(t=>t.classList.remove('on'));
-  const tabIndex={all:0,mine:1,late:2,week:3,notstarted:4,trimise:5}[tab];
+  const tabIndex={all:0,mine:1,late:2,week:3,notstarted:4,probasoon:5,trimise:6}[tab];
   if(tabIndex!==undefined)document.querySelectorAll('.subbar .tab')[tabIndex]?.classList.add('on');
   renderPipeline();
   if(typeof renderTable==='function')renderTable();
@@ -3066,7 +3067,7 @@ function attachSearch(){
 }
 function attachFilters(){
   const tabs=document.querySelectorAll('.subbar .tab');if(!tabs.length)return;
-  const tm=['all','mine','late','week','notstarted','trimise'];
+  const tm=['all','mine','late','week','notstarted','probasoon','trimise'];
   tabs.forEach((t,i)=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('on'));t.classList.add('on');activeFilter.tab=tm[i];renderPipeline();if(typeof renderTable==='function')renderTable()}));
   const ch=document.getElementById('clinicFilterChip');
   const menu=document.getElementById('clinicFilterMenu');
