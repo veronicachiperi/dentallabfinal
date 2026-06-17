@@ -99,12 +99,13 @@ function renderTableRow(c) {
   const noteText=lastNote||'+ Notiță';
   const noteEsc=noteText.replace(/</g,'&lt;');
   const hasNote=parsedNotes.length>0;
- return `<tr data-case-id="${c.id}" class="${c.notStarted?'tbl-row-faded':''}">
+  const rowClasses=[c.notStarted?'tbl-row-faded':'',typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'tbl-row-blocked':''].filter(Boolean).join(' ');
+ return `<tr data-case-id="${c.id}" class="${rowClasses}">
     <td><span class="tbl-num">#${c.seq || c.id}</span></td>
     <td><span class="tbl-name">${c.name}</span></td>
     <td><span class="tbl-clinic">${clinic.name}</span></td>
     <td><span class="tag">${c.type}</span></td>
-    <td class="tbl-actions-cell"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare completă</button><button type="button" data-row-action="preview-pdf" data-case-id="${c.id}">Previzualizează PDF</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button><button type="button" data-row-action="archive" data-case-id="${c.id}">Arhivează</button><button type="button" data-row-action="reset" data-case-id="${c.id}">Clear all → Neînceput</button>${c.stage==='terminat'?'<button type="button" data-row-action="send" data-case-id="'+c.id+'">Marchează expediat</button>':''}<button type="button" data-row-action="delete" data-case-id="${c.id}" class="danger">Șterge lucrarea</button></div></div></td>
+    <td class="tbl-actions-cell"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare completă</button><button type="button" data-row-action="preview-pdf" data-case-id="${c.id}">Previzualizează PDF</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button><button type="button" data-row-action="block" data-case-id="${c.id}">Blochează temporar</button><button type="button" data-row-action="archive" data-case-id="${c.id}">Arhivează</button><button type="button" data-row-action="cancel" data-case-id="${c.id}" class="danger">Anulează lucrarea</button><button type="button" data-row-action="reset" data-case-id="${c.id}">Clear all → Neînceput</button>${c.stage==='terminat'?'<button type="button" data-row-action="send" data-case-id="'+c.id+'">Marchează expediat</button>':''}<button type="button" data-row-action="delete" data-case-id="${c.id}" class="danger">Șterge lucrarea</button></div></div></td>
     <td><span class="tbl-due" data-date-field="intrata">${shortDayMon(c.intrata)}${extractTime(c.intrata)?'<small class="tbl-due-time">'+extractTime(c.intrata)+'</small>':''}</span></td>
     <td><span class="tbl-due-bold" data-date-field="probaDate">${shortDayMon(c.probaDate)}${extractTime(c.probaDate)?'<small class="tbl-due-time">'+extractTime(c.probaDate)+'</small>':''}</span></td>
     <td><span class="tbl-due-bold ${dueClass}" data-date-field="finala">${finalText}${(!c.late&&extractTime(c.finala))?'<small class="tbl-due-time">'+extractTime(c.finala)+'</small>':''}</span></td>
@@ -123,7 +124,8 @@ function renderFlowIndicator(c) {
   const finisatToLab = { print_finisat: 'la_print', cam_finisat: 'cam' };
   const labFromFinisat = finisatToLab[c.stage];
   const activeStage = probaLabStage(c) || probaApprovedStage(c) || barsWaitingStage(c) || barsReadyStage(c) || (stages.includes(c.stage) ? c.stage : null);
-  const activeIndex = c.stage === 'terminat' || c.stage === 'trimis'
+  const archived = typeof isCaseArchived === 'function' ? isCaseArchived(c) : c.stage === 'trimis';
+  const activeIndex = c.stage === 'terminat' || archived
     ? stages.length
     : activeStage
       ? stages.indexOf(activeStage)
@@ -134,9 +136,9 @@ function renderFlowIndicator(c) {
     // Dacă cazul e marcat ca "X_finisat", tratează etapa X ca finalizată.
     if (labFromFinisat === sId) status = 'finalizat';
     // Dacă cazul e la o etapă mai târzie decât asta, marchează asta ca finalizată.
-    if (c.stage === 'terminat' || c.stage === 'trimis') status = 'finalizat';
+    if (c.stage === 'terminat' || archived) status = 'finalizat';
     let techIds = stageAssignees(c,sId);
-    if(!c.notStarted && activeIndex > -1 && i > activeIndex && c.stage !== 'terminat' && c.stage !== 'trimis' && status !== 'finalizat'){
+    if(!c.notStarted && activeIndex > -1 && i > activeIndex && c.stage !== 'terminat' && !archived && status !== 'finalizat'){
       status = 'neincepute';
       techIds = [];
     }
@@ -208,14 +210,12 @@ function attachTableHandlers(root) {
       if(btn.dataset.rowAction==='pdf')generateFisaPDF(c);
       if(btn.dataset.rowAction==='attach')chooseFilesForCase(id,()=>renderTable());
       if(btn.dataset.rowAction==='view')location.href=`case.html?id=${id}`;
+      if(btn.dataset.rowAction==='block')moveCaseToStage(id,'blocat');
       if(btn.dataset.rowAction==='archive')archiveCase(id);
+      if(btn.dataset.rowAction==='cancel')archiveCase(id,'anulat');
       if(btn.dataset.rowAction==='reset'&&confirm('Resetezi TOT cazul la „neîncepute"? Toate etapele se pierd.'))resetCaseToNotStarted(c);
       if(btn.dataset.rowAction==='send'){
-        if(!confirm('Marchezi această lucrare ca expediată?'))return;
-        c.stage='trimis';
-        c.sentDate=fmtShortDate(todayLabDate());
-        if(typeof _syncCase==='function')_syncCase(c);
-        renderTable();if(typeof renderPipeline==='function')renderPipeline();
+        archiveCase(id,'trimis');
       }
       if(btn.dataset.rowAction==='delete')deleteCase(id);
     });

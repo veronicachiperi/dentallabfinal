@@ -529,6 +529,7 @@ CASES.forEach(c => { c.priority = computePriority(c); });
 
 // Calendar status — only 3 categories
 function getCalendarStatus(c) {
+  if (c.stage === 'blocat') return 'blocat';
   if (c.stage === 'terminat' || c.stage === 'trimis' || c.stage === 'anulat') return 'terminat';
   const stages = getEtapeLabStages(c.type);
   if (c.notStarted || stages.every(s => (c.stageStatuses?.[s] || 'neincepute') === 'neincepute')) return 'neincepute';

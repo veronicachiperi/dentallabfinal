@@ -420,7 +420,8 @@ function postProcessCase(c) {
     if (curIdx === -1 && c.stage === 'proba') {
       curIdx = stages.findIndex(s => c.stageStatuses[s] === 'la_proba');
     }
-    if (c.stage === 'terminat' || c.stage === 'trimis') {
+    const archived = typeof isCaseArchived === 'function' ? isCaseArchived(c) : c.stage === 'trimis';
+    if (c.stage === 'terminat' || archived) {
       // Lucrare terminată/expediată → toate etapele sunt finalizate.
       stages.forEach(s => {
         if (!c.stageStatuses[s]) c.stageStatuses[s] = 'finalizat';
@@ -448,10 +449,10 @@ function postProcessCase(c) {
     if (due) {
       const d  = Math.ceil((due - today) / 86400000);
       const sent = parseShortDate(c.sentDate);
-      c.late   = c.stage === 'trimis'
+      c.late   = archived
         ? Boolean(sent && sent > due)
         : d < 0;
-      c.warn   = c.stage !== 'trimis' && d >= 0 && d <= 2;
+      c.warn   = !archived && d >= 0 && d <= 2;
     }
   }
 }
