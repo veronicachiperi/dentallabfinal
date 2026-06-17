@@ -10,7 +10,9 @@ const STAGES = [
   { id: 'ceramica',       name: 'Ceramică',       color: '#EF9F27', order: 8 },
   { id: 'proba',          name: 'La probă',       color: '#EAC04A', order: 9 },
   { id: 'terminat',       name: 'Terminat',       color: '#97C459', order: 10 },
-  { id: 'trimis',         name: 'Trimis',         color: '#27500A', order: 11 }
+  { id: 'blocat',         name: 'Blocat',         color: '#A32D2D', order: 11 },
+  { id: 'trimis',         name: 'Trimis',         color: '#27500A', order: 12 },
+  { id: 'anulat',         name: 'Anulat',         color: '#7A1F1F', order: 13 }
 ];
 
 // Etape lab arătate în coloana "Etape lab" — 4 max (Design, CAM, Prelucrare, Ceramică)
@@ -34,8 +36,8 @@ function getEtapeLabStages(type) {
 
 const PIPELINE_STAGES = ['design', 'cam', 'prelucrare', 'ceramica', 'proba', 'terminat']; // Flux rapid/advance. No Trimis
 const PIPELINE_STAGES_NO_CERAMIC = ['design', 'cam', 'prelucrare', 'proba', 'terminat'];
-const PIPELINE_COLUMNS = ['design', 'la_print', 'print_finisat', 'cam', 'cam_finisat', 'la_bare', 'prelucrare', 'ceramica', 'proba', 'terminat'];
-const STAGE_MOVE_SEQUENCE = ['design', 'la_print', 'print_finisat', 'cam', 'cam_finisat', 'la_bare', 'prelucrare', 'ceramica', 'proba', 'proba_aprobata', 'terminat'];
+const PIPELINE_COLUMNS = ['design', 'la_print', 'print_finisat', 'cam', 'cam_finisat', 'la_bare', 'prelucrare', 'ceramica', 'proba', 'terminat', 'blocat'];
+const STAGE_MOVE_SEQUENCE = ['design', 'la_print', 'print_finisat', 'cam', 'cam_finisat', 'la_bare', 'prelucrare', 'ceramica', 'proba', 'proba_aprobata', 'terminat', 'blocat', 'anulat'];
 
 const STAGE_ICONS = {
   design:     '<polygon points="12,3 21,21 3,21"/>',
@@ -45,7 +47,9 @@ const STAGE_ICONS = {
   ceramica:   '<circle cx="12" cy="13" r="6"/><path d="M9 7 L9 4 L15 4 L15 7"/>',
   proba:      '<polyline points="20,6 9,17 4,12"/>',
   terminat:   '<circle cx="12" cy="12" r="9"/><polyline points="9,12 11,14 15,10"/>',
-  trimis:     '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/>'
+  blocat:     '<circle cx="12" cy="12" r="9"/><line x1="8" y1="8" x2="16" y2="16"/><line x1="16" y1="8" x2="8" y2="16"/>',
+  trimis:     '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/>',
+  anulat:     '<circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'
 };
 function stageIconSVG(stageId) {
   return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle">${STAGE_ICONS[stageId] || ''}</svg>`;
@@ -199,6 +203,8 @@ function getStage(id)    { return STAGES.find(s => s.id === id); }
 function getCase(id)     { return CASES.find(c => c.id === Number(id)); }
 function casesForClinic(id) { return CASES.filter(c => c.clinic === id); }
 function casesInStage(id)   { return CASES.filter(c => c.stage === id); }
+function isCaseArchived(c) { return c?.stage === 'trimis' || c?.stage === 'anulat'; }
+function isCaseBlocked(c) { return c?.stage === 'blocat'; }
 function nextStage(current, type) {
   const workType = normTerm(type);
   const flow = isDesignOnlyType(type)
@@ -277,7 +283,13 @@ function applyCaseStageSelection(c, stageId, assigneeId) {
     c.assignee = primaryStageAssignee(c, labStage) || assigneeId || c.assignee || null;
     return stageId;
   }
-  if (stageId === 'terminat' || stageId === 'trimis') {
+  if (stageId === 'blocat') {
+    c.stage = 'blocat';
+    c.notStarted = false;
+    c.assignee = null;
+    return stageId;
+  }
+  if (stageId === 'terminat' || stageId === 'trimis' || stageId === 'anulat') {
     c.stageStatuses = c.stageStatuses || {};
     stages.forEach(s => { c.stageStatuses[s] = 'finalizat'; });
     c.stage = stageId;
@@ -287,7 +299,7 @@ function applyCaseStageSelection(c, stageId, assigneeId) {
       if (!c.finalTech) c.finalTech = primaryStageAssignee(c, stages[stages.length - 1]) || c.finalTech || null;
       if (!c.completedDate && typeof fmtShortDate === 'function') c.completedDate = fmtShortDate(todayLabDate());
     }
-    if (stageId === 'trimis' && !c.sentDate && typeof fmtShortDate === 'function') c.sentDate = fmtShortDate(todayLabDate());
+    if ((stageId === 'trimis' || stageId === 'anulat') && !c.sentDate && typeof fmtShortDate === 'function') c.sentDate = fmtShortDate(todayLabDate());
     return stageId;
   }
   c.stage = stageId;
@@ -305,11 +317,12 @@ function stageMoveOptions(c, opts = {}) {
   const skipCeramica = TYPES_SKIP_CERAMICA.some(t => normTerm(c?.type || '').includes(normTerm(t)));
   const designOnly = isDesignOnlyType(c?.type);
   STAGE_MOVE_SEQUENCE.forEach(id => {
-    if (designOnly && !['design', 'proba', 'proba_aprobata', 'terminat'].includes(id)) return;
+    if (designOnly && !['design', 'proba', 'proba_aprobata', 'terminat', 'blocat', 'anulat'].includes(id)) return;
     if (skipCeramica && id === 'ceramica') return;
     add(id, getStage(id)?.name || (id === 'proba_aprobata' ? 'Probă aprobată' : id));
   });
   if (opts.includeTrimis) add('trimis', 'Trimis');
+  if (opts.includeAnulat) add('anulat', 'Anulat');
   return options;
 }
 function selectedStageMoveValue(c) {
@@ -324,7 +337,7 @@ function displayLabStageStatus(c, stageId) {
   const stages = getEtapeLabStages(c.type);
   const idx = stages.indexOf(stageId);
   if (idx < 0) return c.stageStatuses?.[stageId] || 'neincepute';
-  if (c.stage === 'terminat' || c.stage === 'trimis') return 'finalizat';
+  if (c.stage === 'terminat' || c.stage === 'trimis' || c.stage === 'anulat') return 'finalizat';
   if (c.notStarted) return 'neincepute';
   const active = resolveLabStageForCase(c);
   const activeIdx = stages.indexOf(active);
@@ -346,7 +359,7 @@ function completeLabStage(c, stageId) {
     if (!c.stageStatuses[next]) c.stageStatuses[next] = 'neincepute';
     c.assignee = primaryStageAssignee(c,next);
   } else if (stages.every(s => c.stageStatuses[s] === 'finalizat')) {
-    if (c.stage !== 'terminat' && c.stage !== 'trimis') {
+    if (c.stage !== 'terminat' && c.stage !== 'trimis' && c.stage !== 'anulat') {
       c.stage = 'terminat';
       c.finalTech = primaryStageAssignee(c, stageId) || c.assignee || c.finalTech || null;
       c.completedDate = typeof fmtShortDate === 'function' ? fmtShortDate(todayLabDate()) : c.completedDate;
@@ -355,7 +368,7 @@ function completeLabStage(c, stageId) {
   }
 }
 function syncCaseStageFromLabStatus(c, preferredStage) {
-  if (!c || c.stage === 'trimis' || c.stage === 'terminat') return;
+  if (!c || c.stage === 'trimis' || c.stage === 'terminat' || c.stage === 'anulat' || c.stage === 'blocat') return;
   const stages = getEtapeLabStages(c.type);
   c.stageStatuses = c.stageStatuses || {};
   const active = preferredStage && stages.includes(preferredStage)
@@ -516,7 +529,7 @@ CASES.forEach(c => { c.priority = computePriority(c); });
 
 // Calendar status — only 3 categories
 function getCalendarStatus(c) {
-  if (c.stage === 'terminat' || c.stage === 'trimis') return 'terminat';
+  if (c.stage === 'terminat' || c.stage === 'trimis' || c.stage === 'anulat') return 'terminat';
   const stages = getEtapeLabStages(c.type);
   if (c.notStarted || stages.every(s => (c.stageStatuses?.[s] || 'neincepute') === 'neincepute')) return 'neincepute';
   const anyStarted = stages.some(s => c.stageStatuses?.[s] && c.stageStatuses[s] !== 'neincepute');
@@ -547,7 +560,7 @@ function workTypeColor(i) {
   return palette[i % palette.length];
 }
 function statsOnTimeRate() {
-  const sent = CASES.filter(c => c.stage === 'trimis');
+  const sent = CASES.filter(c => isCaseArchived(c));
   const total = sent.length;
   const late = sent.filter(c => c.late).length;
   return { total, late, onTime: total - late, rate: total ? Math.round(((total - late) / total) * 100) : 100 };

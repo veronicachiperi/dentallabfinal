@@ -150,6 +150,59 @@ function chooseFilesForCase(caseId,onDone){
 }
 
 const activeFilter={tab:'all',clinic:'all',sort:'default',q:''};
+function normalizePersonKey(value){
+  return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+function resolveUserEmployeeId(user){
+  if(!user)return null;
+  const direct=[user.employeeId,user.id].filter(Boolean).find(id=>typeof getEmployee==='function'&&getEmployee(id));
+  if(direct)return direct;
+  const userKey=normalizePersonKey(user.name||user.username||'');
+  if(userKey&&Array.isArray(EMPLOYEES)){
+    const byName=EMPLOYEES.find(e=>{
+      const empKey=normalizePersonKey(e.name);
+      return empKey&&(
+        empKey===userKey||
+        empKey.includes(userKey)||
+        userKey.includes(empKey)
+      );
+    });
+    if(byName)return byName.id;
+  }
+  return user.employeeId||user.id||null;
+}
+function currentUserAssigneeIds(user=getCurrentUser()){
+  const employeeId=resolveUserEmployeeId(user);
+  return [...new Set([employeeId,user?.employeeId,user?.id,user?.supabaseId].filter(Boolean).map(String))];
+}
+function isEmployeeId(id){
+  return !!(id&&typeof getEmployee==='function'&&getEmployee(id));
+}
+function resolveUserLabActorId(user=getCurrentUser()){
+  const id=resolveUserEmployeeId(user);
+  return isEmployeeId(id)?id:null;
+}
+function caseStageAssignedToUser(c,stageId,user=getCurrentUser()){
+  const ids=currentUserAssigneeIds(user);
+  return ids.some(id=>c?.assignee===id||stageAssignees(c,stageId).includes(id));
+}
+function promoteStageAssignee(c,stageId,employeeId,aliases=currentUserAssigneeIds()){
+  if(!c||!stageId||!employeeId)return;
+  const aliasSet=new Set((aliases||[]).filter(id=>id&&id!==employeeId));
+  const rest=stageAssignees(c,stageId).filter(id=>id&&id!==employeeId&&!aliasSet.has(id));
+  setStageAssignees(c,stageId,[employeeId,...rest]);
+  c.assignee=employeeId;
+}
+function claimStageForEmployee(c,stageId,employeeId,aliases=currentUserAssigneeIds()){
+  if(!c||!stageId||!employeeId)return;
+  if(typeof setLabStageStatus==='function')setLabStageStatus(c,stageId,'in_lucru',employeeId);
+  else{c.stageStatuses=c.stageStatuses||{};c.stageStatuses[stageId]='in_lucru';c.stage=stageId;c.notStarted=false;}
+  // „Preiau eu” must replace stale/automatic assignees, not append after them.
+  setStageAssignees(c,stageId,[employeeId]);
+  c.stage=stageId;
+  c.notStarted=false;
+  c.assignee=employeeId;
+}
 function applyFilter(cases){
   const today=todayLabDate();
   const weekEnd=new Date(today);weekEnd.setDate(today.getDate()+7);
@@ -161,7 +214,7 @@ function applyFilter(cases){
   // A real case always has at least a patient name, so these are invalid rows.
   src=src.filter(c=>isValidCase(c));
   return src.filter(c=>{
-    const isTrimis=c.stage==='trimis';
+    const isArchived=typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis';
     if(activeFilter.clinic!=='all'&&c.clinic!==activeFilter.clinic)return false;
     // Search persistent: numele pacientului, clinica, tipul, #caz, notițe, dinți, urgență, etc.
     if(activeFilter.q){
@@ -176,9 +229,9 @@ function applyFilter(cases){
         .filter(Boolean).join(' ').toLowerCase();
       if(!hay.includes(q))return false;
     }
-    if(activeFilter.tab==='trimise')return isTrimis;
-    if(isTrimis)return Boolean(activeFilter.q);
-    if(activeFilter.tab==='mine'){if(!user||!(c.assignee===user.id||stageAssignees(c,c.stage).includes(user.id)))return false}
+    if(activeFilter.tab==='trimise')return isArchived;
+    if(isArchived)return Boolean(activeFilter.q);
+    if(activeFilter.tab==='mine'){if(!user||!caseStageAssignedToUser(c,c.stage,user))return false}
     if(activeFilter.tab==='late'&&!c.late)return false;
     if(activeFilter.tab==='today'){const f=parseShortDate(c.finala);if(!f||f.toDateString()!==today.toDateString())return false}
     if(activeFilter.tab==='week'){const f=parseShortDate(c.finala);if(!f||f<today||f>weekEnd)return false}
@@ -221,22 +274,25 @@ async function deleteCase(id){
   if(location.pathname.includes('case.html'))location.href=redirectAfterDelete;
 }
 
-async function archiveCase(id){
+async function archiveCase(id,targetStage='trimis'){
   const c=getCase(id);if(!c)return;
-  if(!confirm(`Arhivezi cazul "${c.name}"? Lucrarea va trece în arhivă ca expediată.`))return;
+  const isCancel=targetStage==='anulat';
+  const actionLabel=isCancel?'Anulezi':'Arhivezi';
+  const resultLabel=isCancel?'anulată':'expediată';
+  if(!confirm(`${actionLabel} cazul "${c.name}"? Lucrarea va trece în arhivă ca ${resultLabel}.`))return;
   const before=caseAuditSnapshot(c);
-  c.stage='trimis';
-  c.notStarted=false;
-  c.sentDate=fmtShortDate(todayLabDate());
+  if(typeof applyCaseStageSelection==='function')applyCaseStageSelection(c,targetStage);
+  else {c.stage=targetStage;c.notStarted=false;c.sentDate=fmtShortDate(todayLabDate());}
+  c.sentDate=c.sentDate||fmtShortDate(todayLabDate());
   c.stageStatuses=c.stageStatuses||{};
   c.assignees=c.assignees||{};
-  overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';
+  overrides.stages=overrides.stages||{};overrides.stages[c.id]=targetStage;
   overrides.edits=overrides.edits||{};
   overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,sentDate:c.sentDate,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee};
   saveOverrides(overrides);
   try{await syncCaseNow(c)}
-  catch(e){alert('Arhivarea a fost salvată local, dar nu s-a transmis către server: '+e.message);return}
-  auditCaseChangesFrom(c,before,'archive_case');
+  catch(e){alert(`${isCancel?'Anularea':'Arhivarea'} a fost salvată local, dar nu s-a transmis către server: `+e.message);return}
+  auditCaseChangesFrom(c,before,isCancel?'cancel_case':'archive_case');
   reRenderAll();
   if(typeof renderArchive==='function')renderArchive();
   if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();
@@ -329,7 +385,9 @@ const AUDIT_STATUS_LABELS={
   bari_finalizate:'Bare finalizate',
   asteptare_raspuns:'Așteaptă răspuns',
   astept_aprobare:'Așteaptă aprobare',
-  trimis:'Expediat'
+  blocat:'Blocat',
+  trimis:'Expediat',
+  anulat:'Anulat'
 };
 function auditDisplayValue(field,value){
   if(value===undefined||value===null||value==='')return'—';
@@ -547,8 +605,8 @@ ${role==='admin'?item('activity.html','Activitate'):''}
 
 function updateMainSummary(){
   refreshDerivedNotifications();
-  const active=CASES.filter(c=>c.stage!=='trimis'&&isValidCase(c)).length;
-  const late=CASES.filter(c=>c.stage!=='trimis'&&c.late&&isValidCase(c)).length;
+  const active=CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')&&isValidCase(c)).length;
+  const late=CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')&&c.late&&isValidCase(c)).length;
   const count=document.getElementById('navCountLucrari');
   if(count)count.textContent=active;
   const banner=document.getElementById('lateBanner');
@@ -586,6 +644,8 @@ function publicStageName(c){
   // Final states must be checked first — stageStatuses retains historical values
   // (e.g. proba_aprobata) even after a case advances to trimis/terminat
   if(c?.stage==='trimis')return 'Expediată';
+  if(c?.stage==='anulat')return 'Anulat';
+  if(c?.stage==='blocat')return 'Blocat';
   if(c?.stage==='terminat')return 'Terminat';
   if(isCaseNotStarted(c))return 'Neînceput';
   if(c&&getEtapeLabStages(c.type).some(s=>c.stageStatuses?.[s]==='astept_aprobare'))return 'Aștept aprobare design';
@@ -599,6 +659,8 @@ function publicStageName(c){
 
 function publicStageColor(c){
   if(c?.stage==='trimis')return getStage('trimis')?.color || '#27500A';
+  if(c?.stage==='anulat')return getStage('anulat')?.color || '#7A1F1F';
+  if(c?.stage==='blocat')return getStage('blocat')?.color || '#A32D2D';
   if(c?.stage==='terminat')return getStage('terminat')?.color || '#1D9E75';
   if(isCaseNotStarted(c))return '#9CA3AF';
   if(c&&getEtapeLabStages(c.type).some(s=>c.stageStatuses?.[s]==='astept_aprobare'))return '#854F0B';
@@ -632,7 +694,7 @@ function isCaseAtProba(c){
   return Boolean(c&&(c.stage==='proba'||probaLabStage(c)));
 }
 function isCaseProbaApproved(c){
-  if(!c||c.stage==='trimis'||c.stage==='terminat')return false;
+  if(!c||(typeof isCaseArchived==='function'&&isCaseArchived(c))||c.stage==='terminat'||c.stage==='blocat')return false;
   return Boolean(probaApprovedStage(c));
 }
 function refreshDerivedNotifications(){
@@ -648,7 +710,7 @@ function refreshDerivedNotifications(){
   NOTIFICATIONS.length=0;
   const _today=todayLabDate();
   CASES.forEach(c=>{
-    if(c.stage==='trimis')return;
+    if((typeof isCaseArchived==='function'&&isCaseArchived(c))||c.stage==='blocat')return;
     // Probă AZI — prioritate maximă în clopoțel, sortate după oră.
     if(!c.noProba && c.probaDate){
       const pd=parseShortDate(c.probaDate);
@@ -920,7 +982,7 @@ function renderActionDashboard(){
   const root=document.getElementById('actionDashboard');
   if(!root)return;
   const today=todayLabDate();
-  const activeAll=CASES.filter(c=>c.stage!=='trimis'&&isValidCase(c));
+  const activeAll=CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')&&isValidCase(c));
   const active=activeAll.filter(c=>activeFilter.clinic==='all'||c.clinic===activeFilter.clinic);
   const dueToday=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===today.toDateString()});
   // „În proces" = lucrarea e la etapa respectivă (c.stage) SAU substarea
@@ -1135,7 +1197,7 @@ function renderPipeline(){
     const isNotStartedCol=stageId==='notstarted';
     const stage=isNotStartedCol?{name:'Neînceput',color:'#9CA3AF'}:getStage(stageId);
     const stageCases=isNotStartedCol
-      ? CASES.filter(c=>isCaseNotStarted(c)&&c.stage!=='trimis')
+      ? CASES.filter(c=>isCaseNotStarted(c)&&!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis'))
       : casesInStage(stageId).filter(c=>!isCaseNotStarted(c));
     const cases=applyFilter(stageCases);
     const col=document.createElement('div');
@@ -1171,7 +1233,8 @@ function renderPipeline(){
 function renderKanbanCard(c){
   const card=document.createElement('div');
   const deadlineUrgent=labDeadlineStatus(c).urgent;
-  card.className='kb-card'+(c.late?' late':deadlineUrgent?' urgent':c.warn?' warn':c.stage==='terminat'?' ready':'');
+  const blocked=typeof isCaseBlocked==='function'?isCaseBlocked(c):c.stage==='blocat';
+  card.className='kb-card'+(blocked?' blocked':c.late?' late':deadlineUrgent?' urgent':c.warn?' warn':c.stage==='terminat'?' ready':'');
   card.draggable=true;card.dataset.caseId=c.id;card.tabIndex=0;card.setAttribute('role','link');
   const clinic=getClinic(c.clinic)||{name:c.clinic||'—'};
   const cardAssignees=stageAssignees(c,c.stage);
@@ -1179,8 +1242,8 @@ function renderKanbanCard(c){
   const extraTechs=cardAssignees.slice(1).map(id=>getEmployee(id)).filter(Boolean);
   const ss=c.notStarted?'neincepute':(isCaseAtProba(c)?'la_proba':(c.stageStatuses?.[c.stage]||'in_lucru'));
   const badge=ss==='finalizat'?`<span class="substate-badge final">✓</span>`:ss==='asteptare_bari'?`<span class="substate-badge bars">B</span>`:ss==='proba_aprobata'?`<span class="substate-badge approved">A</span>`:ss==='la_proba'?`<span class="substate-badge proba">P</span>`:`<span class="substate-badge lucru">●</span>`;
-  const ft=c.late?'restant':c.stage==='terminat'?'gata':c.finala;
-  const fc=(c.late||deadlineUrgent)?'late':c.stage==='terminat'?'ready':'';
+  const ft=blocked?'blocat':c.late?'restant':c.stage==='terminat'?'gata':c.finala;
+  const fc=blocked?'blocked':(c.late||deadlineUrgent)?'late':c.stage==='terminat'?'ready':'';
   const approvalChip=isCaseProbaApproved(c)?'<span class="kb-approval-chip">Probă aprobată</span>':'';
   const parsedNotes=_parseNotes(c.notes);
   const note=parsedNotes.length>0;
@@ -1205,7 +1268,7 @@ function renderKanbanCard(c){
       `<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button>`+
       (isAdminOrTech?`<div class="kb-pop-sep"></div><div class="kb-pop-label">Mută la etapă</div>${stageOpts}`+
       (currentStageAssignable?`<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="collaborators">Colaboratori...</button>`:'')+
-      `<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="archive">Arhivează</button><button class="kb-pop-item" type="button" data-act="reset">Clear all → Neînceput</button>`:'')+
+      `<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="block">Blochează temporar</button><button class="kb-pop-item" type="button" data-act="archive">Arhivează</button><button class="kb-pop-item danger" type="button" data-act="cancel">Anulează lucrarea</button><button class="kb-pop-item" type="button" data-act="reset">Clear all → Neînceput</button>`:'')+
       (isAdminOrTech||user.role==='clinic'?`<button class="kb-pop-item danger" type="button" data-act="delete">Șterge lucrarea</button>`:'');
     card.appendChild(m);
     m.querySelectorAll('.kb-pop-item').forEach(it=>it.addEventListener('click',ev=>{
@@ -1214,7 +1277,9 @@ function renderKanbanCard(c){
       if(act==='view-pdf'){previewFisaPDF(c)}
       if(act==='dl-pdf'){generateFisaPDF(c)}
       if(act==='reset'&&confirm(`Resetezi progresul pentru ${c.name}?`))resetCaseToNotStarted(c);
+      if(act==='block')moveCaseToStage(c.id,'blocat');
       if(act==='archive')archiveCase(c.id);
+      if(act==='cancel')archiveCase(c.id,'anulat');
       if(act==='open')location.href=`case.html?id=${c.id}`;
       if(act==='move'){moveCaseToStage(c.id,it.dataset.stage)}
       if(act==='collaborators'){openCollaboratorEditor(c,c.stage,()=>{renderPipeline();if(typeof renderTable==='function')renderTable();})}
@@ -1353,11 +1418,11 @@ function renderClinic(){
   if(!clinic){root.innerHTML='<p>Clinică inexistentă</p>';return}
   const clinicName=String(clinic.name||clinic.id||'Clinică');
   const cases=casesForClinic(clinicId).filter(c=>typeof isValidCase==='function'?isValidCase(c):true);
-  const active=cases.filter(c=>c.stage!=='trimis');
+  const active=cases.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis'));
   const notStarted=cases.filter(isCaseNotStarted);
   const proba=cases.filter(isCaseAtProba);
   const finished=cases.filter(c=>c.stage==='terminat');
-  const shipped=cases.filter(c=>c.stage==='trimis');
+  const shipped=cases.filter(c=>typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis');
   const late=cases.filter(c=>c.late);
   const viewParam=new URLSearchParams(location.search).get('view')||'active';
   const allowedClinicViews=['active','notstarted','proba','finished','shipped'];
@@ -1379,7 +1444,8 @@ function renderClinic(){
   function clinicProgressIndex(c){
     if(isCaseNotStarted(c))return -1;
     const flow=clinicFlowFor(c);
-    if(c.stage==='trimis')return flow.length-1;
+    if(typeof isCaseArchived==='function'&&isCaseArchived(c))return flow.length-1;
+    if(c.stage==='blocat')return -1;
     if(probaApprovedStage(c))return flow.indexOf('proba_aprobata');
     if(c.stage==='proba')return flow.indexOf('proba_aprobata');
     return flow.indexOf(c.stage);
@@ -1451,7 +1517,7 @@ function renderClinic(){
         const a=ra(c);
         const pct=progressPct(c);
         const stageName=publicStageName(c);
-        return `<div class="pc-row-grid ${isCaseNotStarted(c)?'not-started':''} ${isCaseAtProba(c)?'proba-row':''}" data-case-id="${c.id}">
+        return `<div class="pc-row-grid ${isCaseNotStarted(c)?'not-started':''} ${isCaseAtProba(c)?'proba-row':''} ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}" data-case-id="${c.id}">
           <div class="tbl-num">#${c.seq||c.id}</div>
           <div class="tbl-name">${c.name}</div>
           <div><span class="tag">${c.type}</span></div>
@@ -1506,13 +1572,14 @@ function openClinicCaseMenu(anchor,c){
   host.style.position='relative';
   const m=document.createElement('div');
   m.className='clinic-case-popover kb-card-popover';
-  m.innerHTML=`<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button><button class="kb-pop-item" type="button" data-act="archive">Arhivează</button><button class="kb-pop-item danger" type="button" data-act="delete">Șterge lucrarea</button>`;
+  m.innerHTML=`<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button><button class="kb-pop-item" type="button" data-act="archive">Arhivează</button><button class="kb-pop-item danger" type="button" data-act="cancel">Anulează lucrarea</button><button class="kb-pop-item danger" type="button" data-act="delete">Șterge lucrarea</button>`;
   host.appendChild(m);
   m.querySelectorAll('.kb-pop-item').forEach(it=>it.addEventListener('click',async ev=>{
     ev.stopPropagation();
     const act=it.dataset.act;
     if(act==='open')location.href=`case.html?id=${c.id}`;
     if(act==='archive')await archiveCase(c.id);
+    if(act==='cancel')await archiveCase(c.id,'anulat');
     if(act==='delete')await deleteCase(c.id);
     m.remove();
   }));
@@ -1539,14 +1606,7 @@ async function handleClinicAction(action,caseId){
     auditCaseChangesFrom(c,before,'approve_probe');
     alert(labStage?'Probă aprobată — designerul a fost notificat':'Probă aprobată — lucrarea a trecut la finalizare');renderClinic();updateMainSummary();
   } else if(action==='pickup'){
-    const before=caseAuditSnapshot(c);
-    c.stage='trimis';c.sentDate=fmtShortDate(todayLabDate());
-    overrides.stages=overrides.stages||{};overrides.stages[c.id]='trimis';
-    overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],sentDate:c.sentDate};
-    saveOverrides(overrides);
-    try{await syncCaseNow(c)}
-    catch(e){alert('Ridicarea a fost marcată local, dar nu s-a transmis către server: '+e.message);return}
-    auditCaseChangesFrom(c,before,'confirm_pickup');
+    await archiveCase(caseId,'trimis');
     alert('Expediere confirmată — lucrarea a fost arhivată');renderClinic();
   } else if(action==='note'){
     openModal(`<div class="modal-head"><div class="modal-title">Notă · ${escHTML(c.name)}</div><button class="modal-close" type="button">×</button></div>
@@ -1761,6 +1821,8 @@ function renderCaseDetail(){
       e.stopPropagation();
       const sId=item.dataset.tlStage;
       const user=getCurrentUser()||{id:'admin',initials:'AD',name:'Admin'};
+      const actorId=resolveUserLabActorId(user);
+      const actorAliases=currentUserAssigneeIds(user);
       const st=c.stageStatuses?.[sId]||'neincepute';
       const items=[
         {value:'claim',label:'Preia (Eu lucrez la asta)'},
@@ -1779,7 +1841,10 @@ function renderCaseDetail(){
       openInlinePopover(item,items,sel=>{
         const before=caseAuditSnapshot(c);
         c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
-        if(sel.value==='claim'){activateLabStage(c,sId,user.id);}
+        if(sel.value==='claim'){
+          if(!actorId){alert('Acest utilizator nu este legat de un tehnician. Verifică profilul utilizatorului.');return;}
+          claimStageForEmployee(c,sId,actorId,actorAliases);
+        }
         else if(sel.value==='collaborators'){
           openCollaboratorEditor(c,sId,()=>renderCaseDetail());
           return;
@@ -1800,10 +1865,20 @@ function renderCaseDetail(){
           if(c.stage===sId)c.assignee=primaryStageAssignee(c,sId);
         }
         else{
-          if(sel.value==='finalizat')completeLabStage(c,sId);
-          else if(sel.value==='in_lucru')activateLabStage(c,sId,primaryStageAssignee(c,sId)||user.id);
-          else if(sel.value==='la_proba'&&typeof setLabStageStatus==='function')setLabStageStatus(c,sId,'la_proba',primaryStageAssignee(c,sId)||user.id);
-          else if(sel.value==='proba_aprobata'&&typeof setLabStageStatus==='function')setLabStageStatus(c,sId,'proba_aprobata',primaryStageAssignee(c,sId)||user.id);
+          const stageOwner=primaryStageAssignee(c,sId)||actorId||null;
+          if(sel.value==='finalizat'){if(actorId)promoteStageAssignee(c,sId,actorId,actorAliases);completeLabStage(c,sId);}
+          else if(sel.value==='in_lucru'){
+            if(actorId)claimStageForEmployee(c,sId,actorId,actorAliases);
+            else activateLabStage(c,sId,stageOwner);
+          }
+          else if(sel.value==='la_proba'&&typeof setLabStageStatus==='function'){
+            setLabStageStatus(c,sId,'la_proba',actorId||stageOwner);
+            if(actorId)promoteStageAssignee(c,sId,actorId,actorAliases);
+          }
+          else if(sel.value==='proba_aprobata'&&typeof setLabStageStatus==='function'){
+            setLabStageStatus(c,sId,'proba_aprobata',actorId||stageOwner);
+            if(actorId)promoteStageAssignee(c,sId,actorId,actorAliases);
+          }
           else{
             c.stage=sel.value==='la_proba'?'proba':sId;
             c.notStarted=false;
@@ -1940,19 +2015,26 @@ function renderTechnicianPortal(){
     root.innerHTML=`<div class="app">${adminSidebarHTML('index')}<main class="main"><div class="tp-shell"><div class="tp-greet"><h1 class="tp-greet-title">Acasă</h1><div class="tp-greet-sub">Panoul Acasă este disponibil doar pentru conturile tehnicienilor.</div></div></div></main></div>`;
     return;
   }
-  const myStage=techStage(user.id);
+  const techId=resolveUserLabActorId(user);
+  if(!techId){
+    root.innerHTML=`<div class="app">${adminSidebarHTML('index')}<main class="main"><div class="tp-shell"><div class="tp-greet"><h1 class="tp-greet-title">Cont tehnician neconfigurat</h1><div class="tp-greet-sub">Acest utilizator nu este legat de un tehnician din echipă. Administratorul trebuie să seteze employee_id în profil.</div></div></div></main></div>`;
+    return;
+  }
+  const techProfile=(typeof getEmployee==='function'&&getEmployee(techId))||{id:techId,name:user.name,initials:user.initials};
+  const myStage=techStage(techId);
   const stage=getStage(myStage);
   const stageName=stage.name;
   // Exclude empty/junk cases (no name, no clinic and no type) — same guard as
   // applyFilter, ca să nu apară lucrări goale în portalul tehnicianului.
   const validCases=CASES.filter(c=>isValidCase(c));
-  const myInProgress=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='in_lucru');
-  const sentToProbe=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='la_proba');
-  const approvedCases=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='proba_aprobata');
-  const barsReady=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='bari_finalizate');
-  const waitingBars=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='asteptare_bari');
-  const waitingResponse=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='asteptare_raspuns');
-  const waitingApproval=validCases.filter(c=>stageAssignees(c,myStage).includes(user.id)&&c.stageStatuses?.[myStage]==='astept_aprobare');
+  const assignedToMe=c=>caseStageAssignedToUser(c,myStage,user);
+  const myInProgress=validCases.filter(c=>assignedToMe(c)&&c.stageStatuses?.[myStage]==='in_lucru');
+  const sentToProbe=validCases.filter(c=>assignedToMe(c)&&c.stageStatuses?.[myStage]==='la_proba');
+  const approvedCases=validCases.filter(c=>assignedToMe(c)&&c.stageStatuses?.[myStage]==='proba_aprobata');
+  const barsReady=validCases.filter(c=>assignedToMe(c)&&c.stageStatuses?.[myStage]==='bari_finalizate');
+  const waitingBars=validCases.filter(c=>assignedToMe(c)&&c.stageStatuses?.[myStage]==='asteptare_bari');
+  const waitingResponse=validCases.filter(c=>assignedToMe(c)&&c.stageStatuses?.[myStage]==='asteptare_raspuns');
+  const waitingApproval=validCases.filter(c=>assignedToMe(c)&&c.stageStatuses?.[myStage]==='astept_aprobare');
   // „De rezolvat prima dată" — strict NEÎNCEPUTE cu probă sau finală azi/mâine.
   const _today=todayLabDate();
   const _tomorrow=new Date(_today);_tomorrow.setDate(_today.getDate()+1);
@@ -1982,11 +2064,11 @@ function renderTechnicianPortal(){
     if(my>0){const prev=ms[my-1];if(c.stageStatuses?.[prev]!=='finalizat')return false}
     return true;
   });
-  const completed=validCases.filter(c=>c.stageStatuses?.[myStage]==='finalizat'&&stageAssignees(c,myStage).includes(user.id));
+  const completed=validCases.filter(c=>c.stageStatuses?.[myStage]==='finalizat'&&assignedToMe(c));
   const approvedCount=approvedCases.length+barsReady.length;
   const lateCount=[...myInProgress,...sentToProbe,...approvedCases,...waitingBars,...barsReady].filter(c=>c.late).length;
   const stageColors={design:'#85B7EB',cam:'#444441',prelucrare:'#854F0B',ceramica:'#EF9F27'};
-  root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-name">PRIVATE CAD</div></div><div class="nav-section">Workflow</div><a class="nav-item active" href="tehnician.html"><span class="nav-icon round"></span>Acasă</a><a class="nav-item" href="dashboard.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><div class="nav-section">Setări</div><a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a></aside><main class="main"><div class="tp-shell"><div class="tp-topbar"><button class="mobile-menu-btn" type="button" aria-label="Meniu"><span></span><span></span><span></span></button><div class="tp-tech-av" style="background:${stageColors[myStage]||'#1D9E75'}">${user.initials}</div><div><div class="tp-tech-name">${user.name}</div><div class="tp-tech-role">Tehnician ${stageName.toLowerCase()}</div></div><input class="search tp-search" id="tpSearch" type="search" placeholder="Caută pacient, clinică sau tip…" style="max-width:300px"><div class="spacer"></div><a href="dashboard.html" class="btn tp-main-table-btn">Tabel lucrări</a><a href="login.html" class="btn">Schimbă rol</a></div><div class="tp-greet"><h1 class="tp-greet-title">Bună, ${user.name.split(' ')[0]}</h1><div class="tp-greet-sub">${myInProgress.length} lucrări în curs · ${sentToProbe.length} trimise la probă · ${waitingBars.length} în așteptarea barelor · ${claimable.length} de revendicat</div></div><div class="tp-stats"><div class="tp-stat"><div class="tp-stat-num warn">${myInProgress.length}</div><div class="tp-stat-lbl">În lucru</div></div><div class="tp-stat"><div class="tp-stat-num">${sentToProbe.length}</div><div class="tp-stat-lbl">Trimise la probă</div></div><div class="tp-stat"><div class="tp-stat-num good">${approvedCount}</div><div class="tp-stat-lbl">Probă aprobată</div></div><div class="tp-stat"><div class="tp-stat-num late">${lateCount}</div><div class="tp-stat-lbl">În întârziere</div></div></div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">De rezolvat prima dată</span><span class="tp-section-count">${rezolvatPrimul.length} lucrări</span></div>${rezolvatPrimul.length?rezolvatPrimul.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const pd=!c.noProba?parseShortDate(c.probaDate):null;const fd=parseShortDate(c.finala);const reason=_sameDay(pd,_today)?'Probă AZI':_sameDay(pd,_tomorrow)?'Probă mâine':_sameDay(fd,_today)?'Finală AZI':'Finală mâine';return `<div class="tp-task-card late" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:#A32D2D;color:#fff">!</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${reason}</b>${c.type?' · '+c.type:''}</div></div><div class="tp-task-due">${(!c.noProba&&c.probaDate)?('<div class="tp-task-due-bold" style="color:var(--info)">'+shortDayMonTime(c.probaDate)+'</div><div style="margin-bottom:6px;font-size:10px">probă</div>'):''}<div class="tp-task-due-bold">${shortDayMonTime(c.finala)}</div><div>finală</div></div><span class="tp-task-status late">Neînceput</span></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nimic critic — la zi cu lucrurile urgente</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În lucru la tine</span><span class="tp-section-count">${myInProgress.length} lucrări</span></div>${myInProgress.length?myInProgress.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card ${c.late||deadlineUrgent?'late':c.warn?'warn':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due">${(!c.noProba&&c.probaDate)?('<div class="tp-task-due-bold" style="color:var(--info)">'+shortDayMonTime(c.probaDate)+'</div><div style="margin-bottom:6px;font-size:10px">probă</div>'):''}<div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div><div>finală</div></div><span class="tp-task-status in-lucru">În lucru</span><div class="tp-task-actions"><button class="tp-task-btn" data-action="wait-response" data-case-id="${c.id}" data-stage="${myStage}">Așteaptă răspuns</button>${labStageRequiresProbe(myStage)?`<button class="tp-task-btn" data-action="wait-approval" data-case-id="${c.id}" data-stage="${myStage}">Trimit la aprobare</button><button class="tp-task-btn" data-action="proba" data-case-id="${c.id}" data-stage="${myStage}">La probă</button><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Design finalizat</button>`:`<button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează</button>`}</div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare activă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Trimise la probă</span><span class="tp-section-count">${sentToProbe.length} lucrări</span></div>${sentToProbe.length?sentToProbe.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card ${c.late||deadlineUrgent?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info">Trimisă la probă. Așteaptă răspunsul clinicii.</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':shortDayMonTime(c.probaDate||c.finala)}</div><div>probă</div></div><span class="tp-task-status la-proba">La probă</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="approve-proba" data-case-id="${c.id}" data-stage="${myStage}">Marchează probă aprobată</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare trimisă la probă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Probe aprobate</span><span class="tp-section-count">${approvedCases.length} lucrări</span></div>${approvedCases.length||barsReady.length?[...approvedCases.map(c=>`<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Clinica a aprobat proba. Alege dacă lucrarea are nevoie de bare.</div></div><span class="tp-task-status proba-approved">Probă aprobată</span><div class="tp-task-actions"><button class="tp-task-btn" data-action="wait-bars" data-case-id="${c.id}" data-stage="${myStage}">În așteptarea barelor</button><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Design finalizat</button></div></div>`),...barsReady.map(c=>`<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Barele sunt finalizate. Designul poate fi finalizat.</div></div><span class="tp-task-status proba-approved">Bare finalizate</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează design</button></div></div>`)].join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio probă aprobată</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În așteptarea barelor</span><span class="tp-section-count">${waitingBars.length} lucrări</span></div>${waitingBars.length?waitingBars.map(c=>`<div class="tp-task-card warn" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:#854F0B">B</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Designul așteaptă finalizarea barelor.</div></div><span class="tp-task-status asteptare-bari">În așteptarea barelor</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="bars-done" data-case-id="${c.id}" data-stage="${myStage}">Bare finalizate</button></div></div>`).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare în așteptarea barelor</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În așteptare răspuns clinică</span><span class="tp-section-count">${waitingResponse.length} lucrări</span></div>${waitingResponse.length?waitingResponse.map(c=>`<div class="tp-task-card warn" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:#A32D2D;color:#fff">?</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Aștepți răspuns de la clinică pentru a continua designul.</div></div><span class="tp-task-status asteptare-bari">Așteaptă răspuns</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="response-received" data-case-id="${c.id}" data-stage="${myStage}">Răspuns primit · continuă</button></div></div>`).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare în așteptare răspuns</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Aștept aprobare design</span><span class="tp-section-count">${waitingApproval.length} lucrări</span></div>${waitingApproval.length?waitingApproval.map(c=>`<div class="tp-task-card warn" data-case-id="${c.id}" style="background:#FAEEDA"><div class="tp-task-stage-icon" style="background:#854F0B;color:#fff">A</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Designul a fost trimis spre clinică pentru aprobare.</div></div><span class="tp-task-status asteptare-bari">Aștept aprobare</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="approval-ok" data-case-id="${c.id}" data-stage="${myStage}">Aprobat — continuă</button><button class="tp-task-btn" data-action="approval-changes" data-case-id="${c.id}" data-stage="${myStage}">Necesită modificări</button></div></div>`).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare în așteptare aprobare</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Așteaptă să fie revendicate</span><span class="tp-section-count">${claimable.length} lucrări</span></div>${claimable.length?claimable.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card tp-claimable ${c.late||deadlineUrgent?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due">${(!c.noProba&&c.probaDate)?('<div class="tp-task-due-bold" style="color:var(--info)">'+shortDayMonTime(c.probaDate)+'</div><div style="margin-bottom:6px;font-size:10px">probă</div>'):''}<div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div><div>finală</div></div><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="claim" data-case-id="${c.id}" data-stage="${myStage}">Pun în proces</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare de revendicat</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Finalizate de mine</span><span class="tp-section-count">${completed.length} lucrări</span></div>${completed.length?completed.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};return `<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold">${shortDayMonTime(c.completedDate||c.finala)||'—'}</div><div>finalizat</div></div><span class="tp-task-status proba-approved">Finalizat ✓</span><div class="tp-task-actions"><button class="tp-task-btn" data-action="reopen" data-case-id="${c.id}" data-stage="${myStage}">Redeschide</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare finalizată încă</div>'}</div></div></main></div>`;
+  root.innerHTML=`<div class="app"><aside class="sidebar"><div class="brand"><div class="brand-name">PRIVATE CAD</div></div><div class="nav-section">Workflow</div><a class="nav-item active" href="tehnician.html"><span class="nav-icon round"></span>Acasă</a><a class="nav-item" href="dashboard.html"><span class="nav-icon"></span>Lucrări</a><a class="nav-item" href="calendar.html"><span class="nav-icon"></span>Calendar</a><a class="nav-item" href="arhiva.html"><span class="nav-icon"></span>Arhivă</a><div class="nav-section">Setări</div><a class="nav-item" href="login.html"><span class="nav-icon round"></span>Schimbă rol</a></aside><main class="main"><div class="tp-shell"><div class="tp-topbar"><button class="mobile-menu-btn" type="button" aria-label="Meniu"><span></span><span></span><span></span></button><div class="tp-tech-av" style="background:${stageColors[myStage]||'#1D9E75'}">${techProfile.initials||user.initials}</div><div><div class="tp-tech-name">${techProfile.name||user.name}</div><div class="tp-tech-role">Tehnician ${stageName.toLowerCase()}</div></div><input class="search tp-search" id="tpSearch" type="search" placeholder="Caută pacient, clinică sau tip…" style="max-width:300px"><div class="spacer"></div><a href="dashboard.html" class="btn tp-main-table-btn">Tabel lucrări</a><a href="login.html" class="btn">Schimbă rol</a></div><div class="tp-greet"><h1 class="tp-greet-title">Bună, ${(techProfile.name||user.name).split(' ')[0]}</h1><div class="tp-greet-sub">${myInProgress.length} lucrări în curs · ${sentToProbe.length} trimise la probă · ${waitingBars.length} în așteptarea barelor · ${claimable.length} de revendicat</div></div><div class="tp-stats"><div class="tp-stat"><div class="tp-stat-num warn">${myInProgress.length}</div><div class="tp-stat-lbl">În lucru</div></div><div class="tp-stat"><div class="tp-stat-num">${sentToProbe.length}</div><div class="tp-stat-lbl">Trimise la probă</div></div><div class="tp-stat"><div class="tp-stat-num good">${approvedCount}</div><div class="tp-stat-lbl">Probă aprobată</div></div><div class="tp-stat"><div class="tp-stat-num late">${lateCount}</div><div class="tp-stat-lbl">În întârziere</div></div></div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">De rezolvat prima dată</span><span class="tp-section-count">${rezolvatPrimul.length} lucrări</span></div>${rezolvatPrimul.length?rezolvatPrimul.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const pd=!c.noProba?parseShortDate(c.probaDate):null;const fd=parseShortDate(c.finala);const reason=_sameDay(pd,_today)?'Probă AZI':_sameDay(pd,_tomorrow)?'Probă mâine':_sameDay(fd,_today)?'Finală AZI':'Finală mâine';return `<div class="tp-task-card late" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:#A32D2D;color:#fff">!</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${reason}</b>${c.type?' · '+c.type:''}</div></div><div class="tp-task-due">${(!c.noProba&&c.probaDate)?('<div class="tp-task-due-bold" style="color:var(--info)">'+shortDayMonTime(c.probaDate)+'</div><div style="margin-bottom:6px;font-size:10px">probă</div>'):''}<div class="tp-task-due-bold">${shortDayMonTime(c.finala)}</div><div>finală</div></div><span class="tp-task-status late">Neînceput</span></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nimic critic — la zi cu lucrurile urgente</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În lucru la tine</span><span class="tp-section-count">${myInProgress.length} lucrări</span></div>${myInProgress.length?myInProgress.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card ${c.late||deadlineUrgent?'late':c.warn?'warn':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due">${(!c.noProba&&c.probaDate)?('<div class="tp-task-due-bold" style="color:var(--info)">'+shortDayMonTime(c.probaDate)+'</div><div style="margin-bottom:6px;font-size:10px">probă</div>'):''}<div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div><div>finală</div></div><span class="tp-task-status in-lucru">În lucru</span><div class="tp-task-actions"><button class="tp-task-btn" data-action="wait-response" data-case-id="${c.id}" data-stage="${myStage}">Așteaptă răspuns</button>${labStageRequiresProbe(myStage)?`<button class="tp-task-btn" data-action="wait-approval" data-case-id="${c.id}" data-stage="${myStage}">Trimit la aprobare</button><button class="tp-task-btn" data-action="proba" data-case-id="${c.id}" data-stage="${myStage}">La probă</button><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Design finalizat</button>`:`<button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează</button>`}</div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare activă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Trimise la probă</span><span class="tp-section-count">${sentToProbe.length} lucrări</span></div>${sentToProbe.length?sentToProbe.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card ${c.late||deadlineUrgent?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info">Trimisă la probă. Așteaptă răspunsul clinicii.</div></div><div class="tp-task-due"><div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':shortDayMonTime(c.probaDate||c.finala)}</div><div>probă</div></div><span class="tp-task-status la-proba">La probă</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="approve-proba" data-case-id="${c.id}" data-stage="${myStage}">Marchează probă aprobată</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare trimisă la probă</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Probe aprobate</span><span class="tp-section-count">${approvedCases.length} lucrări</span></div>${approvedCases.length||barsReady.length?[...approvedCases.map(c=>`<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Clinica a aprobat proba. Alege dacă lucrarea are nevoie de bare.</div></div><span class="tp-task-status proba-approved">Probă aprobată</span><div class="tp-task-actions"><button class="tp-task-btn" data-action="wait-bars" data-case-id="${c.id}" data-stage="${myStage}">În așteptarea barelor</button><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Design finalizat</button></div></div>`),...barsReady.map(c=>`<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Barele sunt finalizate. Designul poate fi finalizat.</div></div><span class="tp-task-status proba-approved">Bare finalizate</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="finalize" data-case-id="${c.id}" data-stage="${myStage}">Finalizează design</button></div></div>`)].join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio probă aprobată</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În așteptarea barelor</span><span class="tp-section-count">${waitingBars.length} lucrări</span></div>${waitingBars.length?waitingBars.map(c=>`<div class="tp-task-card warn" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:#854F0B">B</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Designul așteaptă finalizarea barelor.</div></div><span class="tp-task-status asteptare-bari">În așteptarea barelor</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="bars-done" data-case-id="${c.id}" data-stage="${myStage}">Bare finalizate</button></div></div>`).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare în așteptarea barelor</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">În așteptare răspuns clinică</span><span class="tp-section-count">${waitingResponse.length} lucrări</span></div>${waitingResponse.length?waitingResponse.map(c=>`<div class="tp-task-card warn" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:#A32D2D;color:#fff">?</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Aștepți răspuns de la clinică pentru a continua designul.</div></div><span class="tp-task-status asteptare-bari">Așteaptă răspuns</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="response-received" data-case-id="${c.id}" data-stage="${myStage}">Răspuns primit · continuă</button></div></div>`).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare în așteptare răspuns</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Aștept aprobare design</span><span class="tp-section-count">${waitingApproval.length} lucrări</span></div>${waitingApproval.length?waitingApproval.map(c=>`<div class="tp-task-card warn" data-case-id="${c.id}" style="background:#FAEEDA"><div class="tp-task-stage-icon" style="background:#854F0B;color:#fff">A</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</div><div class="tp-task-info">Designul a fost trimis spre clinică pentru aprobare.</div></div><span class="tp-task-status asteptare-bari">Aștept aprobare</span><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="approval-ok" data-case-id="${c.id}" data-stage="${myStage}">Aprobat — continuă</button><button class="tp-task-btn" data-action="approval-changes" data-case-id="${c.id}" data-stage="${myStage}">Necesită modificări</button></div></div>`).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare în așteptare aprobare</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Așteaptă să fie revendicate</span><span class="tp-section-count">${claimable.length} lucrări</span></div>${claimable.length?claimable.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};const deadlineUrgent=labDeadlineStatus(c).urgent;return `<div class="tp-task-card tp-claimable ${c.late||deadlineUrgent?'late':''}" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due">${(!c.noProba&&c.probaDate)?('<div class="tp-task-due-bold" style="color:var(--info)">'+shortDayMonTime(c.probaDate)+'</div><div style="margin-bottom:6px;font-size:10px">probă</div>'):''}<div class="tp-task-due-bold ${c.late||deadlineUrgent?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div><div>finală</div></div><div class="tp-task-actions"><button class="tp-task-btn primary" data-action="claim" data-case-id="${c.id}" data-stage="${myStage}">Pun în proces</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare de revendicat</div>'}</div><div class="tp-section"><div class="tp-section-head"><span class="tp-section-title">Finalizate de mine</span><span class="tp-section-count">${completed.length} lucrări</span></div>${completed.length?completed.map(c=>{const cl=getClinic(c.clinic)||{name:c.clinic||'—'};return `<div class="tp-task-card ready" data-case-id="${c.id}"><div class="tp-task-stage-icon" style="background:${stageColors[myStage]}">${stageName[0]}</div><div class="tp-task-meta"><div class="tp-task-name">${c.name} · ${cl.name}</div><div class="tp-task-info"><b>${c.type}</b>${c.color?' · culoare '+c.color:''}</div></div><div class="tp-task-due"><div class="tp-task-due-bold">${shortDayMonTime(c.completedDate||c.finala)||'—'}</div><div>finalizat</div></div><span class="tp-task-status proba-approved">Finalizat ✓</span><div class="tp-task-actions"><button class="tp-task-btn" data-action="reopen" data-case-id="${c.id}" data-stage="${myStage}">Redeschide</button></div></div>`}).join(''):'<div style="color:var(--text-dim);padding:14px;text-align:center;font-style:italic">Nicio lucrare finalizată încă</div>'}</div></div></main></div>`;
   root.querySelector('.sidebar')?.replaceWith(Object.assign(document.createElement('div'),{innerHTML:adminSidebarHTML('tehnician')}).firstElementChild);
   applySidebarRoles();
   attachMobileMenu();
@@ -2021,43 +2103,54 @@ function renderTechnicianPortal(){
     card.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${card.dataset.caseId}`});
   });
   document.querySelectorAll('.tp-task-btn[data-action]').forEach(btn=>{
-    btn.addEventListener('click',e=>{
+    btn.addEventListener('click',async e=>{
       e.stopPropagation();
+      btn.disabled=true;
       const id=Number(btn.dataset.caseId),sid=btn.dataset.stage,act=btn.dataset.action;
-      const c=getCase(id);if(!c)return;
+      const c=getCase(id);if(!c){btn.disabled=false;return;}
+      const actorId=resolveUserLabActorId(user);
+      if(!actorId){alert('Acest utilizator nu este legat de un tehnician. Verifică profilul utilizatorului.');btn.disabled=false;return;}
+      const actorAliases=currentUserAssigneeIds(user);
       c.stageStatuses=c.stageStatuses||{};c.assignees=c.assignees||{};
-      if(act==='claim'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'in_lucru',user.id);else{c.stageStatuses[sid]='in_lucru';addStageAssignee(c,sid,user.id);c.notStarted=false;if(!c.assignee)c.assignee=primaryStageAssignee(c,sid)||user.id}}
-      else if(act==='proba'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'la_proba',user.id);else{c.stageStatuses[sid]='la_proba';c.stage='proba';c.notStarted=false}}
-      else if(act==='wait-bars'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'asteptare_bari',user.id);else c.stageStatuses[sid]='asteptare_bari'}
-      else if(act==='bars-done'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'bari_finalizate',user.id);else c.stageStatuses[sid]='bari_finalizate'}
-      else if(act==='wait-response'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'asteptare_raspuns',user.id);else c.stageStatuses[sid]='asteptare_raspuns'}
-      else if(act==='response-received'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'in_lucru',user.id);else c.stageStatuses[sid]='in_lucru'}
-      else if(act==='wait-approval'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'astept_aprobare',user.id);else c.stageStatuses[sid]='astept_aprobare'}
-      else if(act==='approval-ok'){completeLabStage(c,sid)}
-      else if(act==='approval-changes'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'in_lucru',user.id);else c.stageStatuses[sid]='in_lucru'}
-      else if(act==='finalize')completeLabStage(c,sid)
+      if(act==='claim'){claimStageForEmployee(c,sid,actorId,actorAliases)}
+      else if(act==='proba'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'la_proba',actorId);else{c.stageStatuses[sid]='la_proba';c.stage='proba';c.notStarted=false}promoteStageAssignee(c,sid,actorId,actorAliases)}
+      else if(act==='wait-bars'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'asteptare_bari',actorId);else c.stageStatuses[sid]='asteptare_bari';promoteStageAssignee(c,sid,actorId,actorAliases)}
+      else if(act==='bars-done'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'bari_finalizate',actorId);else c.stageStatuses[sid]='bari_finalizate';promoteStageAssignee(c,sid,actorId,actorAliases)}
+      else if(act==='wait-response'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'asteptare_raspuns',actorId);else c.stageStatuses[sid]='asteptare_raspuns';promoteStageAssignee(c,sid,actorId,actorAliases)}
+      else if(act==='response-received'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'in_lucru',actorId);else c.stageStatuses[sid]='in_lucru';promoteStageAssignee(c,sid,actorId,actorAliases)}
+      else if(act==='wait-approval'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'astept_aprobare',actorId);else c.stageStatuses[sid]='astept_aprobare';promoteStageAssignee(c,sid,actorId,actorAliases)}
+      else if(act==='approval-ok'){promoteStageAssignee(c,sid,actorId,actorAliases);completeLabStage(c,sid)}
+      else if(act==='approval-changes'){if(typeof setLabStageStatus==='function')setLabStageStatus(c,sid,'in_lucru',actorId);else c.stageStatuses[sid]='in_lucru';promoteStageAssignee(c,sid,actorId,actorAliases)}
+      else if(act==='finalize'){promoteStageAssignee(c,sid,actorId,actorAliases);completeLabStage(c,sid)}
       else if(act==='approve-proba'){
-        if(!confirm('Confirmi că ai primit aprobarea clinicii pentru această probă?'))return;
+        if(!confirm('Confirmi că ai primit aprobarea clinicii pentru această probă?')){btn.disabled=false;return;}
         const labStage=(typeof probaLabStage==='function'&&probaLabStage(c))||sid;
-        if(typeof setLabStageStatus==='function')setLabStageStatus(c,labStage,'proba_aprobata',user.id);
+        if(typeof setLabStageStatus==='function')setLabStageStatus(c,labStage,'proba_aprobata',actorId);
         else{
           c.stageStatuses[labStage]='proba_aprobata';
           c.stage=labStage;c.notStarted=false;
-          if(!stageAssignees(c,labStage).length)addStageAssignee(c,labStage,user.id);
-          c.assignee=primaryStageAssignee(c,labStage)||user.id;
+          if(!stageAssignees(c,labStage).length)addStageAssignee(c,labStage,actorId);
+          c.assignee=primaryStageAssignee(c,labStage)||actorId;
         }
+        promoteStageAssignee(c,labStage,actorId,actorAliases);
       }
       else if(act==='reopen'){
-        if(!confirm('Redeschizi lucrarea pentru corectare? Etapele ulterioare vor fi reluate.'))return;
+        if(!confirm('Redeschizi lucrarea pentru corectare? Etapele ulterioare vor fi reluate.')){btn.disabled=false;return;}
         const ls=getEtapeLabStages(c.type);const idx=ls.indexOf(sid);
         ls.forEach((s,i)=>{if(i>idx)delete c.stageStatuses[s];});
         c.stageStatuses[sid]='in_lucru';
-        if(!stageAssignees(c,sid).includes(user.id))addStageAssignee(c,sid,user.id);
+        promoteStageAssignee(c,sid,actorId,actorAliases);
         c.stage=sid;c.notStarted=false;c.completedDate='';c.finalTech='';
       }
       overrides.edits=overrides.edits||{};overrides.edits[c.id]=overrides.edits[c.id]||{};
       Object.assign(overrides.edits[c.id],{stageStatuses:c.stageStatuses,assignees:c.assignees,stage:c.stage,notStarted:c.notStarted,assignee:c.assignee,finalTech:c.finalTech,completedDate:c.completedDate});
-      saveOverrides(overrides);_syncCase(c);renderTechnicianPortal();
+      saveOverrides(overrides);
+      try{await syncCaseNow(c)}
+      catch(err){
+        console.warn('[sb sync]',err?.message||err);
+        alert('Asignarea a fost păstrată local, dar nu s-a transmis către server: '+(err?.message||err));
+      }
+      renderTechnicianPortal();
     });
   });
 }
@@ -3484,6 +3577,8 @@ function attachInlineEditors(root) {
       const c = getCase(id);
       if (!c) return;
       const user = getCurrentUser() || { id: 'admin', initials: 'AD', name: 'Admin' };
+      const actorId = resolveUserLabActorId(user);
+      const actorAliases = currentUserAssigneeIds(user);
       const items = [
         { value: 'claim', label: 'Preia (Eu lucrez la asta)' },
         { value: 'in_lucru', label: 'Marchez ca: În lucru' },
@@ -3506,7 +3601,8 @@ function attachInlineEditors(root) {
         c.assignees = c.assignees || {};
         let shouldSyncStage=true;
         if (sel.value === 'claim') {
-          activateLabStage(c,stage,user.id);
+          if(!actorId){alert('Acest utilizator nu este legat de un tehnician. Verifică profilul utilizatorului.');return;}
+          claimStageForEmployee(c,stage,actorId,actorAliases);
         } else if (sel.value === 'collaborators') {
           openCollaboratorEditor(c,stage,()=>{if(typeof renderTable==='function')renderTable();if(typeof renderPipeline==='function')renderPipeline();});
           return;
@@ -3522,10 +3618,20 @@ function attachInlineEditors(root) {
           if(c.stage===stage)c.assignee=primaryStageAssignee(c,stage);
           shouldSyncStage=false;
         } else {
-          if (sel.value === 'finalizat') {completeLabStage(c, stage);shouldSyncStage=false;}
-          else if(sel.value==='in_lucru') activateLabStage(c,stage,primaryStageAssignee(c,stage)||user.id);
-          else if(sel.value==='la_proba'&&typeof setLabStageStatus==='function')setLabStageStatus(c,stage,'la_proba',primaryStageAssignee(c,stage)||user.id);
-          else if(sel.value==='proba_aprobata'&&typeof setLabStageStatus==='function')setLabStageStatus(c,stage,'proba_aprobata',primaryStageAssignee(c,stage)||user.id);
+          const stageOwner=primaryStageAssignee(c,stage)||actorId||null;
+          if (sel.value === 'finalizat') {if(actorId)promoteStageAssignee(c,stage,actorId,actorAliases);completeLabStage(c, stage);shouldSyncStage=false;}
+          else if(sel.value==='in_lucru') {
+            if(actorId)claimStageForEmployee(c,stage,actorId,actorAliases);
+            else activateLabStage(c,stage,stageOwner);
+          }
+          else if(sel.value==='la_proba'&&typeof setLabStageStatus==='function'){
+            setLabStageStatus(c,stage,'la_proba',actorId||stageOwner);
+            if(actorId)promoteStageAssignee(c,stage,actorId,actorAliases);
+          }
+          else if(sel.value==='proba_aprobata'&&typeof setLabStageStatus==='function'){
+            setLabStageStatus(c,stage,'proba_aprobata',actorId||stageOwner);
+            if(actorId)promoteStageAssignee(c,stage,actorId,actorAliases);
+          }
           else {
             c.stage=sel.value==='la_proba'?'proba':stage;
             c.notStarted=false;

@@ -1321,7 +1321,61 @@ button{font-family:inherit;cursor:pointer}
   .lab-term-card{grid-template-columns:1fr;gap:8px;padding:11px 12px}
   .lab-term-time{justify-self:start}
   .collab-list{grid-template-columns:1fr}
-  .inline-popover,.inline-note-editor{max-width:calc(100vw - 24px)}
+  .inline-popover,
+  .date-popover,
+  .inline-note-editor,
+  .row-actions-menu,
+  .kb-card-popover,
+  .kb-col-popover,
+  .clinic-case-popover,
+  .case-actions-menu.open,
+  .chip-menu.open{
+    position:fixed !important;
+    left:12px !important;
+    right:12px !important;
+    top:auto !important;
+    bottom:12px !important;
+    width:auto !important;
+    min-width:0 !important;
+    max-width:none !important;
+    max-height:min(70dvh, 520px) !important;
+    overflow-y:auto !important;
+    z-index:2200 !important;
+    border-radius:14px !important;
+    box-shadow:0 18px 50px rgba(0,0,0,.28), 0 2px 10px rgba(0,0,0,.12) !important;
+    -webkit-overflow-scrolling:touch;
+  }
+  .inline-popover,
+  .row-actions-menu.open,
+  .kb-card-popover,
+  .kb-col-popover,
+  .clinic-case-popover,
+  .case-actions-menu.open{
+    padding:8px !important;
+    gap:2px;
+  }
+  .inline-pop-header,
+  .kb-pop-label{
+    position:sticky;
+    top:0;
+    background:var(--bg);
+    z-index:1;
+  }
+  .inline-pop-item,
+  .row-actions-menu button,
+  .kb-pop-item,
+  .case-actions-menu button,
+  .chip-menu-item{
+    min-height:44px;
+    display:flex;
+    align-items:center;
+    font-size:14px;
+    padding:10px 12px;
+  }
+  .date-popover{padding:8px !important}
+  .date-cal-day{height:38px;font-size:13px}
+  .inline-note-editor textarea,
+  .note-form-input{font-size:16px}
 }
 
 @media (max-width: 480px){
