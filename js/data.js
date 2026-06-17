@@ -422,7 +422,8 @@ function parseShortDate(str) {
     const [y, m, d] = s.split('-').map(Number);
     return new Date(y, m - 1, d);
   }
-  const months = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11 };
+  const months = { Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11,
+                   Ian:0, Mai:4, Iun:5, Iul:6 }; // acceptă și prescurtările românești (Ian/Mai/Iun/Iul)
   const [m, d, explicitYear] = s.split(' ');
   if (months[m] === undefined) return null;
   const month = months[m];

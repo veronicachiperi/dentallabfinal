@@ -2078,6 +2078,9 @@ function renderArchive(){
   if(archiveFilter.tech!=='all')archived=archived.filter(c=>archiveTech(c)===archiveFilter.tech||Object.keys(c.assignees||{}).some(s=>stageAssignees(c,s).includes(archiveFilter.tech)));
   if(archiveFilter.type!=='all')archived=archived.filter(c=>c.type===archiveFilter.type);
   if(archiveFilter.q){const q=archiveFilter.q.toLowerCase();archived=archived.filter(c=>c.name.toLowerCase().includes(q)||String(c.id).includes(q))}
+  // Filtrare după an: păstrăm cazurile cu data în anul selectat. Cazurile fără
+  // dată parsabilă (grupate la „Necunoscută") rămân vizibile indiferent de an.
+  if(archiveFilter.year)archived=archived.filter(c=>{const d=archiveDate(c);return !d||String(d.getFullYear())===String(archiveFilter.year)});
   if(archiveFilter.month!=='all')archived=archived.filter(c=>{const d=archiveDate(c);return d&&d.getMonth()===Number(archiveFilter.month)});
   const total=archived.length;
   const finished=archived.filter(c=>c.stage==='terminat').length;
