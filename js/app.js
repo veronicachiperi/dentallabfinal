@@ -3036,6 +3036,7 @@ async function renderActivityLog(){
     reset_stage:'Resetat etapă',
     assign_collaborators:'Schimbat colaboratori',
     archive_case:'Arhivat caz',
+    cancel_case:'Anulat caz',
     confirm_pickup:'Confirmat expediere',
     approve_probe:'Probă aprobată',
     delete_case:'Șters caz',
