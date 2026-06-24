@@ -212,6 +212,11 @@
     'Pe tehnician': 'По технику', 'La timp vs întârziere': 'Вовремя и с опозданием',
     'Tipuri de lucrări per clinică': 'Типы работ по клиникам',
     'Întârziate': 'С опозданием', 'Cel mai mult:': 'Больше всего:',
+    'Termeni & respectarea lor (per clinică)': 'Сроки и их соблюдение (по клиникам)',
+    'Lucrări': 'Работы', 'Zile medii oferite': 'Среднее кол-во дней',
+    'Min. recomandat': 'Мин. рекомендуемый', '% urgentate': '% срочных', '% respectate': '% в срок',
+    'Nu există încă lucrări cu termeni măsurabili (au nevoie de dată de intrare + finală + tip recunoscut).':
+      'Пока нет работ с измеримыми сроками (нужны дата поступления + финал + распознанный тип).',
 
     // Clinici / Echipa
     '+ Clinică nouă': '+ Новая клиника', 'Administrare clinici': 'Управление клиниками',
@@ -311,7 +316,8 @@
     'data probei descrescător': 'дата примерки по убыванию',
     'data finală crescător': 'финальная дата по возрастанию',
     'data finală descrescător': 'финальная дата по убыванию',
-    'Sortare:': 'Сортировка:', 'pe luni': 'по месяцам', 'toate': 'все',
+    'Sortare:': 'Сортировка:', 'pe luni': 'по месяцам', 'toate': 'все', 'implicit': 'по умолчанию',
+    'Expediate': 'Отправленные',
     'în curs': 'в процессе', 'active': 'активных', 'expediate': 'отправлено',
     'lucrări': 'работ', 'lucrare': 'работа',
     'tehnicieni': 'техников', 'clinici': 'клиник', 'cazuri legate': 'связанных дел',

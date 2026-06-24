@@ -555,6 +555,34 @@ function statsTypesByClinic() {
     return { id: cl.id, name: String(cl.name || cl.id || 'Clinică'), total: cases.length, types };
   }).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
 }
+// Statistici termeni per clinică: câte zile lucrătoare oferă clinica (intrare→finală)
+// față de minimul recomandat pe tip de lucrare, ce procent sunt URGENTĂRI (sub minim)
+// și ce procent RESPECTĂ termenii. Sortat după % urgentări (cele mai problematice sus).
+function statsTermsByClinic() {
+  return CLINICS.map(cl => {
+    const cases = casesForClinic(cl.id).filter(c => typeof isValidCase === 'function' ? isValidCase(c) : true);
+    let measured = 0, urgent = 0, sumDays = 0, sumMin = 0;
+    cases.forEach(c => {
+      const st = labDeadlineStatus(c);
+      if (st && st.term && st.businessDays !== null && st.min != null) {
+        measured++;
+        sumDays += st.businessDays;
+        sumMin += st.min;
+        if (st.urgent) urgent++;
+      }
+    });
+    const respected = measured - urgent;
+    return {
+      id: cl.id,
+      name: String(cl.name || cl.id || 'Clinică'),
+      total: cases.length, measured, urgent, respected,
+      pctUrgent: measured ? Math.round((urgent / measured) * 100) : 0,
+      pctRespected: measured ? Math.round((respected / measured) * 100) : 0,
+      avgDays: measured ? Math.round((sumDays / measured) * 10) / 10 : null,
+      avgMin: measured ? Math.round((sumMin / measured) * 10) / 10 : null
+    };
+  }).filter(x => x.measured > 0).sort((a, b) => b.pctUrgent - a.pctUrgent);
+}
 // Paletă stabilă pentru tipuri de lucrări.
 function workTypeColor(i) {
   const palette = ['#5B8DEF','#534AB7','#185FA5','#D85A30','#1D9E75','#B07D2A','#444441','#A32D2D','#27500A','#7B5EA7','#BA7517','#2D8C8C','#C2477E','#6B7280','#9C6ADE','#E0A82E','#3D9970','#85144B'];

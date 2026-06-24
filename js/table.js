@@ -81,6 +81,27 @@ function renderTable() {
     if (!sortedKeys.length) html = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Nicio lucrare pentru filtrul curent.</div>';
   }
 
+  // Expediate într-un tabel separat jos — la sortare (crescător/descrescător)
+  // și la filtrarea pe clinică. Lista principală rămâne doar cu lucrări active.
+  const showExpedited = activeFilter.tab !== 'trimise' && (activeFilter.clinic !== 'all' || sortMode !== 'default');
+  if (showExpedited) {
+    const _tab = activeFilter.tab;
+    activeFilter.tab = 'trimise';            // refolosim filtrul (respectă clinică + căutare)
+    let expedited = applyFilter(CASES);
+    activeFilter.tab = _tab;
+    expedited = expedited.slice().sort((a, b) => {
+      const da = parseShortDate(a.sentDate || a.completedDate || a.finala) || 0;
+      const db = parseShortDate(b.sentDate || b.completedDate || b.finala) || 0;
+      return db - da;                        // cele mai recent expediate primele
+    });
+    if (expedited.length) {
+      html += `<div class="month-section expedited-section">
+        <div class="month-header"><span class="month-name">Expediate</span><span class="month-count">${expedited.length} ${expedited.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
+        <div class="tbl-wrap"><table class="tbl">${tblHeaders}<tbody>${expedited.map(renderTableRow).join('')}</tbody></table></div>
+      </div>`;
+    }
+  }
+
   root.innerHTML = html;
   attachTableHandlers(root);
 }
