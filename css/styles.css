@@ -1450,3 +1450,23 @@ button{font-family:inherit;cursor:pointer}
 .expedited-summary::before{content:'▸';margin-right:8px;font-size:11px;color:var(--text-dim);transition:transform .15s}
 .expedited-section[open] .expedited-summary::before{content:'▾'}
 .expedited-summary:hover{opacity:1}
+
+/* === TELEFON: tabel lucrări mai compact (mai puțin scroll dreapta) === */
+@media (max-width:560px){
+  /* Tabelul încape pe ecran (nu mai forțăm 980px) */
+  .tbl{min-width:0}
+  /* Ascundem coloanele neesențiale pe telefon:
+     5=Acțiuni, 6=Intrată, 10=Etape lab, 12=Notițe.
+     Rămân: #, Nume, Clinică, Tip, Probă, Finală, Prioritate, Etapă. */
+  .tbl thead th:nth-child(5),  .tbl tbody td:nth-child(5),
+  .tbl thead th:nth-child(6),  .tbl tbody td:nth-child(6),
+  .tbl thead th:nth-child(10), .tbl tbody td:nth-child(10),
+  .tbl thead th:nth-child(12), .tbl tbody td:nth-child(12){display:none}
+  .tbl th,.tbl td{padding:9px 7px}
+  /* Scris mai lizibil */
+  .tbl-name{font-size:14px}
+  .tbl-clinic,.tbl-due,.tbl-due-bold,.tbl-num{font-size:12.5px}
+  .tag{font-size:11px}
+  .tbl-prio{font-size:11px}
+  .tbl thead th{font-size:10.5px}
+}
