@@ -1438,3 +1438,11 @@ button{font-family:inherit;cursor:pointer}
 .pc-sort-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;margin-right:2px}
 .pc-sort-chip{font-size:12px;padding:6px 11px;border:0.5px solid var(--border);border-radius:999px;background:var(--bg);color:var(--text-muted);cursor:pointer}
 .pc-sort-chip.on{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* Secțiunea „Expediate" pliabilă (închisă implicit) în tabelul de lucrări */
+.expedited-section{margin-top:14px}
+.expedited-summary{cursor:pointer;list-style:none;user-select:none;opacity:.85}
+.expedited-summary::-webkit-details-marker{display:none}
+.expedited-summary::before{content:'▸';margin-right:8px;font-size:11px;color:var(--text-dim);transition:transform .15s}
+.expedited-section[open] .expedited-summary::before{content:'▾'}
+.expedited-summary:hover{opacity:1}

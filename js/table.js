@@ -4,6 +4,7 @@ function withAlpha(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 const MONTH_NAMES = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
+let _expeditedOpen = false; // secțiunea „Expediate" e pliată implicit; reține starea între redări
 // MON_SHORT and shortDayMon are now defined in data.js (used on every page).
 
 function renderTable() {
@@ -95,14 +96,16 @@ function renderTable() {
       return db - da;                        // cele mai recent expediate primele
     });
     if (expedited.length) {
-      html += `<div class="month-section expedited-section">
-        <div class="month-header"><span class="month-name">Expediate</span><span class="month-count">${expedited.length} ${expedited.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
+      // Pliabil, ÎNCHIS implicit: cazurile active rămân vizibile sus, fără aglomerare.
+      html += `<details class="month-section expedited-section"${_expeditedOpen ? ' open' : ''}>
+        <summary class="month-header expedited-summary"><span class="month-name">Expediate</span><span class="month-count">${expedited.length} ${expedited.length === 1 ? 'lucrare' : 'lucrări'}</span></summary>
         <div class="tbl-wrap"><table class="tbl">${tblHeaders}<tbody>${expedited.map(renderTableRow).join('')}</tbody></table></div>
-      </div>`;
+      </details>`;
     }
   }
 
   root.innerHTML = html;
+  root.querySelector('.expedited-section')?.addEventListener('toggle', e => { _expeditedOpen = e.target.open; });
   attachTableHandlers(root);
 }
 
