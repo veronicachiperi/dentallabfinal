@@ -230,6 +230,9 @@ function applyFilter(cases){
       if(!hay.includes(q))return false;
     }
     if(activeFilter.tab==='trimise')return isArchived;
+    // La CĂUTARE, expediatele/anulate apar inline (ca să găsești orice pacient).
+    // La răsfoire (filtru pe clinică / sortare, fără căutare) NU apar în lista
+    // activă — sunt afișate separat în secțiunea „Expediate" de jos.
     if(isArchived)return Boolean(activeFilter.q);
     if(activeFilter.tab==='mine'){if(!user||!caseStageAssignedToUser(c,c.stage,user))return false}
     if(activeFilter.tab==='late'&&!c.late)return false;

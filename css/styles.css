@@ -1207,7 +1207,11 @@ button{font-family:inherit;cursor:pointer}
   .kb-card{padding:12px}
 
   .modal-overlay{padding:0;align-items:stretch}
-  .modal,.modal.modal-wide{max-width:none;width:100%;height:100dvh;max-height:none;border-radius:0}
+  /* min-width:0 — fără el, modalul (flex item) nu se micșorează sub cel mai lat
+     copil (schema dentară 560px) și conținutul ieșea în afara ecranului. */
+  .modal,.modal.modal-wide{max-width:none;width:100%;min-width:0;height:100dvh;max-height:none;border-radius:0;overflow-x:hidden}
+  .modal-body,.modal-body-compact,.wizard-content,.wizard-panel,.field,.field-row{min-width:0;max-width:100%}
+  .field input,.field select,.field textarea{max-width:100%}
   .modal-head{padding:14px 16px;position:sticky;top:0;background:var(--bg);z-index:5}
   .modal-body{padding:16px}
   .modal-body-compact{padding:0}

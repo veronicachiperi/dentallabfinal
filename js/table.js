@@ -84,7 +84,9 @@ function renderTable() {
 
   // Expediate într-un tabel separat jos — la sortare (crescător/descrescător)
   // și la filtrarea pe clinică. Lista principală rămâne doar cu lucrări active.
-  const showExpedited = activeFilter.tab !== 'trimise' && (activeFilter.clinic !== 'all' || sortMode !== 'default');
+  // Secțiunea „Expediate" jos apare la RĂSFOIRE (filtru clinică / sortare), fără
+  // căutare. La căutare, expediatele apar inline în listă, deci nu o dublăm.
+  const showExpedited = activeFilter.tab !== 'trimise' && !activeFilter.q && (activeFilter.clinic !== 'all' || sortMode !== 'default');
   if (showExpedited) {
     const _tab = activeFilter.tab;
     activeFilter.tab = 'trimise';            // refolosim filtrul (respectă clinică + căutare)
