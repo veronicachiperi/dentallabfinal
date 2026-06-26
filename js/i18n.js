@@ -284,6 +284,11 @@
     'data finală crescător': 'финальная дата по возрастанию',
     'data finală descrescător': 'финальная дата по убыванию',
     'Date live neîncărcate': 'Данные не загружены',
+    'Sortare': 'Сортировка', 'Pe luni': 'По месяцам',
+    'Dată arhivă ↓ (recent)': 'Дата архива ↓ (недавние)',
+    'Dată arhivă ↑ (vechi)': 'Дата архива ↑ (старые)',
+    'Dată arhivă — crescător': 'Дата архива — по возрастанию',
+    'Dată arhivă — descrescător': 'Дата архива — по убыванию',
     'Mele': 'Мои', 'Întârziere': 'Опоздание', 'Săptămâna': 'Неделя',
 
     // Placeholdere + tooltipuri (atribute placeholder / title)

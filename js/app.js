@@ -2187,7 +2187,7 @@ function renderTechnicianPortal(){
 }
 
 // === ARCHIVE ===
-let archiveFilter={year:String(new Date().getFullYear()),month:'all',clinic:'all',tech:'all',type:'all',q:''};
+let archiveFilter={year:String(new Date().getFullYear()),month:'all',clinic:'all',tech:'all',type:'all',q:'',sort:'default'};
 function renderArchive(){
   const root=document.getElementById('archiveShell');if(!root)return;
   if(typeof assignCaseNumbers==='function')assignCaseNumbers();
@@ -2214,19 +2214,30 @@ function renderArchive(){
   const onTime=total?Math.round(archived.filter(c=>!c.late).length/total*100):100;
   const clCounts={};archived.forEach(c=>{clCounts[c.clinic]=(clCounts[c.clinic]||0)+1});
   const topCl=Object.entries(clCounts).sort((a,b)=>b[1]-a[1])[0];
-  const groups={};archived.forEach(c=>{const d=archiveDate(c);const k=d?`${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`:'unknown';(groups[k]=groups[k]||[]).push(c)});
-  const sortedKeys=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  const groups={};let sortedKeys;
+  if(archiveFilter.sort&&archiveFilter.sort!=='default'){
+    // Sortare după data arhivării (crescător/descrescător) — listă unică, fără grupare pe luni.
+    const dir=archiveFilter.sort==='date-asc'?1:-1;
+    const flat=archived.slice().sort((a,b)=>{const da=archiveDate(a)||0,db=archiveDate(b)||0;return (da-db)*dir;});
+    const key=archiveFilter.sort==='date-asc'?'__asc':'__desc';
+    groups[key]=flat;sortedKeys=[key];
+  } else {
+    archived.forEach(c=>{const d=archiveDate(c);const k=d?`${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`:'unknown';(groups[k]=groups[k]||[]).push(c)});
+    sortedKeys=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  }
   const archiveClinic=getClinic(clinicArchiveId);
   const archiveTitle=clinicArchiveId?`Arhiva ${archiveClinic?.name||'clinicii'}`:'Arhivă lucrări';
   const clinicFilterHTML=clinicArchiveId
     ? `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><input class="ar-input" value="${escAttr(archiveClinic?.name||clinicArchiveId)}" disabled></div>`
     : `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${CLINICS.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div>`;
-  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">${archiveTitle}</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div>${clinicArchiveId?'<a href="clinic.html" class="ar-btn">Portal clinică</a>':''}<button class="ar-btn" id="arExport">Export CSV</button></div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">${clinicArchiveId?'Clinică':'Clinică top'}</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY">${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>${clinicFilterHTML}${clinicArchiveId?'':`<div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div>`}</div>`;
+  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">${archiveTitle}</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div>${clinicArchiveId?'<a href="clinic.html" class="ar-btn">Portal clinică</a>':''}<button class="ar-btn" id="arExport">Export CSV</button></div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">${clinicArchiveId?'Clinică':'Clinică top'}</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY">${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>${clinicFilterHTML}${clinicArchiveId?'':`<div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div>`}<div class="ar-filter"><label class="ar-filter-label">Sortare</label><select class="ar-select" id="arS">${[['default','Pe luni'],['date-desc','Dată arhivă ↓ (recent)'],['date-asc','Dată arhivă ↑ (vechi)']].map(([v,l])=>`<option value="${v}" ${archiveFilter.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>`;
   if(!sortedKeys.length){h+='<div style="padding:60px;text-align:center;color:var(--text-dim)">Nicio lucrare terminată sau expediată în filtrul curent.</div>'}
   sortedKeys.forEach(k=>{
     const cs=groups[k];
     let lbl='Necunoscută';
-    if(k!=='unknown'){const[y,m]=k.split('-').map(Number);lbl=`${MONTH_NAMES_RO[m]} ${y}`}
+    if(k==='__asc')lbl='Dată arhivă — crescător';
+    else if(k==='__desc')lbl='Dată arhivă — descrescător';
+    else if(k!=='unknown'){const[y,m]=k.split('-').map(Number);lbl=`${MONTH_NAMES_RO[m]} ${y}`}
     h+=`<div class="ar-month-section">${lbl} · ${cs.length} lucrări</div><div class="ar-tbl-wrap"><table class="ar-tbl"><thead><tr><th>#</th><th>Pacient</th><th>Clinică</th><th>Tip</th><th>Status</th><th>Tehnicieni (per etapă)</th><th>Intrată</th><th>Data arhivă</th><th>Durată</th><th>Acțiuni</th></tr></thead><tbody>${cs.map(c=>{
       // Listă unică de tehnicieni care au lucrat la caz, cu etapele asociate.
       const stageNames={design:'Design',la_print:'Print',cam:'CAM',la_bare:'Bare',prelucrare:'Prelucrare',ceramica:'Ceramică'};
@@ -2243,12 +2254,13 @@ function renderArchive(){
   });
   h+=`</div></main></div>`;
   root.innerHTML=h;
-  ['arQ','arY','arM','arC','arT'].forEach(id=>{document.getElementById(id)?.addEventListener('change',()=>{
+  ['arQ','arY','arM','arC','arT','arS'].forEach(id=>{document.getElementById(id)?.addEventListener('change',()=>{
     archiveFilter.q=document.getElementById('arQ')?.value||'';
     archiveFilter.year=document.getElementById('arY')?.value||archiveFilter.year;
     archiveFilter.month=document.getElementById('arM')?.value||'all';
     archiveFilter.clinic=clinicArchiveId||document.getElementById('arC')?.value||'all';
     archiveFilter.tech=document.getElementById('arT')?.value||'all';
+    archiveFilter.sort=document.getElementById('arS')?.value||'default';
     renderArchive()
   })});
   document.getElementById('arQ')?.addEventListener('input',e=>{archiveFilter.q=e.target.value;renderArchive()});
