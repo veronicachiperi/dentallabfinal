@@ -298,7 +298,26 @@ function handleStageClick(caseId, stageId) {
 }
 
 function exportCSV() {
-  const cases = applyFilter(CASES);
+  const filtered = applyFilter(CASES);
+  // Exportăm în ACEEAȘI ordine ca afișarea: sortare aleasă sau grupare pe luni.
+  const sortMode = (typeof activeFilter !== 'undefined' && activeFilter.sort) || 'default';
+  let cases;
+  if (sortMode !== 'default') {
+    const field = sortMode.startsWith('proba') ? 'probaDate' : 'finala';
+    const dir = sortMode.endsWith('-desc') ? -1 : 1;
+    cases = filtered.slice().sort((a, b) => {
+      const da = parseShortDate(a[field]), db = parseShortDate(b[field]);
+      if (!da && !db) return 0; if (!da) return 1; if (!db) return -1;
+      return (da - db) * dir;
+    });
+  } else {
+    const groupDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala);
+    const groups = {};
+    filtered.forEach(c => { const d = groupDate(c); const key = d ? `${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}` : 'unknown'; (groups[key] = groups[key] || []).push(c); });
+    const keys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+    keys.forEach(k => groups[k].sort((a, b) => (groupDate(b) || 0) - (groupDate(a) || 0)));
+    cases = keys.filter(k => k !== 'unknown').flatMap(k => groups[k]);
+  }
   const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Intrată','Probă','Finală','Prioritate','Dinți','Implant','Amprentă','Note'];
   const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');const cl=getClinic(c.clinic)||{name:c.clinic||'—',doctor:''};return [c.id, c.name, cl.name, c.doctor || cl.doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), c.implantType || '', c.amprentaType || '', notes]});
   const csv = [headers, ...rows].map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');

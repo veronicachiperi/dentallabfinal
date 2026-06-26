@@ -2225,6 +2225,8 @@ function renderArchive(){
     archived.forEach(c=>{const d=archiveDate(c);const k=d?`${d.getFullYear()}-${String(d.getMonth()).padStart(2,'0')}`:'unknown';(groups[k]=groups[k]||[]).push(c)});
     sortedKeys=Object.keys(groups).sort((a,b)=>b.localeCompare(a));
   }
+  // Ordinea exactă afișată (sortată sau grupată pe luni) — folosită și la export CSV.
+  const orderedArchived=sortedKeys.flatMap(k=>groups[k]||[]);
   const archiveClinic=getClinic(clinicArchiveId);
   const archiveTitle=clinicArchiveId?`Arhiva ${archiveClinic?.name||'clinicii'}`:'Arhivă lucrări';
   const clinicFilterHTML=clinicArchiveId
@@ -2269,7 +2271,7 @@ function renderArchive(){
   document.querySelectorAll('.ar-tbl tbody tr').forEach(r=>r.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${r.dataset.caseId}`}));
   document.getElementById('arExport')?.addEventListener('click',()=>{
     const headers=['ID','Pacient','Clinică','Tip','Status','Intrată','Data arhivă','Durată'];
-    const rows=archived.map(c=>[c.id,c.name,(getClinic(c.clinic)||{name:c.clinic||'—'}).name,c.type,statusLabel(c),c.intrata,c.sentDate||c.completedDate||c.finala,c.durationDays||'']);
+    const rows=orderedArchived.map(c=>[c.id,c.name,(getClinic(c.clinic)||{name:c.clinic||'—'}).name,c.type,statusLabel(c),c.intrata,c.sentDate||c.completedDate||c.finala,c.durationDays||'']);
     const csv=[headers,...rows].map(r=>r.map(cell=>`"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`arhiva-${clinicArchiveId||'toate'}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
