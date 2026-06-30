@@ -569,7 +569,8 @@ button{font-family:inherit;cursor:pointer}
   .view-tabs,.subbar{overflow-x:auto;white-space:nowrap;padding-left:12px;padding-right:12px}
   .subbar{gap:14px}
   .month-header{padding-left:12px;padding-right:12px}
-  .tbl{min-width:1040px}
+  /* Lucrări pe mobil: tabelul lat devine carduri verticale (vezi blocul #tableView de mai jos) */
+  #tableView .tbl{min-width:0}
   .cd-topbar{padding:10px 12px;position:sticky;top:0;z-index:8}
   .cd-head{padding:18px 12px 14px}
   .cd-title{font-size:20px}

@@ -131,18 +131,18 @@ function renderTableRow(c) {
   const hasNote=parsedNotes.length>0;
   const rowClasses=[c.notStarted?'tbl-row-faded':'',typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'tbl-row-blocked':''].filter(Boolean).join(' ');
  return `<tr data-case-id="${c.id}" class="${rowClasses}">
-    <td><span class="tbl-num">#${c.seq || c.id}</span></td>
-    <td><span class="tbl-name">${c.name}</span></td>
-    <td><span class="tbl-clinic">${clinic.name}</span></td>
-    <td><span class="tag">${c.type}</span></td>
-    <td class="tbl-actions-cell"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare completă</button><button type="button" data-row-action="preview-pdf" data-case-id="${c.id}">Previzualizează PDF</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button><button type="button" data-row-action="block" data-case-id="${c.id}">Blochează temporar</button><button type="button" data-row-action="archive" data-case-id="${c.id}">Arhivează</button><button type="button" data-row-action="cancel" data-case-id="${c.id}" class="danger">Anulează lucrarea</button><button type="button" data-row-action="reset" data-case-id="${c.id}">Clear all → Neînceput</button>${c.stage==='terminat'?'<button type="button" data-row-action="send" data-case-id="'+c.id+'">Marchează expediat</button>':''}<button type="button" data-row-action="delete" data-case-id="${c.id}" class="danger">Șterge lucrarea</button></div></div></td>
-    <td><span class="tbl-due" data-date-field="intrata">${shortDayMon(c.intrata)}${extractTime(c.intrata)?'<small class="tbl-due-time">'+extractTime(c.intrata)+'</small>':''}</span></td>
-    <td><span class="tbl-due-bold" data-date-field="probaDate">${shortDayMon(c.probaDate)}${extractTime(c.probaDate)?'<small class="tbl-due-time">'+extractTime(c.probaDate)+'</small>':''}</span></td>
-    <td><span class="tbl-due-bold ${dueClass}" data-date-field="finala">${finalText}${(!c.late&&extractTime(c.finala))?'<small class="tbl-due-time">'+extractTime(c.finala)+'</small>':''}</span></td>
-    <td><span class="tbl-prio ${c.priority}">${c.priority}</span></td>
-    <td>${renderFlowIndicator(c)}</td>
-    <td><span class="tbl-pill" style="background:${withAlpha(stageColor,0.15)};color:${stageColor}">${stageIcon}<span style="margin-left:${stageIcon?'4px':'0'}">${stageLabel}</span></span></td>
-    <td><span class="tbl-notes ${hasNote?'has-note':'is-empty'}" title="${hasNote?noteEsc:'Adaugă notiță'}">${noteEsc}${parsedNotes.length>1?` <small>+${parsedNotes.length-1}</small>`:''}</span></td>
+    <td class="tc-num" data-label="Nr"><span class="tbl-num">#${c.seq || c.id}</span></td>
+    <td class="tc-name" data-label="Pacient"><span class="tbl-name">${c.name}</span></td>
+    <td data-label="Clinică"><span class="tbl-clinic">${clinic.name}</span></td>
+    <td data-label="Tip"><span class="tag">${c.type}</span></td>
+    <td class="tbl-actions-cell tc-actions" data-label="Acțiuni"><div class="row-actions"><button class="fisa-btn row-actions-btn" data-row-actions="${c.id}" type="button">Acțiuni ▾</button><div class="row-actions-menu" data-row-menu="${c.id}"><button type="button" data-row-action="edit" data-case-id="${c.id}">Editare completă</button><button type="button" data-row-action="preview-pdf" data-case-id="${c.id}">Previzualizează PDF</button><button type="button" data-row-action="pdf" data-case-id="${c.id}">Descarcă PDF</button><button type="button" data-row-action="attach" data-case-id="${c.id}">Atașează fișiere</button><button type="button" data-row-action="view" data-case-id="${c.id}">Deschide cazul</button><button type="button" data-row-action="block" data-case-id="${c.id}">Blochează temporar</button><button type="button" data-row-action="archive" data-case-id="${c.id}">Arhivează</button><button type="button" data-row-action="cancel" data-case-id="${c.id}" class="danger">Anulează lucrarea</button><button type="button" data-row-action="reset" data-case-id="${c.id}">Clear all → Neînceput</button>${c.stage==='terminat'?'<button type="button" data-row-action="send" data-case-id="'+c.id+'">Marchează expediat</button>':''}<button type="button" data-row-action="delete" data-case-id="${c.id}" class="danger">Șterge lucrarea</button></div></div></td>
+    <td data-label="Intrată"><span class="tbl-due" data-date-field="intrata">${shortDayMon(c.intrata)}${extractTime(c.intrata)?'<small class="tbl-due-time">'+extractTime(c.intrata)+'</small>':''}</span></td>
+    <td data-label="Probă"><span class="tbl-due-bold" data-date-field="probaDate">${shortDayMon(c.probaDate)}${extractTime(c.probaDate)?'<small class="tbl-due-time">'+extractTime(c.probaDate)+'</small>':''}</span></td>
+    <td data-label="Finală"><span class="tbl-due-bold ${dueClass}" data-date-field="finala">${finalText}${(!c.late&&extractTime(c.finala))?'<small class="tbl-due-time">'+extractTime(c.finala)+'</small>':''}</span></td>
+    <td data-label="Prioritate"><span class="tbl-prio ${c.priority}">${c.priority}</span></td>
+    <td class="tc-flow" data-label="Etape lab">${renderFlowIndicator(c)}</td>
+    <td data-label="Etapă"><span class="tbl-pill" style="background:${withAlpha(stageColor,0.15)};color:${stageColor}">${stageIcon}<span style="margin-left:${stageIcon?'4px':'0'}">${stageLabel}</span></span></td>
+    <td class="tc-notes" data-label="Notițe"><span class="tbl-notes ${hasNote?'has-note':'is-empty'}" title="${hasNote?noteEsc:'Adaugă notiță'}">${noteEsc}${parsedNotes.length>1?` <small>+${parsedNotes.length-1}</small>`:''}</span></td>
   </tr>`;
 }
 
