@@ -322,8 +322,8 @@ function exportCSV() {
     keys.forEach(k => groups[k].sort((a, b) => (groupDate(b) || 0) - (groupDate(a) || 0)));
     cases = keys.filter(k => k !== 'unknown').flatMap(k => groups[k]);
   }
-  const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Intrată','Probă','Finală','Prioritate','Dinți','Implant','Amprentă','Note'];
-  const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');const cl=getClinic(c.clinic)||{name:c.clinic||'—',doctor:''};return [c.id, c.name, cl.name, c.doctor || cl.doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), c.implantType || '', c.amprentaType || '', notes]});
+  const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Intrată','Probă','Finală','Prioritate','Dinți','Punți','Implant','Amprentă','Note'];
+  const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');const cl=getClinic(c.clinic)||{name:c.clinic||'—',doctor:''};const punti=(c.bridges||[]).filter(g=>g&&g.length>=2).map(g=>g.join('-')).join(' | ');return [c.id, c.name, cl.name, c.doctor || cl.doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), punti, c.implantType || '', c.amprentaType || '', notes]});
   const csv = [headers, ...rows].map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);

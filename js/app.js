@@ -1665,6 +1665,51 @@ async function handleClinicAction(action,caseId){
   }
 }
 
+// === PUNȚI (bridges) — unește dinți adiacenți într-o lucrare comună ===
+const FDI_UPPER_ROW=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+const FDI_LOWER_ROW=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+function _toothRowPos(n){
+  n=Number(n);
+  let i=FDI_UPPER_ROW.indexOf(n);if(i>=0)return{row:0,idx:i};
+  i=FDI_LOWER_ROW.indexOf(n);if(i>=0)return{row:1,idx:i};
+  return null;
+}
+function sortBridgeGroup(group){
+  return group.map(Number).slice().sort((a,b)=>{
+    const pa=_toothRowPos(a),pb=_toothRowPos(b);
+    if(!pa||!pb)return a-b;
+    return pa.row-pb.row||pa.idx-pb.idx;
+  });
+}
+function normalizeBridges(bridges){
+  return (bridges||[]).map(g=>sortBridgeGroup(g)).filter(g=>g.length>=2);
+}
+function removeTeethFromBridges(bridges,teeth){
+  const drop=new Set(teeth.map(Number));
+  return bridges.map(g=>g.filter(n=>!drop.has(Number(n)))).filter(g=>g.length>=2);
+}
+// Aplică conectorii vizuali (bară aurie) între dinții uniți în punte.
+function applyBridgeConnectors(wrap,bridges){
+  if(!wrap)return;
+  wrap.querySelectorAll('[data-tooth]').forEach(el=>el.classList.remove('br-link-right','br-mem'));
+  (bridges||[]).forEach(group=>{
+    const sorted=sortBridgeGroup(group);
+    sorted.forEach(n=>{const el=wrap.querySelector(`[data-tooth="${n}"]`);if(el)el.classList.add('br-mem')});
+    for(let i=0;i<sorted.length-1;i++){
+      const pa=_toothRowPos(sorted[i]),pb=_toothRowPos(sorted[i+1]);
+      if(pa&&pb&&pa.row===pb.row&&pb.idx===pa.idx+1&&pa.idx!==7){
+        const el=wrap.querySelector(`[data-tooth="${sorted[i]}"]`);
+        if(el)el.classList.add('br-link-right');
+      }
+    }
+  });
+}
+function bridgeSummaryHTML(bridges){
+  const b=normalizeBridges(bridges);
+  if(!b.length)return '';
+  return b.map(g=>`<div class="tc-summary-line"><span class="tc-sum-mini bridge"></span><span>Punte:</span><b>${g.join('–')}</b></div>`).join('');
+}
+
 function openClinicCaseEdit(caseId){
   const c=getCase(caseId);if(!c)return;
   const user=getCurrentUser();
@@ -1701,6 +1746,11 @@ function openClinicCaseEdit(caseId){
           <button type="button" class="tc-jaw-btn" data-jaw="upper">Maxilar complet</button>
           <button type="button" class="tc-jaw-btn" data-jaw="lower">Mandibulă completă</button>
           <button type="button" class="tc-jaw-btn tc-jaw-clear" data-jaw="clear">Șterge tot</button>
+          <button type="button" class="tc-jaw-btn tc-bridge-toggle" id="ceBridgeToggle">Punte</button>
+        </div>
+        <div class="tc-bridge-bar" id="ceBridgeBar" hidden>
+          <span class="tc-bridge-hint">Selectează dinții adiacenți, apoi <b>Unește</b>. Apasă din nou pe o punte pentru a o desface.</span>
+          <span class="tc-bridge-actions"><b id="ceBridgeCount">0 selectați</b><button type="button" class="btn-mini" id="ceBridgeUnite">Unește</button><button type="button" class="btn-mini" id="ceBridgeSplit">Desparte</button><button type="button" class="btn-mini primary" id="ceBridgeDone">Gata</button></span>
         </div>
         <div class="tc-form-wrap" id="clinicEditToothChart"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div>
         <div class="tc-summary" id="clinicEditToothSummary"></div>
@@ -1711,18 +1761,53 @@ function openClinicCaseEdit(caseId){
 
   const tMap=new Map();
   (c.teeth||[]).forEach(t=>{if(t&&t.n&&t.type)tMap.set(String(t.n),t.type)});
+  let bridges=normalizeBridges(c.bridges);
+  let bridgeMode=false;const brSel=new Set();
+  const ceChartWrap=()=>document.getElementById('clinicEditToothChart');
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
+  function refreshBridges(){applyBridgeConnectors(ceChartWrap(),bridges);}
+  function updateBridgeCount(){const el=document.getElementById('ceBridgeCount');if(el)el.textContent=`${brSel.size} selectați`;}
   function updateSum(){
     const s=document.getElementById('clinicEditToothSummary');if(!s)return;
-    if(!tMap.size){s.innerHTML='<div style="color:var(--text-dim)">Niciun dinte selectat</div>';return}
+    const bridgeHTML=bridgeSummaryHTML(bridges);
+    if(!tMap.size&&!bridgeHTML){s.innerHTML='<div style="color:var(--text-dim)">Niciun dinte selectat</div>';refreshBridges();return}
     const bt={};tMap.forEach((t,n)=>{(bt[t]=bt[t]||[]).push(Number(n))});
-    s.innerHTML=Object.entries(bt).map(([t,ns])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]||t}:</span><b>${ns.sort((a,b)=>a-b).join(', ')}</b></div>`).join('');
+    s.innerHTML=Object.entries(bt).map(([t,ns])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]||t}:</span><b>${ns.sort((a,b)=>a-b).join(', ')}</b></div>`).join('')+bridgeHTML;
+    refreshBridges();
   }
   function setTooth(n,type){
     const tb=document.querySelector(`#clinicEditToothChart [data-tooth="${n}"]`);
     if(type){tMap.set(String(n),type);if(tb)tb.className='tooth-cell '+type}
-    else{tMap.delete(String(n));if(tb)tb.className='tooth-cell'}
+    else{tMap.delete(String(n));bridges=removeTeethFromBridges(bridges,[n]);if(tb)tb.className='tooth-cell'}
     updateSum();
+  }
+  function toggleBridgeMode(on){
+    bridgeMode=on;brSel.clear();
+    const bar=document.getElementById('ceBridgeBar'),btn=document.getElementById('ceBridgeToggle'),wrap=ceChartWrap();
+    if(bar)bar.hidden=!on;if(btn)btn.classList.toggle('active',on);if(wrap)wrap.classList.toggle('bridge-mode',on);
+    wrap&&wrap.querySelectorAll('.br-sel').forEach(el=>el.classList.remove('br-sel'));
+    updateBridgeCount();
+  }
+  function toggleBridgeSelect(tb){
+    const n=String(tb.dataset.tooth);
+    if(brSel.has(n)){brSel.delete(n);tb.classList.remove('br-sel')}
+    else{brSel.add(n);tb.classList.add('br-sel')}
+    updateBridgeCount();
+  }
+  function uniteSelection(){
+    if(brSel.size<2){return}
+    const group=Array.from(brSel).map(Number);
+    bridges=removeTeethFromBridges(bridges,group);
+    bridges.push(sortBridgeGroup(group));
+    bridges=normalizeBridges(bridges);
+    brSel.clear();const wrap=ceChartWrap();wrap&&wrap.querySelectorAll('.br-sel').forEach(el=>el.classList.remove('br-sel'));
+    updateBridgeCount();updateSum();
+  }
+  function splitSelection(){
+    if(!brSel.size){bridges=[];}
+    else{bridges=removeTeethFromBridges(bridges,Array.from(brSel).map(Number));}
+    brSel.clear();const wrap=ceChartWrap();wrap&&wrap.querySelectorAll('.br-sel').forEach(el=>el.classList.remove('br-sel'));
+    updateBridgeCount();updateSum();
   }
   function openToothPop(tb){
     document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
@@ -1733,11 +1818,15 @@ function openClinicCaseEdit(caseId){
     p.querySelectorAll('.tp-btn').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();setTooth(n,b.dataset.type);p.remove()}));
     setTimeout(()=>{const cl=ev=>{if(!p.contains(ev.target)&&ev.target!==tb){p.remove();document.removeEventListener('click',cl)}};document.addEventListener('click',cl)},0);
   }
-  document.querySelectorAll('#clinicEditToothChart .tooth-cell').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openToothPop(b)}));
-  document.querySelectorAll('.tc-jaw-btn').forEach(btn=>btn.addEventListener('click',e=>{
+  document.querySelectorAll('#clinicEditToothChart .tooth-cell').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();if(bridgeMode)toggleBridgeSelect(b);else openToothPop(b)}));
+  document.getElementById('ceBridgeToggle')?.addEventListener('click',e=>{e.stopPropagation();toggleBridgeMode(!bridgeMode)});
+  document.getElementById('ceBridgeUnite')?.addEventListener('click',e=>{e.stopPropagation();uniteSelection()});
+  document.getElementById('ceBridgeSplit')?.addEventListener('click',e=>{e.stopPropagation();splitSelection()});
+  document.getElementById('ceBridgeDone')?.addEventListener('click',e=>{e.stopPropagation();toggleBridgeMode(false)});
+  document.querySelectorAll('.tc-jaw-btn:not(.tc-bridge-toggle)').forEach(btn=>btn.addEventListener('click',e=>{
     e.stopPropagation();
     const jaw=btn.dataset.jaw;
-    if(jaw==='clear'){Array.from(tMap.keys()).forEach(n=>setTooth(n,''));return}
+    if(jaw==='clear'){bridges=[];Array.from(tMap.keys()).forEach(n=>setTooth(n,''));updateSum();return}
     const jawTeeth=jaw==='upper'?upper:lower;
     document.querySelectorAll('.tooth-popover').forEach(p=>p.remove());
     const p=document.createElement('div');p.className='tooth-popover';
@@ -1796,11 +1885,12 @@ function openClinicCaseEdit(caseId){
     c.probaDate=c.noProba?'':readDateTimeInput('ceProba','ceProbaTime');
     c.finala=readDateTimeInput('ceFinala','ceFinalaTime');
     c.teeth=Array.from(tMap.entries()).map(([n,type])=>({n:Number(n),type})).sort((a,b)=>a.n-b.n);
+    c.bridges=normalizeBridges(bridges);
     c.notes=notesFromTextArea(document.getElementById('ceNotes').value,c.notes);
     c.deadlineUrgent=labDeadlineStatus(c).urgent;
     c.priority=computePriority(c);
     overrides.edits=overrides.edits||{};
-    overrides.edits[c.id]={...overrides.edits[c.id],name:c.name,lastName:c.lastName,firstName:c.firstName,clinic:c.clinic,stage:c.stage,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,doctor:c.doctor,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,noProba:c.noProba,finala:c.finala,teeth:c.teeth,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority,finalTech:c.finalTech,completedDate:c.completedDate,sentDate:c.sentDate};
+    overrides.edits[c.id]={...overrides.edits[c.id],name:c.name,lastName:c.lastName,firstName:c.firstName,clinic:c.clinic,stage:c.stage,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,doctor:c.doctor,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,noProba:c.noProba,finala:c.finala,teeth:c.teeth,bridges:c.bridges,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority,finalTech:c.finalTech,completedDate:c.completedDate,sentDate:c.sentDate};
     saveOverrides(overrides);_syncCase(c);closeModal();renderClinic();updateMainSummary();
     auditCaseChangesFrom(c,before,'edit_case');
     if(typeof renderTable==='function')renderTable();renderPipeline();
@@ -1816,7 +1906,7 @@ function renderCaseDetail(){
   const stages=getEtapeLabStages(c.type);
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
-  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);return `<div class="t-display ${t?t.type:''}">${n}</div>`};
+  const tcell=n=>{const t=(c.teeth||[]).find(x=>x.n===n);return `<div class="t-display ${t?t.type:''}" data-tooth="${n}">${n}</div>`};
   const trow=arr=>arr.slice(0,8).map(tcell).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tcell).join('');
   const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
@@ -1829,7 +1919,8 @@ function renderCaseDetail(){
   const actionsMenu=isClinicView
     ?`<button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`
     :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button><button type="button" data-case-action="block">Blochează temporar</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`;
-  root.innerHTML=`<div class="case-shell ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.seq||c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-muted);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=typeof displayLabStageStatus==='function'?displayLabStageStatus(c,sId):(c.stageStatuses?.[sId]||'neincepute');const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" ${isClinicView?'':'style="cursor:pointer" title="Click pentru a schimba starea"'}><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
+  root.innerHTML=`<div class="case-shell ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.seq||c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-muted);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}${bridgeSummaryHTML(c.bridges)}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=typeof displayLabStageStatus==='function'?displayLabStageStatus(c,sId):(c.stageStatuses?.[sId]||'neincepute');const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" ${isClinicView?'':'style="cursor:pointer" title="Click pentru a schimba starea"'}><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
+  applyBridgeConnectors(root.querySelector('.tc-display-wrap'),c.bridges);
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
   document.querySelector('.fisa-fmeta')?.replaceChildren(document.createTextNode('A5 · alb-negru'));
   document.getElementById('dlFisaBtn')?.insertAdjacentHTML('beforebegin','<button class="btn" id="previewFisaBtn">Previzualizează</button>');
@@ -2717,6 +2808,11 @@ function openNewCaseModal(defClinic){
                   <button type="button" class="tc-jaw-btn" data-jaw="upper">Maxilar complet</button>
                   <button type="button" class="tc-jaw-btn" data-jaw="lower">Mandibulă completă</button>
                   <button type="button" class="tc-jaw-btn tc-jaw-clear" data-jaw="clear">Șterge tot</button>
+                  <button type="button" class="tc-jaw-btn tc-bridge-toggle" id="ncBridgeToggle">Punte</button>
+                </div>
+                <div class="tc-bridge-bar" id="ncBridgeBar" hidden>
+                  <span class="tc-bridge-hint">Selectează dinții adiacenți, apoi <b>Unește</b>. Apasă din nou pe o punte pentru a o desface.</span>
+                  <span class="tc-bridge-actions"><b id="ncBridgeCount">0 selectați</b><button type="button" class="btn-mini" id="ncBridgeUnite">Unește</button><button type="button" class="btn-mini" id="ncBridgeSplit">Desparte</button><button type="button" class="btn-mini primary" id="ncBridgeDone">Gata</button></span>
                 </div>
                 <div class="tc-form-wrap" id="toothChartWrap"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div>
                 <div class="tc-summary" id="toothSummary"><div style="color:var(--text-dim)">Niciun dinte selectat</div></div>
@@ -2783,16 +2879,49 @@ function openNewCaseModal(defClinic){
   });
   updateDeadlineAdvisor();
   const tMap=new Map();
+  let bridges=[];let bridgeMode=false;const brSel=new Set();
+  const ncChartWrap=()=>document.getElementById('toothChartWrap');
+  function ncRefreshBridges(){applyBridgeConnectors(ncChartWrap(),bridges);}
+  function ncUpdateBridgeCount(){const el=document.getElementById('ncBridgeCount');if(el)el.textContent=`${brSel.size} selectați`;}
+  function ncToggleBridgeMode(on){
+    bridgeMode=on;brSel.clear();
+    const bar=document.getElementById('ncBridgeBar'),btn=document.getElementById('ncBridgeToggle'),wrap=ncChartWrap();
+    if(bar)bar.hidden=!on;if(btn)btn.classList.toggle('active',on);if(wrap)wrap.classList.toggle('bridge-mode',on);
+    wrap&&wrap.querySelectorAll('.br-sel').forEach(el=>el.classList.remove('br-sel'));
+    ncUpdateBridgeCount();
+  }
+  function ncToggleBridgeSelect(tb){
+    const n=String(tb.dataset.tooth);
+    if(brSel.has(n)){brSel.delete(n);tb.classList.remove('br-sel')}
+    else{brSel.add(n);tb.classList.add('br-sel')}
+    ncUpdateBridgeCount();
+  }
+  function ncUnite(){
+    if(brSel.size<2)return;
+    const group=Array.from(brSel).map(Number);
+    bridges=removeTeethFromBridges(bridges,group);bridges.push(sortBridgeGroup(group));bridges=normalizeBridges(bridges);
+    brSel.clear();ncChartWrap()?.querySelectorAll('.br-sel').forEach(el=>el.classList.remove('br-sel'));
+    ncUpdateBridgeCount();updateSum();
+  }
+  function ncSplit(){
+    if(!brSel.size)bridges=[];else bridges=removeTeethFromBridges(bridges,Array.from(brSel).map(Number));
+    brSel.clear();ncChartWrap()?.querySelectorAll('.br-sel').forEach(el=>el.classList.remove('br-sel'));
+    ncUpdateBridgeCount();updateSum();
+  }
+  document.getElementById('ncBridgeToggle')?.addEventListener('click',e=>{e.stopPropagation();ncToggleBridgeMode(!bridgeMode)});
+  document.getElementById('ncBridgeUnite')?.addEventListener('click',e=>{e.stopPropagation();ncUnite()});
+  document.getElementById('ncBridgeSplit')?.addEventListener('click',e=>{e.stopPropagation();ncSplit()});
+  document.getElementById('ncBridgeDone')?.addEventListener('click',e=>{e.stopPropagation();ncToggleBridgeMode(false)});
   document.querySelectorAll('#toothChartWrap .tooth-cell').forEach(b=>{
-    b.addEventListener('click',e=>{e.stopPropagation();openToothPop(b)});
+    b.addEventListener('click',e=>{e.stopPropagation();if(bridgeMode)ncToggleBridgeSelect(b);else openToothPop(b)});
   });
   // Jaw select buttons
-  document.querySelectorAll('.tc-jaw-btn').forEach(btn=>{
+  document.querySelectorAll('.tc-jaw-btn:not(.tc-bridge-toggle)').forEach(btn=>{
     btn.addEventListener('click',e=>{
       e.stopPropagation();
       const jaw=btn.dataset.jaw;
       if(jaw==='clear'){
-        tMap.clear();
+        tMap.clear();bridges=[];
         document.querySelectorAll('#toothChartWrap .tooth-cell').forEach(tb=>{tb.className='tooth-cell'});
         updateSum();return;
       }
@@ -2823,7 +2952,7 @@ function openNewCaseModal(defClinic){
     document.body.appendChild(p);positionFloatingUnder(p,tb);
     p.querySelectorAll('.tp-btn').forEach(b=>b.addEventListener('click',e=>{
       e.stopPropagation();const t=b.dataset.type;
-      if(t==='erase'){tMap.delete(n);tb.className='tooth-cell'}
+      if(t==='erase'){tMap.delete(n);bridges=removeTeethFromBridges(bridges,[n]);tb.className='tooth-cell'}
       else{tMap.set(n,t);tb.className='tooth-cell '+t}
       p.remove();tb.classList.remove('popped');updateSum();
     }));
@@ -2831,20 +2960,23 @@ function openNewCaseModal(defClinic){
   }
   function updateSum(){
     const s=document.getElementById('toothSummary');
-    if(!tMap.size){s.innerHTML='<div style="color:var(--text-dim)">Niciun dinte selectat</div>';return}
+    const bridgeHTML=bridgeSummaryHTML(bridges);
+    if(!tMap.size&&!bridgeHTML){s.innerHTML='<div style="color:var(--text-dim)">Niciun dinte selectat</div>';ncRefreshBridges();return}
     const bt={};tMap.forEach((t,n)=>{(bt[t]=bt[t]||[]).push(Number(n))});
     const lb={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
-    s.innerHTML=Object.entries(bt).map(([t,ns])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${lb[t]}:</span><b>${ns.sort((a,b)=>a-b).join(', ')}</b></div>`).join('');
+    s.innerHTML=Object.entries(bt).map(([t,ns])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${lb[t]}:</span><b>${ns.sort((a,b)=>a-b).join(', ')}</b></div>`).join('')+bridgeHTML;
+    ncRefreshBridges();
   }
   document.getElementById('ncSave').addEventListener('click',async()=>{
     const last=document.getElementById('ncLast').value.trim();const first=document.getElementById('ncFirst').value.trim();
     if(!last&&!first){document.getElementById('ncLast').style.borderColor='#A32D2D';return}
     const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
+    const bridgesOut=normalizeBridges(bridges);
     const type=document.getElementById('ncType').value.trim()||allWorkTypes()[0]||'Lucrare';
     rememberWorkType(type);
     const caseClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
     const ncNoProba=document.getElementById('ncNoProba')?.checked||false;
-    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true};
+    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,bridges:bridgesOut,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true};
     if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
     nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
     nc.priority=computePriority(nc);
@@ -2855,6 +2987,9 @@ function openNewCaseModal(defClinic){
     const existing=CASES.find(x=>x.id===nc.id);
     if(existing){const i=CASES.indexOf(existing);CASES[i]=nc;}
     else CASES.unshift(nc);
+    // Punțile nu au coloană dedicată în DB — le păstrăm prin stratul local de
+    // overrides, keyed pe id-ul cazului (supraviețuiește reload-ului).
+    if(bridgesOut.length){overrides.edits=overrides.edits||{};overrides.edits[nc.id]={...overrides.edits[nc.id],bridges:bridgesOut};saveOverrides(overrides);}
     if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
     updateMainSummary();
     if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
@@ -2891,9 +3026,13 @@ function buildFisaHTML(c){
   const stageName=publicStageName(c);
   const tehnician=getEmployee(c.assignee)?.name||'—';
   const chip=(t,lbl)=>`<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:10.5px;color:#222"><span style="display:inline-block;width:11px;height:11px;background:${colors[t]};border:1px solid #555;border-radius:2px"></span>${letters[t]} — ${lbl}</span>`;
-  const selectedHTML=Object.keys(byType).length
+  const bridgesNorm=normalizeBridges(c.bridges);
+  const bridgesHTML=bridgesNorm.length
+    ? `<div style="font-size:11.5px;margin-bottom:4px;line-height:1.45"><span style="display:inline-block;width:10px;height:10px;background:#BA7517;border:1px solid #555;border-radius:2px;margin-right:6px;vertical-align:-1px"></span><b>Punți:</b> ${bridgesNorm.map(g=>g.join('–')).join(' &nbsp; ')}</div>`
+    : '';
+  const selectedHTML=(Object.keys(byType).length
     ? Object.entries(byType).map(([t,ns])=>`<div style="font-size:11.5px;margin-bottom:4px;line-height:1.45"><span style="display:inline-block;width:10px;height:10px;background:${colors[t]};border:1px solid #555;border-radius:2px;margin-right:6px;vertical-align:-1px"></span><b>${labels[t]}:</b> ${ns.sort((a,b)=>a-b).join(', ')}</div>`).join('')
-    : '<div style="font-size:10.5px;color:#666;font-style:italic">Niciun dinte selectat</div>';
+    : '<div style="font-size:10.5px;color:#666;font-style:italic">Niciun dinte selectat</div>')+bridgesHTML;
   const notes=_parseNotes(c.notes).map(n=>safe(n.text)).join('<br>')||'Fără indicații suplimentare';
   const pdfCell=(label,value,last=false)=>{
     const important=label==='Pacient'||label==='Finală';
