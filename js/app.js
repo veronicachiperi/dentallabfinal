@@ -203,6 +203,16 @@ function claimStageForEmployee(c,stageId,employeeId,aliases=currentUserAssigneeI
   c.notStarted=false;
   c.assignee=employeeId;
 }
+// Potrivire a căutării DOAR pe numele pacientului (sau #caz). Folosit ca să decidem
+// dacă o lucrare expediată apare inline sus (căutare după nume) sau rămâne în
+// secțiunea „Expediate" de jos (căutare după clinică / cuvinte cheie).
+function caseQueryMatchesName(c,q){
+  if(!c||!q)return false;
+  const ql=String(q).toLowerCase().trim();
+  if(!ql)return false;
+  return [c.name,c.lastName,c.firstName,'#'+(c.seq||''),'#'+(c.id||'')]
+    .filter(Boolean).join(' ').toLowerCase().includes(ql);
+}
 function applyFilter(cases){
   const today=todayLabDate();
   const weekEnd=new Date(today);weekEnd.setDate(today.getDate()+7);
@@ -230,10 +240,10 @@ function applyFilter(cases){
       if(!hay.includes(q))return false;
     }
     if(activeFilter.tab==='trimise')return isArchived;
-    // La CĂUTARE, expediatele/anulate apar inline (ca să găsești orice pacient).
-    // La răsfoire (filtru pe clinică / sortare, fără căutare) NU apar în lista
-    // activă — sunt afișate separat în secțiunea „Expediate" de jos.
-    if(isArchived)return Boolean(activeFilter.q);
+    // Expediatele/anulate apar inline DOAR când cauți după numele pacientului
+    // (sau #caz). La căutare după clinică / cuvinte cheie sau la răsfoire, NU apar
+    // în lista activă — sunt afișate separat în secțiunea „Expediate" de jos.
+    if(isArchived)return caseQueryMatchesName(c,activeFilter.q);
     if(activeFilter.tab==='mine'){if(!user||!caseStageAssignedToUser(c,c.stage,user))return false}
     if(activeFilter.tab==='late'&&!c.late)return false;
     if(activeFilter.tab==='today'){const f=parseShortDate(c.finala);if(!f||f.toDateString()!==today.toDateString())return false}

@@ -82,24 +82,28 @@ function renderTable() {
     if (!sortedKeys.length) html = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Nicio lucrare pentru filtrul curent.</div>';
   }
 
-  // Expediate într-un tabel separat jos — la sortare (crescător/descrescător)
-  // și la filtrarea pe clinică. Lista principală rămâne doar cu lucrări active.
-  // Secțiunea „Expediate" jos apare la RĂSFOIRE (filtru clinică / sortare), fără
-  // căutare. La căutare, expediatele apar inline în listă, deci nu o dublăm.
-  const showExpedited = activeFilter.tab !== 'trimise' && !activeFilter.q && (activeFilter.clinic !== 'all' || sortMode !== 'default');
-  if (showExpedited) {
+  // Expediate într-un tabel separat jos — la sortare, la filtrarea pe clinică ȘI
+  // la căutarea după clinică/cuvinte cheie. Excepție: dacă cauți după NUMELE
+  // pacientului, acel caz expediat apare inline sus (deci îl scoatem de jos ca să
+  // nu se dubleze). Lista principală rămâne doar cu lucrări active.
+  if (activeFilter.tab !== 'trimise') {
     const _tab = activeFilter.tab;
     activeFilter.tab = 'trimise';            // refolosim filtrul (respectă clinică + căutare)
     let expedited = applyFilter(CASES);
     activeFilter.tab = _tab;
+    if (activeFilter.q) {
+      // cele potrivite pe nume apar deja inline sus — nu le dublăm jos
+      expedited = expedited.filter(c => !(typeof caseQueryMatchesName === 'function' && caseQueryMatchesName(c, activeFilter.q)));
+    }
     expedited = expedited.slice().sort((a, b) => {
       const da = parseShortDate(a.sentDate || a.completedDate || a.finala) || 0;
       const db = parseShortDate(b.sentDate || b.completedDate || b.finala) || 0;
       return db - da;                        // cele mai recent expediate primele
     });
-    if (expedited.length) {
-      // Pliabil, ÎNCHIS implicit: cazurile active rămân vizibile sus, fără aglomerare.
-      html += `<details class="month-section expedited-section"${_expeditedOpen ? ' open' : ''}>
+    const showExpedited = expedited.length > 0 && (activeFilter.clinic !== 'all' || sortMode !== 'default' || !!activeFilter.q);
+    if (showExpedited) {
+      // Pliabil. Se deschide automat la căutare (ca să vezi rezultatele expediate).
+      html += `<details class="month-section expedited-section"${(_expeditedOpen || activeFilter.q) ? ' open' : ''}>
         <summary class="month-header expedited-summary"><span class="month-name">Expediate</span><span class="month-count">${expedited.length} ${expedited.length === 1 ? 'lucrare' : 'lucrări'}</span></summary>
         <div class="tbl-wrap"><table class="tbl">${tblHeaders}<tbody>${expedited.map(renderTableRow).join('')}</tbody></table></div>
       </details>`;
