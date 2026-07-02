@@ -586,8 +586,6 @@ button{font-family:inherit;cursor:pointer}
   .view-tabs,.subbar{overflow-x:auto;white-space:nowrap;padding-left:12px;padding-right:12px}
   .subbar{gap:14px}
   .month-header{padding-left:12px;padding-right:12px}
-  /* Lucrări pe mobil: tabelul lat devine carduri verticale (vezi blocul #tableView de mai jos) */
-  #tableView .tbl{min-width:0}
   .cd-topbar{padding:10px 12px;position:sticky;top:0;z-index:8}
   .cd-head{padding:18px 12px 14px}
   .cd-title{font-size:20px}
@@ -1468,44 +1466,3 @@ button{font-family:inherit;cursor:pointer}
 .expedited-summary::before{content:'▸';margin-right:8px;font-size:11px;color:var(--text-dim);transition:transform .15s}
 .expedited-section[open] .expedited-summary::before{content:'▾'}
 .expedited-summary:hover{opacity:1}
-
-/* === TELEFON: fiecare rând devine un CARD (fără scroll lateral) === */
-@media (max-width:560px){
-  .tbl-wrap{overflow-x:visible}
-  .tbl{min-width:0;width:100%;border:0;display:block}
-  .tbl thead{display:none}                 /* fără antet pe carduri */
-  .tbl tbody{display:block}
-  .tbl tr{
-    display:grid;
-    grid-template-columns:1fr auto;
-    gap:6px 10px;
-    align-items:center;
-    border:0.5px solid var(--border);
-    border-radius:10px;
-    padding:12px;
-    margin:0 0 8px;
-    background:var(--bg);
-  }
-  .tbl td{display:block;padding:0;border:0;position:static !important;max-width:none !important;min-width:0 !important;white-space:normal}
-  /* Plasare în card */
-  .tbl td:nth-child(2){grid-column:1;grid-row:1}                       /* Nume */
-  .tbl td:nth-child(1){grid-column:2;grid-row:1;text-align:right}      /* # */
-  .tbl td:nth-child(3){grid-column:1 / -1;grid-row:2}                  /* Clinică */
-  .tbl td:nth-child(4){grid-column:1;grid-row:3}                       /* Tip */
-  .tbl td:nth-child(9){grid-column:2;grid-row:3;text-align:right}      /* Prioritate */
-  .tbl td:nth-child(7){grid-column:1;grid-row:4}                       /* Probă */
-  .tbl td:nth-child(8){grid-column:2;grid-row:4;text-align:right}      /* Finală */
-  .tbl td:nth-child(11){grid-column:1;grid-row:5}                      /* Etapă */
-  .tbl td:nth-child(5){grid-column:2;grid-row:5;text-align:right}      /* Acțiuni */
-  .tbl td:nth-child(12){grid-column:1 / -1;grid-row:6}                 /* Notițe (vizibile, pe tot rândul) */
-  .tbl td:nth-child(6),.tbl td:nth-child(10){display:none}            /* Intrată, Etape lab — ascunse */
-  /* Etichete pentru date */
-  .tbl td:nth-child(7) .tbl-due-bold::before{content:'Probă: ';color:var(--text-dim);font-weight:400;font-size:11px}
-  .tbl td:nth-child(8) .tbl-due-bold::before{content:'Finală: ';color:var(--text-dim);font-weight:400;font-size:11px}
-  /* Lizibilitate */
-  .tbl-name{font-size:15px}
-  .tbl-clinic,.tbl-due,.tbl-due-bold,.tbl-num{font-size:12.5px}
-  .tag,.tbl-prio{font-size:11px}
-  .tbl-notes{max-width:none;white-space:normal;display:block;font-size:12px}
-  .tbl-actions-cell .row-actions-btn{font-size:11px;padding:5px 8px}
-}
