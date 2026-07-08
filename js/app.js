@@ -2594,19 +2594,48 @@ function renderEchipa(){
 }
 
 // === STATS ===
+// Filtre statistici — perioadă (după DATA EXPEDIERII / sentDate) + clinică.
+let _statsFilter={period:'all',from:'',to:'',clinic:'all'};
+let _statsLast=null;
+function _statsPeriodRange(sf){
+  const today=todayLabDate();let rFrom=null,rTo=null,label='Toate perioadele';
+  if(sf.period==='today'){rFrom=new Date(today);rTo=new Date(today);label='Azi';}
+  else if(sf.period==='week'){rFrom=new Date(today);rFrom.setDate(today.getDate()-((today.getDay()+6)%7));rTo=new Date(rFrom);rTo.setDate(rFrom.getDate()+6);label='Săptămâna curentă';}
+  else if(sf.period==='month'){rFrom=new Date(today.getFullYear(),today.getMonth(),1);rTo=new Date(today.getFullYear(),today.getMonth()+1,0);label='Luna curentă';}
+  else if(sf.period==='year'){rFrom=new Date(today.getFullYear(),0,1);rTo=new Date(today.getFullYear(),11,31);label='Anul '+today.getFullYear();}
+  else if(sf.period==='custom'){rFrom=parseShortDate(sf.from);rTo=parseShortDate(sf.to);label=(sf.from||'…')+' → '+(sf.to||'…');}
+  if(rFrom)rFrom.setHours(0,0,0,0);if(rTo)rTo.setHours(23,59,59,999);
+  return {rFrom,rTo,label};
+}
+function _statsFilteredCases(sf){
+  const {rFrom,rTo}=_statsPeriodRange(sf);
+  const clinicOk=c=>sf.clinic==='all'||c.clinic===sf.clinic;
+  const dateOk=c=>{if(sf.period==='all')return true;const d=parseShortDate(c.sentDate);if(!d)return false;if(rFrom&&d<rFrom)return false;if(rTo&&d>rTo)return false;return true;};
+  return CASES.filter(c=>(typeof isValidCase==='function'?isValidCase(c):true)&&clinicOk(c)&&dateOk(c));
+}
 function renderStats(){
   const root=document.getElementById('statsShell');if(!root)return;
   const isAdmin=(getCurrentUser()||{}).role==='admin';
-  const onTime=statsOnTimeRate();
-  const trimise=CASES.filter(c=>typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis').length;
-  const active=CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')).length;
+  const sf=_statsFilter;
+  const {label:periodLabel}=_statsPeriodRange(sf);
+  const clinicLabel=sf.clinic==='all'?'Toate clinicile':((CLINICS.find(x=>String(x.id)===String(sf.clinic))||{}).name||sf.clinic);
+  // Set filtrat după perioada de expediere + clinică; toate KPI-urile și graficele derivă din el.
+  const fCases=_statsFilteredCases(sf);
+  const _byClinic={};fCases.forEach(c=>{(_byClinic[c.clinic]=_byClinic[c.clinic]||[]).push(c)});
+  const _isArch=c=>typeof isCaseArchived==='function'?isCaseArchived(c):(c.stage==='trimis'||c.stage==='anulat');
+  const _sent=fCases.filter(_isArch);
+  const _late=_sent.filter(c=>c.late).length;
+  const onTime={total:_sent.length,late:_late,onTime:_sent.length-_late,rate:_sent.length?Math.round((_sent.length-_late)/_sent.length*100):100};
+  const trimise=_sent.length;
+  const active=fCases.length-_sent.length;
+  const totalCount=fCases.length;
 
-  // Statistici pe tip de lucrare (global) — index de culoare stabil per tip.
-  const typeData=statsCountsByType();
+  // Statistici pe tip de lucrare (din set filtrat) — index de culoare stabil per tip.
+  const typeData=statsCountsByType(fCases);
   const typeColorIndex={};typeData.forEach((t,i)=>{typeColorIndex[t.type]=i});
 
-  // Secțiunea breakdown per clinică (doar admin).
-  const clinicTypeData=statsTypesByClinic();
+  // Secțiunea breakdown per clinică (doar admin) — din set filtrat.
+  const clinicTypeData=CLINICS.map(cl=>{const cs=_byClinic[cl.id]||[];return{id:cl.id,name:String(cl.name||cl.id||'Clinică'),total:cs.length,types:statsCountsByType(cs)};}).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
   const perClinicHTML=isAdmin?`
     <div style="margin-top:16px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px">
       <div style="font-size:13px;font-weight:500;margin-bottom:4px">Tipuri de lucrări per clinică</div>
@@ -2623,8 +2652,17 @@ function renderStats(){
       </div>
     </div>`:'';
 
-  // Secțiunea termeni & respectare per clinică (doar admin).
-  const termsClinicData=statsTermsByClinic();
+  // Secțiunea termeni & respectare per clinică (doar admin) — din set filtrat.
+  const termsClinicData=CLINICS.map(cl=>{const cs=_byClinic[cl.id]||[];let measured=0,urgent=0,sumDays=0,sumMin=0;cs.forEach(c=>{const st=labDeadlineStatus(c);if(st&&st.term&&st.businessDays!==null&&st.min!=null){measured++;sumDays+=st.businessDays;sumMin+=st.min;if(st.urgent)urgent++;}});const respected=measured-urgent;return{id:cl.id,name:String(cl.name||cl.id||'Clinică'),total:cs.length,measured,urgent,respected,pctUrgent:measured?Math.round(urgent/measured*100):0,pctRespected:measured?Math.round(respected/measured*100):0,avgDays:measured?Math.round(sumDays/measured*10)/10:null,avgMin:measured?Math.round(sumMin/measured*10)/10:null};}).filter(x=>x.measured>0).sort((a,b)=>b.pctUrgent-a.pctUrgent);
+  // Bara de filtre (interactivă) + caption (rămâne în export).
+  const _perBtns=[['all','Toate'],['today','Azi'],['week','Săptămâna'],['month','Luna'],['year','Anul']];
+  const _inpCss='padding:5px 8px;border:0.5px solid var(--border-strong);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;font-size:12px';
+  const filterBarHTML=`<div class="stats-filter-bar" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 12px;padding:12px 14px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px">`
+    +`<div style="display:flex;gap:6px;flex-wrap:wrap">${_perBtns.map(([k,l])=>`<button class="btn stats-fbtn${sf.period===k?' primary':''}" data-stats-period="${k}" type="button">${l}</button>`).join('')}</div>`
+    +`<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)"><span>Interval expediere:</span><input type="date" id="statsFrom" value="${escAttr(sf.from)}" style="${_inpCss}"><span>–</span><input type="date" id="statsTo" value="${escAttr(sf.to)}" style="${_inpCss}"><button class="btn stats-fbtn${sf.period==='custom'?' primary':''}" id="statsApplyRange" type="button">Aplică</button></div>`
+    +`<div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)"><span>Clinică:</span><select id="statsClinic" style="${_inpCss}"><option value="all"${sf.clinic==='all'?' selected':''}>Toate clinicile</option>${CLINICS.map(cl=>`<option value="${escAttr(String(cl.id))}"${String(sf.clinic)===String(cl.id)?' selected':''}>${escHTML(cl.name)}</option>`).join('')}</select></div>`
+    +`</div><div class="stats-filter-caption" style="font-size:12px;color:var(--text-dim);margin:0 0 16px">Se afișează: <b style="color:var(--text-muted)">${escHTML(periodLabel)}</b> · <b style="color:var(--text-muted)">${escHTML(clinicLabel)}</b> · ${totalCount} lucrări${sf.period!=='all'?' (după data expedierii)':''}</div>`;
+  _statsLast={typeData,clinicTypeData,termsClinicData,periodLabel,clinicLabel};
   const termColor=p=>p>=50?'#A32D2D':p>=25?'#BA7517':'#1D9E75';
   const termsClinicHTML=isAdmin?`
     <div style="margin-top:16px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px">
@@ -2636,7 +2674,7 @@ function renderStats(){
       </tbody></table></div>`:'<div style="color:var(--text-dim);font-size:13px;padding:8px">Nu există încă lucrări cu termeni măsurabili (au nevoie de dată de intrare + finală + tip recunoscut).</div>'}
     </div>`:'';
 
-  root.innerHTML=`<div class="app">${adminSidebarHTML('stats')}<main class="main"><div id="statsExportArea" style="padding:24px"><div class="stats-export-bar" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap"><h1 style="font-size:22px;font-weight:500;margin:0">Statistici</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="statsExportPng" type="button">Export PNG</button><button class="btn" id="statsExportPdf" type="button">Export PDF</button><button class="btn" id="statsExportCsv" type="button">Export CSV</button></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px"><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${CASES.length}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Total</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:${onTime.late?'#A32D2D':'#1D9E75'}">${onTime.rate}%</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">La timp</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${active}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Active</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:#27500A">${trimise}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Trimise / anulate</div></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:13px;font-weight:500;margin-bottom:4px">Lucrări pe tip (per ansamblu)</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">${typeData.length} tipuri de lucrări · ${typeData.reduce((s,t)=>s+t.count,0)} lucrări totale</div><div style="position:relative;height:${Math.max(220,typeData.length*30)}px"><canvas id="chartType"></canvas></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe etapă</div><div style="position:relative;height:240px"><canvas id="chartStage"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe clinică</div><div style="position:relative;height:240px"><canvas id="chartClinic"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Pe tehnician</div><div style="position:relative;height:240px"><canvas id="chartTech"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">La timp vs întârziere</div><div style="position:relative;height:240px"><canvas id="chartOnTime"></canvas></div></div></div>${perClinicHTML}${termsClinicHTML}</div></main></div>`;
+  root.innerHTML=`<div class="app">${adminSidebarHTML('stats')}<main class="main"><div id="statsExportArea" style="padding:24px"><div class="stats-export-bar" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap"><h1 style="font-size:22px;font-weight:500;margin:0">Statistici</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="statsExportPng" type="button">Export PNG</button><button class="btn" id="statsExportPdf" type="button">Export PDF</button><button class="btn" id="statsExportCsv" type="button">Export CSV</button></div></div>${filterBarHTML}<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px"><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${totalCount}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Total</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:${onTime.late?'#A32D2D':'#1D9E75'}">${onTime.rate}%</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">La timp</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${active}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Active</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:#27500A">${trimise}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Trimise / anulate</div></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:13px;font-weight:500;margin-bottom:4px">Lucrări pe tip (pe filtrul curent)</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">${typeData.length} tipuri de lucrări · ${typeData.reduce((s,t)=>s+t.count,0)} lucrări totale</div><div style="position:relative;height:${Math.max(220,typeData.length*30)}px"><canvas id="chartType"></canvas></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe etapă</div><div style="position:relative;height:240px"><canvas id="chartStage"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe clinică</div><div style="position:relative;height:240px"><canvas id="chartClinic"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Pe tehnician</div><div style="position:relative;height:240px"><canvas id="chartTech"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">La timp vs întârziere</div><div style="position:relative;height:240px"><canvas id="chartOnTime"></canvas></div></div></div>${perClinicHTML}${termsClinicHTML}</div></main></div>`;
   setTimeout(()=>{
     if(typeof Chart==='undefined')return;
     Chart.defaults.font.size=11;Chart.defaults.color='#6b7280';
@@ -2645,18 +2683,22 @@ function renderStats(){
     if(isAdmin){clinicTypeData.forEach((cl,ci)=>{const cv=document.getElementById('chartClinicType'+ci);if(!cv)return;new Chart(cv,{type:'bar',data:{labels:cl.types.map(t=>t.type),datasets:[{data:cl.types.map(t=>t.count),backgroundColor:cl.types.map(t=>workTypeColor(typeColorIndex[t.type]??0))}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{precision:0}}}}})});}
     // Grafic orizontal: % urgentări per clinică (roșu = mult, verde = puțin).
     if(isAdmin){const tcv=document.getElementById('chartTermsUrgent');if(tcv&&termsClinicData.length){new Chart(tcv,{type:'bar',data:{labels:termsClinicData.map(c=>c.name),datasets:[{data:termsClinicData.map(c=>c.pctUrgent),backgroundColor:termsClinicData.map(c=>c.pctUrgent>=50?'#A32D2D':c.pctUrgent>=25?'#BA7517':'#1D9E75')}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.x+'% urgentate'}}},scales:{x:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}});}}
-    const sd=statsCountsByStage();
+    const sd=STAGES.map(s=>({name:s.name,count:fCases.filter(c=>c.stage===s.id).length,color:s.color}));
     new Chart(document.getElementById('chartStage'),{type:'bar',data:{labels:sd.map(s=>s.name),datasets:[{data:sd.map(s=>s.count),backgroundColor:sd.map(s=>s.color)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
-    const cd=statsCountsByClinic();
+    const cd=CLINICS.map(c=>({name:c.name,count:(_byClinic[c.id]||[]).length}));
     new Chart(document.getElementById('chartClinic'),{type:'bar',data:{labels:cd.map(c=>c.name),datasets:[{data:cd.map(c=>c.count),backgroundColor:'#1a1a1a'}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}}}});
     const techCnt={};EMPLOYEES.forEach(e=>techCnt[e.id]=0);
-    CASES.forEach(c=>{Object.keys(c.assignees||{}).forEach(s=>stageAssignees(c,s).forEach(t=>{if(techCnt[t]!==undefined)techCnt[t]++}))});
+    fCases.forEach(c=>{Object.keys(c.assignees||{}).forEach(s=>stageAssignees(c,s).forEach(t=>{if(techCnt[t]!==undefined)techCnt[t]++}))});
     new Chart(document.getElementById('chartTech'),{type:'bar',data:{labels:EMPLOYEES.map(e=>e.name),datasets:[{data:EMPLOYEES.map(e=>techCnt[e.id]),backgroundColor:EMPLOYEES.map(e=>({tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'})[e.id]||'#8B8B8B')}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
     new Chart(document.getElementById('chartOnTime'),{type:'doughnut',data:{labels:['La timp','Întârziate'],datasets:[{data:[onTime.onTime,onTime.late],backgroundColor:['#1D9E75','#A32D2D'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%'}});
   },50);
   document.getElementById('statsExportPng')?.addEventListener('click',exportStatsPNG);
   document.getElementById('statsExportPdf')?.addEventListener('click',exportStatsPDF);
   document.getElementById('statsExportCsv')?.addEventListener('click',exportStatsCSV);
+  // Filtre: presets perioadă, interval custom, clinică — re-randează pagina.
+  root.querySelectorAll('[data-stats-period]').forEach(b=>b.addEventListener('click',()=>{_statsFilter={..._statsFilter,period:b.dataset.statsPeriod};renderStats();}));
+  root.querySelector('#statsApplyRange')?.addEventListener('click',()=>{const f=root.querySelector('#statsFrom')?.value||'';const t=root.querySelector('#statsTo')?.value||'';if(!f&&!t){_statsFilter={..._statsFilter,period:'all',from:'',to:''};}else{_statsFilter={..._statsFilter,period:'custom',from:f,to:t};}renderStats();});
+  root.querySelector('#statsClinic')?.addEventListener('change',e=>{_statsFilter={..._statsFilter,clinic:e.target.value};renderStats();});
 }
 
 // Export statistici — PNG și PDF includ TOATE graficele (capturate ca imagine); CSV conține datele.
@@ -2666,7 +2708,7 @@ async function exportStatsPNG(){
   const btn=document.getElementById('statsExportPng');const old=btn?btn.textContent:'';if(btn){btn.textContent='Se generează…';btn.disabled=true}
   try{
     const bg=getComputedStyle(document.body).backgroundColor||'#ffffff';
-    const canvas=await html2canvas(area,{backgroundColor:bg,scale:2,useCORS:true,ignoreElements:el=>el.classList&&el.classList.contains('stats-export-bar')});
+    const canvas=await html2canvas(area,{backgroundColor:bg,scale:2,useCORS:true,ignoreElements:el=>el.classList&&(el.classList.contains('stats-export-bar')||el.classList.contains('stats-filter-bar'))});
     const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=`statistici-${new Date().toISOString().slice(0,10)}.png`;document.body.appendChild(a);a.click();document.body.removeChild(a);
   }catch(e){alert('Eroare la export PNG: '+e.message)}
   finally{if(btn){btn.textContent=old;btn.disabled=false}}
@@ -2679,20 +2721,21 @@ function exportStatsPDF(){
     margin:8,
     filename:`statistici-${new Date().toISOString().slice(0,10)}.pdf`,
     image:{type:'jpeg',quality:0.95},
-    html2canvas:{scale:2,useCORS:true,backgroundColor:getComputedStyle(document.body).backgroundColor||'#ffffff',ignoreElements:el=>el.classList&&el.classList.contains('stats-export-bar')},
+    html2canvas:{scale:2,useCORS:true,backgroundColor:getComputedStyle(document.body).backgroundColor||'#ffffff',ignoreElements:el=>el.classList&&(el.classList.contains('stats-export-bar')||el.classList.contains('stats-filter-bar'))},
     jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},
     pagebreak:{mode:['css','legacy']}
   }).from(area).save().then(()=>{if(btn){btn.textContent=old;btn.disabled=false}}).catch(e=>{alert('Eroare la export PDF: '+e.message);if(btn){btn.textContent=old;btn.disabled=false}});
 }
 function exportStatsCSV(){
   const isAdmin=(getCurrentUser()||{}).role==='admin';
-  const rows=[['Secțiune','Tip lucrare','Număr lucrări']];
-  statsCountsByType().forEach(t=>rows.push(['TOATE CLINICILE',t.type,t.count]));
-  if(isAdmin){statsTypesByClinic().forEach(cl=>cl.types.forEach(t=>rows.push([cl.name,t.type,t.count])));}
+  const L=_statsLast||{typeData:statsCountsByType(),clinicTypeData:statsTypesByClinic(),termsClinicData:statsTermsByClinic(),periodLabel:'Toate perioadele',clinicLabel:'Toate clinicile'};
+  const rows=[['Filtru aplicat',L.periodLabel+' · '+L.clinicLabel],[],['Secțiune','Tip lucrare','Număr lucrări']];
+  L.typeData.forEach(t=>rows.push([L.clinicLabel,t.type,t.count]));
+  if(isAdmin){L.clinicTypeData.forEach(cl=>cl.types.forEach(t=>rows.push([cl.name,t.type,t.count])));}
   if(isAdmin){
     rows.push([]);
     rows.push(['TERMENI / CLINICĂ','% urgentate','% respectate','Zile medii oferite','Min. recomandat','Lucrări']);
-    statsTermsByClinic().forEach(c=>rows.push([c.name,c.pctUrgent+'%',c.pctRespected+'%',c.avgDays!=null?c.avgDays:'—',c.avgMin!=null?c.avgMin:'—',c.measured]));
+    L.termsClinicData.forEach(c=>rows.push([c.name,c.pctUrgent+'%',c.pctRespected+'%',c.avgDays!=null?c.avgDays:'—',c.avgMin!=null?c.avgMin:'—',c.measured]));
   }
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
