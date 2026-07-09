@@ -3062,21 +3062,31 @@ function buildFisaHTML(c){
   const colors={crown:'#D4D4D4',implant:'#A8A8A8',emax:'#888888',veneer:'#6E6E6E'};
   const letters={crown:'C',implant:'I',emax:'E',veneer:'F'};
   const labels={crown:'Coroană',implant:'Pe implant',emax:'Emax',veneer:'Fațetă'};
-  const tcell=n=>{
+  const bridgesNorm=normalizeBridges(c.bridges);
+  const groupOf=n=>bridgesNorm.findIndex(g=>g.includes(n));
+  const inBridge=n=>groupOf(n)!==-1;
+  const tcell=(n,conn,wide)=>{
     const t=(c.teeth||[]).find(x=>x.n===n);
-    const bg=t?colors[t.type]||'#fff':'#fff';
+    const br=inBridge(n);
+    // dinții din punte: contur gri mai gros + fundal ușor gri când nu au tip
+    const bg=t?colors[t.type]||'#fff':(br?'#E8E8E8':'#fff');
     const letter=t?letters[t.type]||'':'';
     // print-color-adjust:exact obligă browserul să păstreze fundalul cenușiu
     // și la printare/print preview (altfel îl scoate by default).
     const txtColor=t&&t.type==='veneer'?'#fff':'#111';
-    return `<td style="text-align:center;height:32px;font-size:11px;border:1px solid #555;background:${bg};padding:3px 1px;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact"><div style="font-weight:700;line-height:1;color:${txtColor}">${n}</div>${letter?`<div style="font-size:9px;font-weight:600;color:${txtColor};margin-top:2px;line-height:1">${letter}</div>`:''}</td>`;
+    const border=br?'2.5px solid #333':'1px solid #555';
+    // „liniuța" conector dintre doi dinți adiacenți din aceeași punte
+    const connEl=conn?`<div style="position:absolute;top:50%;${wide?'right:-14px;width:16px':'right:-5px;width:7px'};height:5px;margin-top:-2.5px;background:#333;z-index:3;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact"></div>`:'';
+    return `<td style="position:relative;text-align:center;height:32px;font-size:11px;border:${border};background:${bg};padding:3px 1px;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact"><div style="font-weight:700;line-height:1;color:${txtColor}">${n}</div>${letter?`<div style="font-size:9px;font-weight:600;color:${txtColor};margin-top:2px;line-height:1">${letter}</div>`:''}${connEl}</td>`;
   };
-  const trow=arr=>'<tr>'+arr.slice(0,8).map(tcell).join('')+'<td style="border:0;width:10px"></td>'+arr.slice(8).map(tcell).join('')+'</tr>';
+  const trow=arr=>{
+    const cells=arr.map((n,i)=>{const nn=arr[i+1];const conn=nn!=null&&inBridge(n)&&groupOf(n)===groupOf(nn);return tcell(n,conn,i===7)});
+    return '<tr>'+cells.slice(0,8).join('')+'<td style="border:0;width:10px"></td>'+cells.slice(8).join('')+'</tr>';
+  };
   const byType={};(c.teeth||[]).forEach(t=>{(byType[t.type]=byType[t.type]||[]).push(t.n)});
   const stageName=publicStageName(c);
   const tehnician=getEmployee(c.assignee)?.name||'—';
   const chip=(t,lbl)=>`<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:10.5px;color:#222"><span style="display:inline-block;width:11px;height:11px;background:${colors[t]};border:1px solid #555;border-radius:2px"></span>${letters[t]} — ${lbl}</span>`;
-  const bridgesNorm=normalizeBridges(c.bridges);
   const bridgesHTML=bridgesNorm.length
     ? `<div style="font-size:11.5px;margin-bottom:4px;line-height:1.45"><span style="display:inline-block;width:10px;height:10px;background:#BA7517;border:1px solid #555;border-radius:2px;margin-right:6px;vertical-align:-1px"></span><b>Punți:</b> ${bridgesNorm.map(g=>g.join('–')).join(' &nbsp; ')}</div>`
     : '';
