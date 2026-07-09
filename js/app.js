@@ -21,6 +21,11 @@ function applyOverrides(){
   if(!sb){
     if(overrides.stages)Object.entries(overrides.stages).forEach(([id,s])=>{const c=getCase(id);if(c)c.stage=s});
     if(overrides.edits)Object.entries(overrides.edits).forEach(([id,e])=>{const c=getCase(id);if(c)Object.assign(c,e)});
+  }else if(overrides.edits){
+    // Punțile (bridges) nu au coloană în DB — trăiesc DOAR în localStorage.
+    // În modul Supabase sărim restul edit-urilor (server = sursă de adevăr),
+    // dar bridges TREBUIE reaplicate, altfel se pierd la reload (nu apar pe PDF).
+    Object.entries(overrides.edits).forEach(([id,e])=>{if(e&&e.bridges){const c=getCase(id);if(c)c.bridges=e.bridges}});
   }
   // Notification read-state stays local to each device.
   if(overrides.read)overrides.read.forEach(id=>{const n=NOTIFICATIONS.find(x=>x.id===id);if(n)n.unread=false});
