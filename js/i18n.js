@@ -196,7 +196,7 @@
     'oră nesetată': 'время не указано',
 
     // TODO echipă
-    'Task-uri rapide ale echipei': 'Быстрые задачи команды', 'Task-uri rapide': 'Быстрые задачи',
+    'Task-uri rapide ale echipei': 'Быстрые задачи команды', 'Task-uri rapide': 'Быстрые задачи', 'taskuri': 'задачи',
     'Echipă': 'Команда', 'Adaugă task rapid… (Enter)': 'Добавить задачу… (Enter)',
     'Adaugă': 'Добавить', 'Finalizate': 'Завершённые',
     'Niciun task activ. Adaugă unul mai sus.': 'Нет активных задач. Добавьте выше.',

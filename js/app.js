@@ -1134,7 +1134,7 @@ function attachTodo(){
   if(!bell)return;
   let btn=document.getElementById('todoBtn');
   if(!btn){
-    bell.insertAdjacentHTML('beforebegin','<button class="icon-btn" id="todoBtn" type="button" title="Task-uri rapide ale echipei">✓<span class="todo-count" style="display:none">0</span></button>');
+    bell.insertAdjacentHTML('beforebegin','<button class="icon-btn todo-btn" id="todoBtn" type="button" title="Task-uri rapide ale echipei">✓<span class="todo-btn-label">taskuri</span><span class="todo-count" style="display:none">0</span></button>');
     btn=document.getElementById('todoBtn');
     btn.addEventListener('click',()=>openTodoDrawer());
   }
