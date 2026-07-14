@@ -62,10 +62,10 @@
 
     // Dashboard / acțiuni
     'Dashboard lucrări': 'Панель работ', 'Vezi toate': 'Показать все',
-    'Azi': 'Сегодня', 'În proces CAM': 'В процессе CAM', 'În proces Ceramică': 'В процессе Керамика',
+    'Azi': 'Сегодня', 'Mâine': 'Завтра', 'În proces CAM': 'В процессе CAM', 'În proces Ceramică': 'В процессе Керамика',
     'La probă': 'На примерке', 'Probă aprobată': 'Примерка одобрена', 'Neîncepute': 'Не начатые',
     'De rezolvat prima dată': 'Решить в первую очередь',
-    'date finale azi': 'финальные даты сегодня', 'în lucru la CAM': 'в работе на CAM',
+    'date finale azi': 'финальные даты сегодня', 'date finale mâine': 'финальные даты завтра', 'în lucru la CAM': 'в работе на CAM',
     'în lucru la Ceramică': 'в работе на Керамике', 'așteaptă clinică': 'ждёт клинику',
     'revine la designer': 'возвращается дизайнеру', 'pornește lucrarea': 'начать работу',
     'Nicio lucrare încă. Adaugă primul caz real din butonul Caz nou.':

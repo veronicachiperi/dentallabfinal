@@ -154,7 +154,7 @@ function chooseFilesForCase(caseId,onDone){
   input.click();
 }
 
-const activeFilter={tab:'all',clinic:'all',sort:'default',q:''};
+const activeFilter={tab:'all',clinic:'all',sort:'default',q:'',scope:'current'};
 function normalizePersonKey(value){
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 }
@@ -252,6 +252,7 @@ function applyFilter(cases){
     if(activeFilter.tab==='mine'){if(!user||!caseStageAssignedToUser(c,c.stage,user))return false}
     if(activeFilter.tab==='late'&&!c.late)return false;
     if(activeFilter.tab==='today'){const f=parseShortDate(c.finala);if(!f||f.toDateString()!==today.toDateString())return false}
+    if(activeFilter.tab==='tomorrow'){const f=parseShortDate(c.finala);const tmr=new Date(today);tmr.setDate(today.getDate()+1);if(!f||f.toDateString()!==tmr.toDateString())return false}
     if(activeFilter.tab==='week'){const f=parseShortDate(c.finala);if(!f||f<today||f>weekEnd)return false}
     if(activeFilter.tab==='probasoon'){if(c.noProba)return false;const pd=parseShortDate(c.probaDate);if(!pd)return false;const tmr=new Date(today);tmr.setDate(today.getDate()+1);const ds=pd.toDateString();if(ds!==today.toDateString()&&ds!==tmr.toDateString())return false}
     if(activeFilter.tab==='notstarted'&&!isCaseNotStarted(c))return false;
@@ -1004,6 +1005,8 @@ function renderActionDashboard(){
   const activeAll=CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')&&isValidCase(c));
   const active=activeAll.filter(c=>activeFilter.clinic==='all'||c.clinic===activeFilter.clinic);
   const dueToday=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===today.toDateString()});
+  const _tmr=new Date(today);_tmr.setDate(today.getDate()+1);
+  const dueTomorrow=active.filter(c=>{const d=parseShortDate(c.finala);return d&&d.toDateString()===_tmr.toDateString()});
   // „În proces" = lucrarea e la etapa respectivă (c.stage) SAU substarea
   // de la acea etapă e „in_lucru" (revendicată activ de tehnician).
   const inCam=active.filter(c=>c.stage==='cam'||c.stageStatuses?.cam==='in_lucru');
@@ -1013,8 +1016,8 @@ function renderActionDashboard(){
   const notStarted=active.filter(isCaseNotStarted);
   const stats=[
     {tab:'today',label:'Azi',value:dueToday.length,tone:'warn',hint:'date finale azi'},
+    {tab:'tomorrow',label:'Mâine',value:dueTomorrow.length,tone:'warn',hint:'date finale mâine'},
     {tab:'cam',label:'În proces CAM',value:inCam.length,tone:'info',hint:'în lucru la CAM'},
-    {tab:'ceramica',label:'În proces Ceramică',value:inCer.length,tone:'info',hint:'în lucru la Ceramică'},
     {tab:'proba',label:'La probă',value:proba.length,tone:'info',hint:'așteaptă clinică'},
     {tab:'approved',label:'Probă aprobată',value:approved.length,tone:'good',hint:'revine la designer'},
     {tab:'notstarted',label:'Neîncepute',value:notStarted.length,tone:'muted',hint:'pornește lucrarea'}
@@ -3435,9 +3438,19 @@ function attachSearch(){
   }));
 }
 function attachFilters(){
+  // Butoane scope: Curente / Expediate / Toate
+  const _syncScopeBtns=s=>document.querySelectorAll('.scope-btn').forEach(b=>b.classList.toggle('on',b.dataset.scope===s));
+  document.querySelectorAll('.scope-btn').forEach(b=>b.addEventListener('click',()=>{
+    activeFilter.scope=b.dataset.scope;_syncScopeBtns(b.dataset.scope);
+    renderPipeline();if(typeof renderTable==='function')renderTable();
+  }));
   const tabs=document.querySelectorAll('.subbar .tab');if(!tabs.length)return;
   const tm=['all','mine','late','week','notstarted','probasoon','trimise'];
-  tabs.forEach((t,i)=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('on'));t.classList.add('on');activeFilter.tab=tm[i];renderPipeline();if(typeof renderTable==='function')renderTable()}));
+  tabs.forEach((t,i)=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('on'));t.classList.add('on');activeFilter.tab=tm[i];
+    // Tab-ul „Trimise" = vederea Expediate; orice alt tab revine la Curente dacă eram pe Expediate
+    const ns=tm[i]==='trimise'?'shipped':(activeFilter.scope==='shipped'?'current':activeFilter.scope);
+    activeFilter.scope=ns;_syncScopeBtns(ns);
+    renderPipeline();if(typeof renderTable==='function')renderTable()}));
   const ch=document.getElementById('clinicFilterChip');
   const menu=document.getElementById('clinicFilterMenu');
   if(ch&&menu){

@@ -28,6 +28,29 @@ function renderTable() {
     <th>Notițe</th>
   </tr></thead>`;
 
+  const scope = (typeof activeFilter !== 'undefined' && activeFilter.scope) || 'current';
+
+  // Vederea „Expediate" — doar lucrări expediate/anulate, tabel unic.
+  if (scope === 'shipped') {
+    const _tab = activeFilter.tab;
+    activeFilter.tab = 'trimise';
+    let exp = applyFilter(CASES);
+    activeFilter.tab = _tab;
+    exp = exp.slice().sort((a, b) => {
+      const da = parseShortDate(a.sentDate || a.completedDate || a.finala) || 0;
+      const db = parseShortDate(b.sentDate || b.completedDate || b.finala) || 0;
+      return db - da;
+    });
+    root.innerHTML = exp.length
+      ? `<div class="month-section">
+          <div class="month-header"><span class="month-name">Expediate</span><span class="month-count">${exp.length} ${exp.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
+          <div class="tbl-wrap"><table class="tbl">${tblHeaders}<tbody>${exp.map(renderTableRow).join('')}</tbody></table></div>
+        </div>`
+      : '<div style="padding:40px;text-align:center;color:var(--text-dim)">Nicio lucrare expediată pentru filtrul curent.</div>';
+    attachTableHandlers(root);
+    return;
+  }
+
   let html = '';
   const sortMode = (typeof activeFilter !== 'undefined' && activeFilter.sort) || 'default';
 
@@ -86,7 +109,7 @@ function renderTable() {
   // la căutarea după clinică/cuvinte cheie. Excepție: dacă cauți după NUMELE
   // pacientului, acel caz expediat apare inline sus (deci îl scoatem de jos ca să
   // nu se dubleze). Lista principală rămâne doar cu lucrări active.
-  if (activeFilter.tab !== 'trimise') {
+  if (scope === 'all' && activeFilter.tab !== 'trimise') {
     const _tab = activeFilter.tab;
     activeFilter.tab = 'trimise';            // refolosim filtrul (respectă clinică + căutare)
     let expedited = applyFilter(CASES);
@@ -331,6 +354,110 @@ function exportCSV() {
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
+// === EXPORT PDF listă lucrări (Curente / Expediate / Toate + clinică) ===
+function _scopedCasesForExport(scope, clinic) {
+  const saved = { tab: activeFilter.tab, clinic: activeFilter.clinic, q: activeFilter.q };
+  activeFilter.clinic = clinic || 'all';
+  activeFilter.q = ''; // exportul e independent de caseta de căutare
+  const gather = tab => { activeFilter.tab = tab; return applyFilter(CASES); };
+  let list;
+  if (scope === 'shipped') list = gather('trimise');
+  else if (scope === 'all') list = gather('all').concat(gather('trimise'));
+  else list = gather('all');
+  activeFilter.tab = saved.tab; activeFilter.clinic = saved.clinic; activeFilter.q = saved.q;
+  const gd = c => parseShortDate(c.intrata) || parseShortDate(c.finala) || 0;
+  return list.slice().sort((a, b) => (gd(b) || 0) - (gd(a) || 0));
+}
+
+function _buildListPDFHTML(cases, meta) {
+  const d = v => { const p = parseShortDate(v); return p ? (typeof shortDayMon === 'function' ? shortDayMon(v) : v) : '—'; };
+  const esc = s => String(s == null ? '' : s).replace(/</g, '&lt;');
+  const th = 'padding:5px 7px;border:0.5px solid #888;font-size:10px;text-align:left;background:#EEE;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact';
+  const td = 'padding:4px 7px;border:0.5px solid #ccc;font-size:10.5px;vertical-align:top';
+  const rows = cases.map((c, i) => {
+    const cl = getClinic(c.clinic) || { name: c.clinic || '—' };
+    return `<tr>
+      <td style="${td};text-align:center">${c.seq || i + 1}</td>
+      <td style="${td}">${esc(c.name)}</td>
+      <td style="${td}">${esc(cl.name)}</td>
+      <td style="${td}">${esc(c.type)}</td>
+      <td style="${td}">${d(c.intrata)}</td>
+      <td style="${td}">${c.noProba ? '—' : d(c.probaDate)}</td>
+      <td style="${td}">${d(c.finala)}</td>
+      <td style="${td}">${esc(publicStageName(c))}</td>
+    </tr>`;
+  }).join('');
+  return `<div style="font-family:Arial,sans-serif;color:#111;padding:6px;background:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:10px">
+      <div>
+        <div style="font-size:16px;font-weight:700">Lucrări — ${esc(meta.scopeLabel)}</div>
+        <div style="font-size:11px;color:#666;margin-top:2px">${esc(meta.clinicLabel)} · ${cases.length} ${cases.length === 1 ? 'lucrare' : 'lucrări'}</div>
+      </div>
+      <div style="font-size:10px;color:#666">PRIVATE CAD · ${new Date().toLocaleDateString('ro-RO')}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="${th};width:34px;text-align:center">#</th>
+        <th style="${th}">Nume</th>
+        <th style="${th}">Clinică</th>
+        <th style="${th}">Tip</th>
+        <th style="${th}">Intrată</th>
+        <th style="${th}">Probă</th>
+        <th style="${th}">Finală</th>
+        <th style="${th}">Etapă</th>
+      </tr></thead>
+      <tbody>${rows || `<tr><td colspan="8" style="${td};text-align:center;color:#888;padding:20px">Nicio lucrare.</td></tr>`}</tbody>
+    </table>
+  </div>`;
+}
+
+function exportListPDF(scope, clinic) {
+  if (typeof html2pdf === 'undefined') { alert('Librăria PDF nu s-a încărcat'); return; }
+  const cases = _scopedCasesForExport(scope, clinic);
+  const scopeLabel = scope === 'shipped' ? 'Expediate' : scope === 'all' ? 'Toate' : 'Curente';
+  const clinicLabel = clinic === 'all' ? 'Toate clinicile' : (getClinic(clinic)?.name || clinic);
+  const w = document.createElement('div');
+  w.innerHTML = _buildListPDFHTML(cases, { scopeLabel, clinicLabel });
+  w.style.position = 'fixed'; w.style.left = '0'; w.style.top = '0'; w.style.width = '1040px'; w.style.background = '#fff'; w.style.zIndex = '-1';
+  document.body.appendChild(w);
+  html2pdf().from(w.firstElementChild).set({
+    margin: [8, 8, 8, 8],
+    filename: `lucrari-${scope}-${new Date().toISOString().slice(0, 10)}.pdf`,
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+    pagebreak: { mode: ['css', 'legacy'] }
+  }).save().finally(() => { document.body.removeChild(w); if (typeof closeModal === 'function') closeModal(); });
+}
+
+function openExportPdfDialog() {
+  const clinicOpts = `<option value="all">Toate clinicile</option>` +
+    CLINICS.map(cl => `<option value="${escAttr(cl.id)}">${escHTML(cl.name)}</option>`).join('');
+  openModal(`<div class="modal-head"><div class="modal-title">Export PDF lucrări</div><button class="modal-close" type="button">×</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Ce exporți</label>
+        <div class="scope-seg" id="pdfScopeSeg">
+          <button class="scope-btn" data-scope="current" type="button">Curente</button>
+          <button class="scope-btn" data-scope="shipped" type="button">Expediate</button>
+          <button class="scope-btn" data-scope="all" type="button">Toate</button>
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px"><label>Clinică</label><select id="pdfClinicSel">${clinicOpts}</select></div>
+      <div id="pdfCountHint" style="font-size:12px;color:var(--text-dim);margin-top:10px"></div>
+    </div>
+    <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="pdfDoExport" type="button">Descarcă PDF</button></div>`, '');
+  let scope = ['current', 'shipped', 'all'].includes(activeFilter.scope) ? activeFilter.scope : 'current';
+  const seg = document.getElementById('pdfScopeSeg');
+  const clinicSel = document.getElementById('pdfClinicSel');
+  if (clinicSel) clinicSel.value = activeFilter.clinic || 'all';
+  const hint = document.getElementById('pdfCountHint');
+  const refresh = () => { const n = _scopedCasesForExport(scope, clinicSel?.value || 'all').length; if (hint) hint.textContent = `${n} ${n === 1 ? 'lucrare' : 'lucrări'} în export.`; };
+  const syncSeg = () => seg?.querySelectorAll('.scope-btn').forEach(b => b.classList.toggle('on', b.dataset.scope === scope));
+  seg?.querySelectorAll('.scope-btn').forEach(b => b.addEventListener('click', () => { scope = b.dataset.scope; syncSeg(); refresh(); }));
+  syncSeg(); refresh();
+  clinicSel?.addEventListener('change', refresh);
+  document.getElementById('pdfDoExport')?.addEventListener('click', () => exportListPDF(scope, clinicSel?.value || 'all'));
+}
+
 function setMainView(view) {
   document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('on', t.dataset.view === view));
   const table = document.getElementById('tableView'), pipeline = document.getElementById('pipeline');
@@ -344,6 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('tableView')) return;
   document.querySelectorAll('.view-tab').forEach(tab => tab.addEventListener('click', () => setMainView(tab.dataset.view)));
   document.getElementById('exportCsvBtn')?.addEventListener('click', exportCSV);
+  document.getElementById('exportPdfBtn')?.addEventListener('click', openExportPdfDialog);
   const savedView = localStorage.getItem('dental-lab-view') || 'table';
   if (typeof SUPABASE_CONFIGURED === 'undefined' || !SUPABASE_CONFIGURED) {
     setMainView(savedView);
