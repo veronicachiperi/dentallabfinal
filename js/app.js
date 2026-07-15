@@ -573,7 +573,7 @@ function buildSidebarHTML(role,user){
   const roleLabel={admin:'Administrator',technician:'Tehnician',tech:'Tehnician',clinic:'Clinică'}[role]||role;
   if(role==='clinic'){
     const clinicHref=`clinic.html?id=${encodeURIComponent(u.clinic||'')}`;
-    return`<div class="brand"><div class="brand-name">PRIVATE CAD</div></div>
+    return`<a class="brand" href="${clinicHref}"><div class="brand-name">PRIVATE CAD</div></a>
 <div class="nav-section">Workflow</div>
 ${item(clinicHref,'Portal')}
 ${item('arhiva.html','Arhivă')}
@@ -589,7 +589,7 @@ ${item(`termeni.html?view=clinic&clinic=${encodeURIComponent(u.clinic||'')}`,'Te
   <button class="sp-logout-btn" onclick="sbSignOut&&sbSignOut();return false">Deconectare</button>
 </div>`;
   }
-  return`<div class="brand"><div class="brand-name">PRIVATE CAD</div></div>
+  return`<a class="brand" href="dashboard.html"><div class="brand-name">PRIVATE CAD</div></a>
 <div class="nav-section">Workflow</div>
 ${role==='admin'?item('dashboard.html','Acasă'):''}
 ${role==='technician'||role==='tech'?item('tehnician.html','Acasă'):''}

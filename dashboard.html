@@ -10,9 +10,9 @@
 <body>
 <div class="app">
   <aside class="sidebar" id="sidebar">
-    <div class="brand">
+    <a class="brand" href="dashboard.html">
       <div class="brand-name">PRIVATE CAD</div>
-    </div>
+    </a>
     <div class="nav-section">Workflow</div>
     <a class="nav-item" href="tehnician.html" data-roles="tech"><span class="nav-icon round"></span>Acasă</a>
     <a class="nav-item active" href="dashboard.html" data-roles="admin,tech"><span class="nav-icon"></span>Lucrări<span class="nav-count" id="navCountLucrari">0</span></a>
@@ -67,20 +67,22 @@
       <button class="view-tab" data-view="pipeline" type="button">Pipeline</button>
     </div>
     <div class="subbar">
-      <div class="scope-seg">
-        <button class="scope-btn on" data-scope="current" type="button">Curente</button>
-        <button class="scope-btn" data-scope="shipped" type="button">Expediate</button>
+      <div class="subbar-row">
+        <div class="scope-seg">
+          <button class="scope-btn on" data-scope="current" type="button">Curente</button>
+          <button class="scope-btn" data-scope="shipped" type="button">Expediate</button>
+        </div>
+        <div class="tab-group">
+          <div class="tab on">Toate</div>
+          <div class="tab">Lucrările mele</div>
+          <div class="tab">În întârziere</div>
+          <div class="tab">Săptămâna asta</div>
+          <div class="tab">Neincepute</div>
+          <div class="tab">Probe azi/mâine</div>
+          <div class="tab">Trimise</div>
+        </div>
       </div>
-      <div class="tab-group">
-        <div class="tab on">Toate</div>
-        <div class="tab">Lucrările mele</div>
-        <div class="tab">În întârziere</div>
-        <div class="tab">Săptămâna asta</div>
-        <div class="tab">Neincepute</div>
-        <div class="tab">Probe azi/mâine</div>
-        <div class="tab">Trimise</div>
-      </div>
-      <div class="spacer"></div>
+      <div class="subbar-row subbar-filters">
       <input class="search" id="tableSearchInput" placeholder="Caută pacient, clinică, #caz..." style="max-width:260px;margin-right:8px">
       <div class="chip-dropdown">
         <button class="chip" id="clinicFilterChip" type="button">Clinică: toate</button>
@@ -103,6 +105,7 @@
           <div class="chip-menu-item" data-value="finala-asc">Data finală — crescător</div>
           <div class="chip-menu-item" data-value="finala-desc">Data finală — descrescător</div>
         </div>
+      </div>
       </div>
     </div>
     <div id="tableView"></div>

@@ -7,7 +7,7 @@ button{font-family:inherit;cursor:pointer}
 
 .app{display:grid;grid-template-columns:200px 1fr;min-height:100vh}
 .sidebar{background:var(--bg-soft);border-right:0.5px solid var(--border);padding:18px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column}
-.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 16px;border-bottom:0.5px solid var(--border);margin-bottom:14px}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 8px 16px;border-bottom:0.5px solid var(--border);margin-bottom:14px;text-decoration:none;color:inherit;cursor:pointer}
 .brand-name{font-size:16px;font-weight:700;letter-spacing:0.4px}
 .nav-section{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.6px;padding:12px 8px 6px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:var(--radius);font-size:13px;color:var(--text-muted);cursor:pointer}
@@ -69,7 +69,9 @@ button{font-family:inherit;cursor:pointer}
 .view-tab:hover{color:var(--text)}
 .view-tab.on{background:var(--bg);color:var(--text);border-color:var(--border);border-bottom-color:var(--bg);font-weight:500}
 
-.subbar{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:0.5px solid var(--border);background:var(--bg);flex-wrap:wrap}
+.subbar{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:14px 20px;border-bottom:0.5px solid var(--border);background:var(--bg)}
+.subbar-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%}
+.subbar-filters{justify-content:flex-start}
 .scope-seg,.tab-group{display:inline-flex;gap:3px;background:var(--bg-soft);border:0.5px solid var(--border);border-radius:var(--radius-md);padding:3px}
 .scope-btn,.tab{font-size:12.5px;font-weight:600;color:var(--text-muted);background:transparent;border:0;padding:5px 12px;border-radius:calc(var(--radius-md) - 3px);cursor:pointer;font-family:inherit;white-space:nowrap}
 .scope-btn:hover,.tab:hover{color:var(--text)}
