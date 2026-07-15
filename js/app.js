@@ -154,7 +154,7 @@ function chooseFilesForCase(caseId,onDone){
   input.click();
 }
 
-const activeFilter={tab:'all',clinic:'all',sort:'default',q:'',scope:'current'};
+const activeFilter={tab:'all',clinic:'all',sort:'default',q:'',scope:'current',range:{field:'finala',from:'',to:''}};
 function normalizePersonKey(value){
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 }
@@ -243,6 +243,16 @@ function applyFilter(cases){
                  notesTxt,c.color,c.implantType,c.amprentaType,teethTxt,urgentTag,stageTxt,c.priority]
         .filter(Boolean).join(' ').toLowerCase();
       if(!hay.includes(q))return false;
+    }
+    // Filtru pe interval de timp (dată selectabilă: finală / probă / intrare)
+    const rg=activeFilter.range;
+    if(rg&&(rg.from||rg.to)){
+      const raw=rg.field==='proba'?c.probaDate:rg.field==='intrare'?c.intrata:c.finala;
+      const dv=parseShortDate(raw);
+      if(!dv)return false;
+      const dOnly=new Date(dv.getFullYear(),dv.getMonth(),dv.getDate());
+      if(rg.from){const[y,m,d]=rg.from.split('-').map(Number);if(dOnly<new Date(y,m-1,d))return false}
+      if(rg.to){const[y,m,d]=rg.to.split('-').map(Number);if(dOnly>new Date(y,m-1,d))return false}
     }
     if(activeFilter.tab==='trimise')return isArchived;
     // Expediatele/anulate apar inline DOAR când cauți după numele pacientului
@@ -3451,6 +3461,16 @@ function attachFilters(){
     const ns=tm[i]==='trimise'?'shipped':(activeFilter.scope==='shipped'?'current':activeFilter.scope);
     activeFilter.scope=ns;_syncScopeBtns(ns);
     renderPipeline();if(typeof renderTable==='function')renderTable()}));
+  // Banner „în întârziere" → deschide tab-ul „În întârziere"
+  const lateBn=document.getElementById('lateBanner');
+  if(lateBn){
+    lateBn.style.cursor='pointer';
+    lateBn.addEventListener('click',()=>{
+      const idx=tm.indexOf('late');if(idx<0)return;
+      tabs[idx].click();
+      document.getElementById('tableView')?.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  }
   const ch=document.getElementById('clinicFilterChip');
   const menu=document.getElementById('clinicFilterMenu');
   if(ch&&menu){
@@ -3481,6 +3501,34 @@ function attachFilters(){
       sortCh.textContent='Sortare: '+(sortLabels[it.dataset.value]||it.dataset.value);
       if(typeof renderTable==='function')renderTable();
     }));
+  }
+  // Interval chip — filtrare pe interval de timp (dată selectabilă).
+  const rgCh=document.getElementById('rangeFilterChip');
+  const rgMenu=document.getElementById('rangeFilterMenu');
+  if(rgCh&&rgMenu){
+    const fld=document.getElementById('rangeField');
+    const inpFrom=document.getElementById('rangeFrom');
+    const inpTo=document.getElementById('rangeTo');
+    const fmt=s=>{if(!s)return'';const[y,m,d]=s.split('-');return d+'.'+m};
+    const updLabel=()=>{
+      const r=activeFilter.range;
+      if(r.from||r.to){rgCh.textContent='Interval: '+(fmt(r.from)||'…')+'–'+(fmt(r.to)||'…')}
+      else rgCh.textContent='Interval: toate';
+    };
+    rgCh.addEventListener('click',e=>{e.stopPropagation();rgMenu.classList.toggle('open')});
+    rgMenu.addEventListener('click',e=>e.stopPropagation());
+    document.addEventListener('click',()=>rgMenu.classList.remove('open'));
+    document.getElementById('rangeApply')?.addEventListener('click',()=>{
+      activeFilter.range={field:fld.value,from:inpFrom.value,to:inpTo.value};
+      updLabel();rgMenu.classList.remove('open');
+      renderPipeline();if(typeof renderTable==='function')renderTable();
+    });
+    document.getElementById('rangeClear')?.addEventListener('click',()=>{
+      inpFrom.value='';inpTo.value='';
+      activeFilter.range={field:fld.value,from:'',to:''};
+      updLabel();rgMenu.classList.remove('open');
+      renderPipeline();if(typeof renderTable==='function')renderTable();
+    });
   }
 }
 function attachMobileMenu(){const b=document.querySelector('.mobile-menu-btn'),s=document.querySelector('.sidebar');if(!b||!s)return;b.addEventListener('click',()=>s.classList.toggle('open'))}

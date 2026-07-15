@@ -106,6 +106,25 @@
           <div class="chip-menu-item" data-value="finala-desc">Data finală — descrescător</div>
         </div>
       </div>
+      <div class="chip-dropdown">
+        <button class="chip" id="rangeFilterChip" type="button">Interval: toate</button>
+        <div class="chip-menu range-menu" id="rangeFilterMenu">
+          <label class="range-lbl">Aplică pe</label>
+          <select class="range-sel" id="rangeField">
+            <option value="finala">Data finală</option>
+            <option value="proba">Data probei</option>
+            <option value="intrare">Data intrării</option>
+          </select>
+          <label class="range-lbl">De la</label>
+          <input type="date" class="range-inp" id="rangeFrom">
+          <label class="range-lbl">Până la</label>
+          <input type="date" class="range-inp" id="rangeTo">
+          <div class="range-actions">
+            <button class="chip" id="rangeClear" type="button">Șterge</button>
+            <button class="chip range-apply" id="rangeApply" type="button">Aplică</button>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
     <div id="tableView"></div>

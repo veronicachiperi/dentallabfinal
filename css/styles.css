@@ -21,8 +21,16 @@ button{font-family:inherit;cursor:pointer}
 .topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:0.5px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:5}
 .crumb{font-size:13px;color:var(--text-muted)}
 .crumb b{color:var(--text);font-weight:500}
-.search{flex:1;max-width:320px;height:30px;border:0.5px solid var(--border);border-radius:var(--radius);padding:0 12px;font-size:13px;color:var(--text);background:var(--bg);outline:none}
-.search:focus{border-color:var(--border-strong)}
+.search{flex:1;max-width:320px;height:34px;border:1.5px solid var(--border-strong);border-radius:var(--radius);padding:0 12px 0 32px;font-size:13px;font-weight:500;color:var(--text);background:var(--bg) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>") no-repeat 9px center;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.search::placeholder{color:var(--text-muted)}
+.search:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.chip-menu.range-menu{min-width:210px;padding:12px;flex-direction:column;gap:6px}
+.chip-menu.range-menu.open{display:flex}
+.range-lbl{font-size:11px;font-weight:600;color:var(--text-muted);margin-top:4px}
+.range-sel,.range-inp{width:100%;height:32px;border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:0 8px;font-size:12.5px;color:var(--text);background:var(--bg);font-family:inherit}
+.range-actions{display:flex;gap:8px;margin-top:10px}
+.range-actions .chip{flex:1;text-align:center;padding:7px 10px}
+.range-apply{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 .spacer{flex:1}
 .icon-btn{width:30px;height:30px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--bg);display:flex;align-items:center;justify-content:center;position:relative;font-size:12px;color:var(--text-muted)}
 .bell-dot{position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--late);border:1.5px solid var(--bg)}
