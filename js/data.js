@@ -202,6 +202,31 @@ function getEmployee(id) { return id ? EMPLOYEES.find(e => e.id === id) : null; 
 function getStage(id)    { return STAGES.find(s => s.id === id); }
 function getCase(id)     { return CASES.find(c => c.id === Number(id)); }
 function casesForClinic(id) { return CASES.filter(c => c.clinic === id); }
+// Normalize a free-text doctor name for matching: lowercase, strip diacritics,
+// drop the "dr"/"dr." prefix and any non-alphanumeric characters.
+function normDoctorName(s) {
+  if (!s) return '';
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\bdr\.?\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+function casesForDoctor(name) {
+  const key = normDoctorName(name);
+  if (!key) return [];
+  return CASES.filter(c => normDoctorName(c.doctor) === key);
+}
+// Unique list of doctor names present across all cases (for admin account creation).
+function allDoctorNames() {
+  const seen = new Map();
+  CASES.forEach(c => {
+    const raw = (c.doctor || '').trim();
+    if (!raw) return;
+    const key = normDoctorName(raw);
+    if (key && !seen.has(key)) seen.set(key, raw);
+  });
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, 'ro'));
+}
 function casesInStage(id)   { return CASES.filter(c => c.stage === id); }
 function isCaseArchived(c) { return c?.stage === 'trimis' || c?.stage === 'anulat'; }
 function isCaseBlocked(c) { return c?.stage === 'blocat'; }

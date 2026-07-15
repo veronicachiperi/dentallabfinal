@@ -1617,6 +1617,272 @@ function renderClinic(){
   document.getElementById('clinicLogoutBtn')?.addEventListener('click',()=>sbSignOut&&sbSignOut());
 }
 
+// === PORTAL MEDIC (doctor) — arhitectură identică portalului clinicii,
+// dar cazurile sunt filtrate după câmpul liber "Medic" (c.doctor). ===
+let doctorSort='default';
+function renderDoctor(){
+  const root=document.getElementById('doctorShell');
+  if(!root)return;
+  if(typeof assignCaseNumbers==='function')assignCaseNumbers();
+  const _cu=getCurrentUser();
+  const isDoctorUser=_cu&&_cu.role==='doctor';
+  const isAdminOrTech=!isDoctorUser&&(!_cu||_cu.role==='admin'||_cu.role==='tech'||_cu.role==='technician');
+  const urlName=new URLSearchParams(location.search).get('name')||'';
+  const doctorName=isDoctorUser?(_cu.doctorName||''):urlName;
+
+  // Admin/tehnician fără medic selectat → afișează un selector de medici.
+  if(!doctorName){
+    if(isAdminOrTech){
+      const names=(typeof allDoctorNames==='function')?allDoctorNames():[];
+      root.innerHTML=`<div class="pc-topbar-wrap"><div class="pc-topbar">
+        <div class="pc-logo">MD</div>
+        <div><div class="pc-clinic-name">Portal medici</div><div class="pc-clinic-sub">Selectați un medic pentru a-i vedea lucrările</div></div>
+        <div class="spacer"></div>
+        <a href="dashboard.html" class="btn">Vezi panoul echipei</a>
+      </div></div>
+      <div class="pc-shell"><div class="pc-clinic-tabs-row">${
+        names.length?names.map(n=>`<button class="pc-clinic-tab" data-doctor-name="${escHTML(n)}">${escHTML(n)}</button>`).join('')
+        :'<div style="padding:24px;color:var(--text-dim);font-size:13px">Niciun medic găsit în lucrări (câmpul „Medic” este gol pe toate cazurile).</div>'
+      }</div></div>`;
+      root.querySelectorAll('.pc-clinic-tab[data-doctor-name]').forEach(t=>{
+        t.addEventListener('click',()=>{location.href='doctor.html?name='+encodeURIComponent(t.dataset.doctorName)});
+      });
+    }else{
+      root.innerHTML='<p style="padding:24px">Contul dvs. nu are un nume de medic asociat. Contactați administratorul.</p>';
+    }
+    return;
+  }
+
+  const cases=(typeof casesForDoctor==='function'?casesForDoctor(doctorName):[]).filter(c=>typeof isValidCase==='function'?isValidCase(c):true);
+  const active=cases.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis'));
+  const notStarted=cases.filter(isCaseNotStarted);
+  const proba=cases.filter(isCaseAtProba);
+  const finished=cases.filter(c=>c.stage==='terminat');
+  const shipped=cases.filter(c=>typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis');
+  const viewParam=new URLSearchParams(location.search).get('view')||'active';
+  const allowed=['active','notstarted','proba','finished','shipped'];
+  const dView=allowed.includes(viewParam)?viewParam:'active';
+  const visibleCases=dView==='notstarted'?notStarted:dView==='proba'?proba:dView==='finished'?finished:dView==='shipped'?shipped:active;
+  const sortedVisible=(()=>{
+    if(doctorSort==='default')return visibleCases;
+    const field=doctorSort.startsWith('proba')?'probaDate':'finala';
+    const dir=doctorSort.endsWith('-desc')?-1:1;
+    return visibleCases.slice().sort((a,b)=>{
+      const da=parseShortDate(a[field]),db=parseShortDate(b[field]);
+      if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;
+      return (da-db)*dir;
+    });
+  })();
+  const sortLabels={'default':'implicit','proba-asc':'probă ↑','proba-desc':'probă ↓','finala-asc':'finală ↑','finala-desc':'finală ↓'};
+  const sortChips=['default','proba-asc','proba-desc','finala-asc','finala-desc']
+    .map(v=>`<button class="pc-sort-chip ${doctorSort===v?'on':''}" data-doctor-sort="${v}" type="button">${sortLabels[v]}</button>`).join('');
+  const nameQ=isAdminOrTech?('&name='+encodeURIComponent(doctorName)):'';
+  const viewUrl=view=>`doctor.html?view=${view}${nameQ}`;
+  const dStat=(view,count,label,numCls='')=>`<a class="pc-stat ${dView===view?'on':''}" href="${viewUrl(view)}"><div class="pc-stat-num ${numCls}">${count}</div><div class="pc-stat-lbl">${label}</div></a>`;
+
+  function dFlowFor(c){
+    const labStages=getEtapeLabStages(c.type);
+    const hasProbeStep=isCaseAtProba(c)||Boolean(probaApprovedStage(c))||c.stage==='proba';
+    return ['design',...(hasProbeStep?['proba_aprobata']:[]),...labStages.filter(s=>s!=='design'),'terminat'];
+  }
+  function dProgressIndex(c){
+    if(isCaseNotStarted(c))return -1;
+    const flow=dFlowFor(c);
+    if(typeof isCaseArchived==='function'&&isCaseArchived(c))return flow.length-1;
+    if(c.stage==='blocat')return -1;
+    if(probaApprovedStage(c))return flow.indexOf('proba_aprobata');
+    if(c.stage==='proba')return flow.indexOf('proba_aprobata');
+    return flow.indexOf(c.stage);
+  }
+  function dPct(c){const flow=dFlowFor(c);const idx=dProgressIndex(c);if(idx<0)return 0;return Math.round(((idx+1)/flow.length)*100);}
+  function dFlowHTML(c){
+    const flow=dFlowFor(c);const idx=dProgressIndex(c);
+    const labels={design:'Design',proba_aprobata:'Probă aprobată',cam:'CAM',ceramica:'Ceramică',prelucrare:'Prelucrare',terminat:'Terminat'};
+    return `<div class="pc-stage-trail">${flow.map((s,i)=>`<span class="${i<idx?'done':i===idx?'current':''}">${labels[s]}</span>`).join('<b>›</b>')}</div>`;
+  }
+  function ra(c){
+    if(isCaseAtProba(c))return{cls:'primary',label:'Aprobă probă',action:'approve'};
+    if(c.stage==='terminat')return{cls:'primary',label:'Confirmă expediere',action:'pickup'};
+    return{cls:'note',label:'Adaugă notă',action:'note'};
+  }
+
+  const dataWarning=(typeof window!=='undefined'&&window.APP_LOAD_ERROR)?`<div class="deadline-strip" style="margin:0 0 18px"><span class="dot-pulse"></span><b>Date live neîncărcate</b><span style="opacity:.85"> — afișez datele locale până se repară conexiunea.</span></div>`:'';
+  const docTabs=isAdminOrTech&&typeof allDoctorNames==='function'
+    ? allDoctorNames().map(n=>`<button class="pc-clinic-tab ${normDoctorName(n)===normDoctorName(doctorName)?'on':''}" data-doctor-name="${escHTML(n)}">${escHTML(n)}</button>`).join('')
+    : '';
+
+  root.innerHTML=`<div class="pc-topbar-wrap">
+    <div class="pc-topbar">
+      <div class="pc-logo">${escHTML(String(doctorName).replace(/\bdr\.?\b/ig,'').trim().slice(0,2).toUpperCase()||'MD')}</div>
+      <div>
+        <div class="pc-clinic-name">${escHTML(doctorName)}</div>
+        <div class="pc-clinic-sub">Portalul medicului · ${active.length} active · ${shipped.length} expediate</div>
+      </div>
+      <div class="spacer"></div>
+      <a href="arhiva.html" class="btn">Arhivă</a>
+      ${isAdminOrTech?'<a href="dashboard.html" class="btn">Vezi panoul echipei</a>':''}
+      ${isDoctorUser?'<button class="btn" id="doctorLogoutBtn" style="color:#A32D2D;border-color:#A32D2D">Deconectare</button>':''}
+    </div>
+  </div>
+  <div class="pc-shell">
+    ${dataWarning}
+    ${docTabs?`<div class="pc-clinic-tabs-row">${docTabs}</div>`:''}
+    <div class="pc-stats">
+      ${dStat('active',active.length,'Active')}
+      ${dStat('notstarted',notStarted.length,'Neîncepute')}
+      ${dStat('proba',proba.length,'La probă','proba')}
+      ${dStat('finished',finished.length,'Terminate','ready')}
+      ${dStat('shipped',shipped.length,'Expediate','shipped')}
+    </div>
+    <div class="pc-sort-row"><span class="pc-sort-label">Sortare:</span>${sortChips}</div>
+    <div class="pc-table">
+      <div class="pc-row-grid head">
+        <div>Caz</div><div>Pacient</div><div>Tip lucrare</div><div>Etapă</div><div>Finală</div><div></div>
+      </div>
+      ${sortedVisible.length?sortedVisible.map(c=>{
+        const a=ra(c);const pct=dPct(c);const stageName=publicStageName(c);
+        return `<div class="pc-row-grid ${isCaseNotStarted(c)?'not-started':''} ${isCaseAtProba(c)?'proba-row':''} ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}" data-case-id="${c.id}">
+          <div class="tbl-num">#${c.seq||c.id}</div>
+          <div class="tbl-name">${c.name}</div>
+          <div><span class="tag">${c.type}</span></div>
+          <div class="pc-progress-cell">
+            <div class="pc-progress-bar"><div class="pc-progress-fill" style="width:${pct}%"></div></div>
+            <span class="pc-progress-label">${stageName}</span>
+            ${dFlowHTML(c)}
+          </div>
+          <div class="tbl-due-bold ${c.late||labDeadlineStatus(c).urgent?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+            ${a.action!=='note'?`<button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button>`:''}
+            <button class="pc-action note" data-action="note" data-case-id="${c.id}">Notă</button>
+            <button class="pc-action note" data-action="menu" data-case-id="${c.id}">Acțiuni ▾</button>
+          </div>
+        </div>`;
+      }).join(''):`<div style="padding:28px;text-align:center;color:var(--text-dim);font-size:13px">Nu există lucrări în această secțiune.</div>`}
+    </div>
+  </div>`;
+
+  root.querySelectorAll('.pc-clinic-tab[data-doctor-name]').forEach(t=>{
+    t.addEventListener('click',()=>{location.href='doctor.html?name='+encodeURIComponent(t.dataset.doctorName)});
+  });
+  root.querySelectorAll('.pc-row-grid[data-case-id]').forEach(r=>{
+    r.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${r.dataset.caseId}`;});
+  });
+  root.querySelectorAll('.pc-action[data-action]').forEach(b=>{
+    b.addEventListener('click',async e=>{
+      e.stopPropagation();
+      if(b.dataset.action==='menu'){const c=getCase(Number(b.dataset.caseId));if(c)openClinicCaseMenu(b,c);return;}
+      b.disabled=true;
+      try{await handleClinicAction(b.dataset.action,Number(b.dataset.caseId));renderDoctor();}
+      finally{b.disabled=false}
+    });
+  });
+  root.querySelectorAll('.pc-sort-chip[data-doctor-sort]').forEach(b=>{
+    b.addEventListener('click',()=>{doctorSort=b.dataset.doctorSort;renderDoctor();});
+  });
+  document.getElementById('doctorLogoutBtn')?.addEventListener('click',()=>sbSignOut&&sbSignOut());
+}
+
+// === LINKURI VIEW-ONLY (private, doar citire) ==================
+// Tokenul codează scope-ul {type,v,exp} în base64 (obfuscare, nu criptare).
+function _encodeViewToken(o){try{return btoa(encodeURIComponent(JSON.stringify(o)))}catch(e){return ''}}
+function _decodeViewToken(t){try{return JSON.parse(decodeURIComponent(atob(t)))}catch(e){return null}}
+function makeViewLink(type,v,days){
+  const o={type,v};
+  if(days&&days>0)o.exp=Date.now()+days*86400000;
+  const base=location.origin+location.pathname.replace(/[^/]*$/,'');
+  return base+'view.html?t='+_encodeViewToken(o);
+}
+function openViewLinkModal(type,v){
+  const label=type==='doctor'?v:(getClinic(v)?.name||v);
+  openModal(`<div class="modal-head"><div class="modal-title">Link view-only · ${escHTML(String(label))}</div><button class="modal-close" type="button">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12.5px;color:var(--text-muted)">Oricine are acest link poate vedea lucrările ${type==='doctor'?'medicului':'clinicii'} <b>${escHTML(String(label))}</b> — doar citire, fără login, fără posibilitatea de a edita.</div>
+      <div class="field"><label>Expirare</label><select id="vlExp"><option value="0">Fără expirare</option><option value="7">7 zile</option><option value="30">30 zile</option><option value="90">90 zile</option></select></div>
+      <div class="field"><label>Link</label><input id="vlUrl" readonly style="font-size:12px" value="${escAttr(makeViewLink(type,v,0))}"></div>
+    </div>
+    <div class="modal-foot"><button class="btn modal-close" type="button">Închide</button><button class="btn primary" id="vlCopy" type="button">Copiază link</button></div>`);
+  const sel=document.getElementById('vlExp');const inp=document.getElementById('vlUrl');
+  sel?.addEventListener('change',()=>{inp.value=makeViewLink(type,v,Number(sel.value));});
+  document.getElementById('vlCopy')?.addEventListener('click',()=>{
+    inp.select();
+    const url=inp.value;
+    if(navigator.clipboard){navigator.clipboard.writeText(url).then(()=>{const b=document.getElementById('vlCopy');b.textContent='✓ Copiat';setTimeout(()=>b.textContent='Copiază link',1500);},()=>{try{document.execCommand('copy')}catch(e){}});}
+    else{try{document.execCommand('copy')}catch(e){}}
+  });
+}
+
+// Bootstrap pentru pagina publică view.html (fără autentificare).
+async function initPublicView(){
+  const root=document.getElementById('viewShell');if(!root)return;
+  const tok=new URLSearchParams(location.search).get('t');
+  const scope=_decodeViewToken(tok);
+  const errBox=msg=>{root.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;min-height:70vh;padding:24px"><div style="text-align:center;color:var(--text-muted);font-size:14px">${msg}</div></div>`;};
+  if(!scope||!scope.type||!scope.v){errBox('Link invalid.');return;}
+  if(scope.exp&&Date.now()>scope.exp){errBox('Acest link a expirat.');return;}
+  // SECURITATE MAXIMĂ: linkul necesită o sesiune validă. Fără cont autentificat,
+  // datele nu se încarcă niciodată (nicio expunere anonimă). RLS rămâne strict.
+  const hasSb=typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED;
+  if(hasSb){
+    let session=null;
+    try{const {data}=await _client().auth.getSession();session=data&&data.session;}catch(e){}
+    if(!session){
+      const back=encodeURIComponent(location.pathname.replace(/^.*\//,'')+location.search);
+      errBox('Trebuie să fiți autentificat pentru a vedea acest link.<br><br><a class="btn primary" href="login.html?next='+back+'">Autentificare</a>');
+      return;
+    }
+    try{
+      const [sbCases,sbClinics]=await Promise.all([sbLoadCases(),sbLoadClinics()]);
+      if(sbClinics&&sbClinics.length){CLINICS.length=0;sbClinics.forEach(c=>CLINICS.push(c));}
+      if(sbCases){CASES.length=0;sbCases.forEach(c=>{postProcessCase(c);CASES.push(c)});}
+    }catch(e){errBox('Nu s-au putut încărca datele. Verificați accesul contului.');return;}
+  }
+  if(typeof assignCaseNumbers==='function')assignCaseNumbers();
+  renderPublicView(scope);
+}
+
+function renderPublicView(scope){
+  const root=document.getElementById('viewShell');if(!root)return;
+  const isDoctor=scope.type==='doctor';
+  const title=isDoctor?scope.v:(getClinic(scope.v)?.name||scope.v);
+  let cases=(isDoctor?(typeof casesForDoctor==='function'?casesForDoctor(scope.v):[]):casesForClinic(scope.v))
+    .filter(c=>typeof isValidCase==='function'?isValidCase(c):true);
+  const _isArch=c=>typeof isCaseArchived==='function'?isCaseArchived(c):(c.stage==='trimis'||c.stage==='anulat');
+  const active=cases.filter(c=>!_isArch(c));
+  const shipped=cases.filter(_isArch);
+  const proba=cases.filter(isCaseAtProba);
+  const finished=cases.filter(c=>c.stage==='terminat');
+  const viewParam=new URLSearchParams(location.search).get('v')||'active';
+  const list=viewParam==='shipped'?shipped:viewParam==='proba'?proba:viewParam==='finished'?finished:active;
+  const sorted=list.slice().sort((a,b)=>{const da=parseShortDate(a.finala),db=parseShortDate(b.finala);if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;return da-db;});
+  const t=new URLSearchParams(location.search).get('t');
+  const vUrl=v=>`view.html?t=${encodeURIComponent(t)}&v=${v}`;
+  const stat=(v,count,label,cls='')=>`<a class="pc-stat ${viewParam===v?'on':''}" href="${vUrl(v)}"><div class="pc-stat-num ${cls}">${count}</div><div class="pc-stat-lbl">${label}</div></a>`;
+  root.innerHTML=`<div class="pc-topbar-wrap"><div class="pc-topbar">
+      <div class="pc-logo">${escHTML(String(title).replace(/\bdr\.?\b/ig,'').trim().slice(0,2).toUpperCase()||'PV')}</div>
+      <div><div class="pc-clinic-name">${escHTML(String(title))}</div><div class="pc-clinic-sub">Vizualizare · doar citire · ${active.length} active</div></div>
+      <div class="spacer"></div>
+      <span class="tag" style="background:#FEF3C7;color:#92400E">Doar citire</span>
+    </div></div>
+    <div class="pc-shell">
+      <div class="pc-stats">
+        ${stat('active',active.length,'Active')}
+        ${stat('proba',proba.length,'La probă','proba')}
+        ${stat('finished',finished.length,'Terminate','ready')}
+        ${stat('shipped',shipped.length,'Expediate','shipped')}
+      </div>
+      <div class="pc-table">
+        <div class="pc-row-grid head"><div>Caz</div><div>Pacient</div><div>Tip lucrare</div><div>Etapă</div><div>Finală</div></div>
+        ${sorted.length?sorted.map(c=>`<div class="pc-row-grid ${isCaseNotStarted(c)?'not-started':''} ${isCaseAtProba(c)?'proba-row':''}" style="grid-template-columns:70px 1.4fr 1fr 1.4fr 100px">
+            <div class="tbl-num">#${c.seq||c.id}</div>
+            <div class="tbl-name">${escHTML(c.name)}</div>
+            <div><span class="tag">${escHTML(c.type)}</span></div>
+            <div><span class="pc-progress-label">${escHTML(publicStageName(c))}</span></div>
+            <div class="tbl-due-bold ${c.late?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div>
+          </div>`).join(''):`<div style="padding:28px;text-align:center;color:var(--text-dim);font-size:13px">Nu există lucrări în această secțiune.</div>`}
+      </div>
+    </div>`;
+}
+
 function openClinicCaseMenu(anchor,c){
   document.querySelectorAll('.clinic-case-popover,.kb-card-popover,.kb-col-popover').forEach(p=>p.remove());
   const host=anchor.parentElement;
@@ -2583,7 +2849,7 @@ function renderEchipa(){
   const isAdmin=(getCurrentUser()||{}).role==='admin';
   const TECH_COLORS={tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'};
   const TECH_ROLES={design:'Designer CAD',cam:'Tehnician CAM',ceramica:'Tehnician ceramică',prelucrare:'Tehnician prelucrare'};
-  root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Echipa</h1>${isAdmin?'<button class="btn primary" id="addEmpBtn" type="button">+ Angajat nou</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')).length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id]||{active:0,done:0,late:0};const stageColor=e.color||TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${escHTML(e.initials)}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div>${isAdmin?`<div id="accountStatusTools" style="margin-top:22px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi angajați</div><div style="font-size:12px;color:var(--text-muted)">Se verifică...</div></div>`:''}</div></main></div>`;
+  root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Echipa</h1>${isAdmin?'<button class="btn primary" id="addEmpBtn" type="button">+ Angajat nou</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')).length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id]||{active:0,done:0,late:0};const stageColor=e.color||TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${escHTML(e.initials)}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div>${isAdmin?`<div id="accountStatusTools" style="margin-top:22px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi angajați</div><div style="font-size:12px;color:var(--text-muted)">Se verifică...</div></div>`:''}${isAdmin?`<div id="doctorAccountTools" style="margin-top:16px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi medici</div><div style="font-size:12px;color:var(--text-muted)">Se verifică...</div></div>`:''}</div></main></div>`;
   document.getElementById('addEmpBtn')?.addEventListener('click',openAddEmployeeModal);
   if(isAdmin&&SUPABASE_CONFIGURED){
     (async()=>{
@@ -2607,6 +2873,32 @@ function renderEchipa(){
           .catch(err=>alert('Eroare: '+err.message));
       }));
       box.querySelectorAll('[data-delete-employee]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();deleteEmployeeFromAdmin(b.dataset.deleteEmployee)}));
+    })();
+    // Conturi medici — listă unică de medici din câmpul „Medic” al lucrărilor.
+    (async()=>{
+      const box=document.getElementById('doctorAccountTools');if(!box)return;
+      const names=(typeof allDoctorNames==='function')?allDoctorNames():[];
+      let profiles=[];
+      try{const {data}=await _client().from('profiles').select('username,doctor_name,role').eq('role','doctor');profiles=data||[];}catch(e){}
+      const accByKey={};profiles.forEach(p=>{const k=normDoctorName(p.doctor_name||p.username);if(k)accByKey[k]=p;});
+      box.innerHTML=`<div style="font-size:13px;font-weight:500;margin-bottom:4px">Conturi medici</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:10px">${names.length} medici în lucrări · un cont per medic permite vizualizare și interacțiune în timp real</div>${names.length?names.map(n=>{
+        const key=normDoctorName(n);
+        const acc=accByKey[key];
+        const uname=acc?.username||'';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:0.5px solid var(--border);flex-wrap:wrap"><div class="pc-logo" style="width:34px;height:34px;font-size:12px">${escHTML(String(n).replace(/\bdr\.?\b/ig,'').trim().slice(0,2).toUpperCase()||'MD')}</div><div style="flex:1;min-width:120px"><div style="font-size:13px;font-weight:500">${escHTML(n)}</div><div style="font-size:11px;color:var(--text-dim)">${acc?`@${escHTML(uname)}`:'Fără cont'}</div></div><button class="btn" style="font-size:11px;padding:4px 10px" data-view-link-doctor="${escAttr(n)}" type="button">Link view-only</button>${acc?`<a class="btn" style="font-size:11px;padding:4px 10px;margin-left:6px" href="doctor.html?name=${encodeURIComponent(n)}">Vezi portal</a><span style="font-size:11px;color:#1D9E75;font-weight:500;margin-left:8px">✓ activ</span>`:`<button class="btn primary" style="font-size:11px;padding:4px 10px;margin-left:6px" data-create-doctor="${escAttr(n)}" type="button">Creează cont</button>`}</div>`;
+      }).join(''):'<div style="font-size:12px;color:var(--text-muted);padding-top:6px">Niciun medic găsit — completați câmpul „Medic” pe lucrări.</div>'}`;
+      box.querySelectorAll('[data-view-link-doctor]').forEach(b=>b.addEventListener('click',()=>openViewLinkModal('doctor',b.dataset.viewLinkDoctor)));
+      box.querySelectorAll('[data-create-doctor]').forEach(b=>b.addEventListener('click',()=>{
+        const dname=b.dataset.createDoctor;
+        const suggested=normDoctorName(dname);
+        const user=prompt(`Nume de utilizator pentru ${dname} (fără spații, ex: ${suggested}):`,suggested);
+        if(!user||!user.trim())return;
+        const pass=prompt(`Parolă pentru ${dname} (min. 8 caractere):`);
+        if(!pass||pass.length<8){alert('Parola trebuie să aibă minim 8 caractere.');return;}
+        sbAdminCreateUser(user.trim(),pass,'doctor',null,null,dname)
+          .then(()=>{alert(`✓ Cont creat pentru ${dname}\nUsername: ${user.trim()}\nParolă: ${pass}\n\nTransmiteți aceste date medicului.`);renderEchipa();})
+          .catch(err=>alert('Eroare: '+err.message));
+      }));
     })();
   }
 }
@@ -2765,10 +3057,11 @@ function renderClinici(){
   const root=document.getElementById('cliniciShell');if(!root)return;
   const isAdmin=(getCurrentUser()||{}).role==='admin';
   const dataWarning=(typeof window!=='undefined'&&window.APP_LOAD_ERROR)?`<div class="deadline-strip" style="margin:0 0 18px"><span class="dot-pulse"></span><b>Date live neîncărcate</b><span style="opacity:.85"> — afișez datele locale până se repară conexiunea.</span></div>`:'';
-  const adminTools=isAdmin?`<div style="margin-top:22px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Administrare clinici</div>${CLINICS.map(cl=>{const clId=String(cl.id||'');const clName=String(cl.name||clId||'Clinică');const total=casesForClinic(clId).length;return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:0.5px solid var(--border)"><div style="width:30px;height:30px;border-radius:6px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)">${escHTML(clName.slice(0,2).toUpperCase())}</div><div style="flex:1"><div style="font-size:13px;font-weight:500">${escHTML(clName)}</div><div style="font-size:11px;color:var(--text-dim)">${total} cazuri legate</div></div><button class="btn danger" data-delete-clinic="${escAttr(clId)}" type="button">Șterge</button></div>`}).join('')}</div>`:'';
+  const adminTools=isAdmin?`<div style="margin-top:22px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Administrare clinici</div>${CLINICS.map(cl=>{const clId=String(cl.id||'');const clName=String(cl.name||clId||'Clinică');const total=casesForClinic(clId).length;return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:0.5px solid var(--border)"><div style="width:30px;height:30px;border-radius:6px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-muted)">${escHTML(clName.slice(0,2).toUpperCase())}</div><div style="flex:1"><div style="font-size:13px;font-weight:500">${escHTML(clName)}</div><div style="font-size:11px;color:var(--text-dim)">${total} cazuri legate</div></div><button class="btn" style="font-size:11px;padding:4px 10px" data-view-link-clinic="${escAttr(clId)}" type="button">Link view-only</button><button class="btn danger" style="margin-left:6px" data-delete-clinic="${escAttr(clId)}" type="button">Șterge</button></div>`}).join('')}</div>`:'';
   root.innerHTML=`<div class="app">${adminSidebarHTML('clinici')}<main class="main"><div style="padding:24px;max-width:1100px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Clinici</h1>${isAdmin?'<button class="btn primary" id="addClinicBtn" type="button">+ Clinică nouă</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${CLINICS.length} clinici · ${CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')).length} lucrări active</div>${dataWarning}<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${CLINICS.map(cl=>{const clId=String(cl.id||'');const clName=String(cl.name||clId||'Clinică');const cases=casesForClinic(clId);const active=cases.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')).length;const late=cases.filter(c=>c.late).length;const ready=cases.filter(c=>c.stage==='terminat').length;const proba=cases.filter(c=>c.stage==='proba').length;return `<a href="clinic.html?id=${encodeURIComponent(clId)}" style="background:var(--bg);border:0.5px solid var(--border);border-radius:10px;padding:18px;text-decoration:none;color:var(--text);display:block"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:42px;height:42px;border-radius:8px;background:var(--bg-soft);border:0.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;color:var(--text-muted)">${escHTML(clName.slice(0,2).toUpperCase())}</div><div><div style="font-size:15px;font-weight:500">${escHTML(clName)}</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:12px;border-top:0.5px solid var(--border)"><div><div style="font-size:18px;font-weight:500">${active}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Active</div></div><div><div style="font-size:18px;font-weight:500;color:#BA7517">${proba}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Probă</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${ready}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Gata</div></div><div><div style="font-size:18px;font-weight:500;color:${late?'#A32D2D':'var(--text-dim)'}">${late}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px">Restant</div></div></div></a>`}).join('')}</div>${adminTools}</div></main></div>`;
   document.getElementById('addClinicBtn')?.addEventListener('click',openAddClinicModal);
   root.querySelectorAll('[data-delete-clinic]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();deleteClinicFromAdmin(b.dataset.deleteClinic)}));
+  root.querySelectorAll('[data-view-link-clinic]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openViewLinkModal('clinic',b.dataset.viewLinkClinic);}));
 }
 
 function adminSidebarHTML(active){
@@ -3290,9 +3583,14 @@ function renderLogin(){
 function _loginErr(id,msg){const el=document.getElementById(id);if(el){el.textContent=msg;el.style.display='block'}}
 function _redirectAfterLogin(prof){
   if(!prof)return;
+  // Onorează ?next= (ex: un link view-only) dacă e o cale internă sigură.
+  const next=new URLSearchParams(location.search).get('next');
+  if(next&&/^[a-zA-Z0-9_\-]+\.html(\?[^#]*)?$/.test(next)){location.href=next;return;}
   if(prof.role==='clinic'){
     const cid=prof.clinic_id||getCurrentUser()?.clinic||'';
     location.href=cid?`clinic.html?id=${cid}`:'clinic.html';
+  }else if(prof.role==='doctor'){
+    location.href='doctor.html';
   }else if(prof.role==='technician')location.href='tehnician.html';
   else location.href='dashboard.html';
 }
@@ -4097,6 +4395,8 @@ if (typeof window !== 'undefined') {
 }
 
 async function initApp(){
+  // Public view-only page — handled by initPublicView (no auth). Skip the auth-gated flow.
+  if(document.getElementById('viewShell'))return;
   // Login page — just render login form, no auth needed
   if(document.getElementById('loginShell')){renderLogin();return}
   // Auth + data loading
@@ -4114,6 +4414,10 @@ async function initApp(){
       // Clinic users go straight to their own portal
       if(prof.role==='clinic'&&prof.clinic_id&&!location.pathname.includes('clinic.html')&&!location.pathname.includes('case.html')&&!location.pathname.includes('termeni.html')&&!location.pathname.includes('arhiva.html')){
         location.href='clinic.html?id='+prof.clinic_id;return;
+      }
+      // Doctor users go straight to their own portal
+      if(prof.role==='doctor'&&!location.pathname.includes('doctor.html')&&!location.pathname.includes('case.html')&&!location.pathname.includes('termeni.html')&&!location.pathname.includes('arhiva.html')){
+        location.href='doctor.html';return;
       }
       const [sbCases,sbClinics,sbEmps]=await withTimeout(Promise.all([sbLoadCases(),sbLoadClinics(),sbLoadEmployees()]),10000,'Încărcarea datelor Supabase');
       if(sbClinics&&sbClinics.length>0){CLINICS.length=0;sbClinics.forEach(c=>CLINICS.push(c));}
@@ -4172,6 +4476,7 @@ async function initApp(){
   if(typeof assignCaseNumbers==='function')assignCaseNumbers();
   updateMainSummary();
   renderClinic();
+  renderDoctor();
   renderCaseDetail();
   renderCalendar();
   renderTechnicianPortal();

@@ -50,6 +50,7 @@ async function sbRequireAuth() {
       role:       _profile.role,
       clinic:     _profile.clinic_id  || null,
       employeeId: _profile.employee_id || null,
+      doctorName: _profile.doctor_name || null,
     });
   }
   return _profile;
@@ -60,13 +61,21 @@ async function sbSignIn(username, password) {
     email:    _toEmail(username),
     password,
   });
-  if (error) throw error;
+  if (error) {
+    if (/email not confirmed/i.test(error.message))
+      throw new Error('Contul nu este confirmat. Administratorul trebuie să dezactiveze "Confirm email" în Supabase → Authentication → Providers → Email.');
+    if (/invalid login credentials/i.test(error.message))
+      throw new Error('Nume de utilizator sau parolă incorecte.');
+    throw error;
+  }
   _session = data.session;
-  const { data: p } = await _client().from('profiles').select('*').eq('id', data.user.id).single();
+  const { data: p, error: perr } = await _client().from('profiles').select('*').eq('id', data.user.id).single();
   _profile = p || null;
   if (!_profile) {
-    // Auth succeeded but no profile row — account has no role, deny access
+    // Auth succeeded but no profile row — either the row is missing or RLS blocks self-select.
     await _client().auth.signOut();
+    if (perr && /row-level security|permission|policy/i.test(perr.message || ''))
+      throw new Error('Profilul contului nu poate fi citit (politici RLS). Contactați administratorul.');
     throw new Error('Cont neautorizat. Contactați administratorul pentru acces.');
   }
   setCurrentUser({
@@ -361,20 +370,34 @@ async function sbDeleteEmployee(id) {
   await _sbLog('delete_employee', 'employee', id, {});
 }
 
-// Creates a login account for a clinic or employee (admin only)
-async function sbAdminCreateUser(username, password, role, clinicId, employeeId) {
+// Creates a login account for a clinic, employee or doctor (admin only).
+// IMPORTANT: signUp() replaces the active session with the newly created user.
+// To keep the admin logged in, we run signUp on a throwaway client that does
+// NOT persist its session, then insert the profile row with the admin client.
+async function sbAdminCreateUser(username, password, role, clinicId, employeeId, doctorName) {
   if (!SUPABASE_CONFIGURED) return;
-  const { data, error } = await _client().auth.signUp({ email: _toEmail(username), password });
-  if (error) throw error;
+  // Fresh isolated client — its own session storage, never touches the admin's.
+  const tmp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, storageKey: 'sb-tmp-signup' },
+  });
+  const { data, error } = await tmp.auth.signUp({ email: _toEmail(username), password });
+  if (error) {
+    if (/already registered|already been registered|user already/i.test(error.message))
+      throw new Error('Există deja un cont cu acest nume de utilizator.');
+    throw error;
+  }
   // data.user is null when Supabase "Confirm email" is enabled — must be turned off
   if (!data.user) throw new Error('Dezactivați "Confirm email" în Supabase → Authentication → Providers → Email');
-  const { error: pe } = await _client().from('profiles').insert({
+  const row = {
     id: data.user.id,
     username: username.trim(),
     role,
     clinic_id:   clinicId   || null,
     employee_id: employeeId || null,
-  });
+  };
+  if (doctorName) row.doctor_name = doctorName;
+  // Insert the profile with the ADMIN client (has rights), not the tmp one.
+  const { error: pe } = await _client().from('profiles').insert(row);
   if (pe) throw pe;
   await _sbLog('create_user', 'profile', data.user.id, { username, role });
   return data;
