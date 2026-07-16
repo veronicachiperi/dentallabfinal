@@ -31,3 +31,15 @@ ok('clinic filter lists only doctor clinics (CL1+CL2 both used)',/value="CL1"/.t
 
 console.log('\nRESULT',pass,'passed,',fail,'failed');
 process.exit(fail?1:0);
+
+// --- sidebar scope pentru medic ---
+vm.runInContext('renderArchive();',ctx);
+const sb=html();
+ok('sidebar: are Portal',/href="doctor.html"[^]*Portal/.test(sb)||sb.includes('>Portal<'));
+ok('sidebar: are Arhivă',/arhiva.html/.test(sb));
+ok('sidebar: NU are Lucrări',!sb.includes('>Lucrări<'));
+ok('sidebar: NU are Clinici',!sb.includes('>Clinici<'));
+ok('sidebar: NU are WorkDrive',!sb.includes('WorkDrive'));
+ok('sidebar: NU are Statistici',!sb.includes('Statistici'));
+ok('sidebar: rol = Medic',sb.includes('Medic'));
+console.log('\nSIDEBAR RESULT',pass,'passed,',fail,'failed');

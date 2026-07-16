@@ -639,7 +639,24 @@ function buildSidebarHTML(role,user){
     return`<a class="nav-item${cur?' active':''}" href="${href}"><span class="nav-icon"></span>${label}</a>`;
   };
   const savedStatus=localStorage.getItem('dental-lab-status')||'online';
-  const roleLabel={admin:'Administrator',technician:'Tehnician',tech:'Tehnician',clinic:'Clinică'}[role]||role;
+  const roleLabel={admin:'Administrator',technician:'Tehnician',tech:'Tehnician',clinic:'Clinică',doctor:'Medic'}[role]||role;
+  if(role==='doctor'){
+    // Medicul are acces DOAR la portalul lui și la arhiva propriilor lucrări.
+    return`<a class="brand" href="doctor.html"><div class="brand-name">PRIVATE CAD</div></a>
+<div class="nav-section">Workflow</div>
+${item('doctor.html','Portal')}
+${item('arhiva.html','Arhivă')}
+<div class="sidebar-profile" id="sidebarProfile">
+  <div class="sp-user">
+    <div class="sp-avatar" id="spAvatar">${escHTML(u.initials||'?')}</div>
+    <div class="sp-info">
+      <div class="sp-name" id="spName">${escHTML(u.name||'')}</div>
+      <div class="sp-role" id="spRole">${roleLabel}</div>
+    </div>
+  </div>
+  <button class="sp-logout-btn" onclick="sbSignOut&&sbSignOut();return false">Deconectare</button>
+</div>`;
+  }
   if(role==='clinic'){
     const clinicHref=`clinic.html?id=${encodeURIComponent(u.clinic||'')}`;
     return`<a class="brand" href="${clinicHref}"><div class="brand-name">PRIVATE CAD</div></a>
@@ -1680,6 +1697,7 @@ function renderClinic(){
 // dar cazurile sunt filtrate după câmpul liber "Medic" (c.doctor). ===
 let doctorSort='default';
 let doctorShipFilter={from:'',to:'',clinic:'all'};
+let doctorMainFilter={from:'',to:''};
 function renderDoctor(){
   const root=document.getElementById('doctorShell');
   if(!root)return;
@@ -1734,7 +1752,15 @@ function renderDoctor(){
     }
     return true;
   });
-  const visibleCases=dView==='notstarted'?notStarted:dView==='proba'?proba:dView==='finished'?finished:dView==='shipped'?shippedFiltered:active;
+  // Filtru interval (pe data finală) pentru vederile principale (nu Expediate, care are propriul filtru).
+  const mainDate=c=>parseShortDate(c.finala);
+  const applyMainRange=list=>{
+    const mf=doctorMainFilter;if(!mf.from&&!mf.to)return list;
+    const df=mf.from?parseShortDate(mf.from):null,dt=mf.to?parseShortDate(mf.to):null;
+    return list.filter(c=>{const d=mainDate(c);if(!d)return false;if(df&&d<df)return false;if(dt&&d>dt)return false;return true;});
+  };
+  const baseVisible=dView==='notstarted'?notStarted:dView==='proba'?proba:dView==='finished'?finished:dView==='shipped'?shippedFiltered:active;
+  const visibleCases=dView==='shipped'?baseVisible:applyMainRange(baseVisible);
   const sortedVisible=(()=>{
     if(doctorSort==='default')return visibleCases;
     const field=doctorSort.startsWith('proba')?'probaDate':'finala';
@@ -1796,6 +1822,17 @@ function renderDoctor(){
       <button class="btn" id="docShipReset" type="button">Resetează</button>
       ${exportMenuHTML('docShip','Export ('+sortedVisible.length+')','primary')}
     </div>`:'';
+  // Bară interval (pe data finală) pentru vederile principale.
+  const mainHasRange=Boolean(doctorMainFilter.from||doctorMainFilter.to);
+  const mainBar=dView!=='shipped'?`<div class="pc-ship-bar">
+      <span class="pc-sort-label">Interval finală:</span>
+      <input type="date" id="docMainFrom" value="${escAttr(doctorMainFilter.from)}">
+      <span style="color:var(--text-dim)">–</span>
+      <input type="date" id="docMainTo" value="${escAttr(doctorMainFilter.to)}">
+      ${mainHasRange?`<span class="pc-sort-label" style="color:var(--text-dim)">${sortedVisible.length} rezultate</span>`:''}
+      <div class="spacer" style="flex:1"></div>
+      ${mainHasRange?'<button class="btn" id="docMainReset" type="button">Resetează</button>':''}
+    </div>`:'';
 
   root.innerHTML=`<div class="pc-topbar-wrap">
     <div class="pc-topbar">
@@ -1822,6 +1859,7 @@ function renderDoctor(){
     </div>
     <div class="pc-sort-row"><span class="pc-sort-label">Sortare:</span>${sortChips}</div>
     ${exportBar}
+    ${mainBar}
     <div class="pc-table">
       <div class="pc-row-grid head">
         <div>Caz</div><div>Pacient</div><div>Tip lucrare</div><div>Etapă</div><div>Finală</div><div></div>
@@ -1873,6 +1911,9 @@ function renderDoctor(){
   document.getElementById('docShipTo')?.addEventListener('change',e=>{doctorShipFilter.to=e.target.value;renderDoctor();});
   document.getElementById('docShipClinic')?.addEventListener('change',e=>{doctorShipFilter.clinic=e.target.value;renderDoctor();});
   document.getElementById('docShipReset')?.addEventListener('click',()=>{doctorShipFilter={from:'',to:'',clinic:'all'};renderDoctor();});
+  document.getElementById('docMainFrom')?.addEventListener('change',e=>{doctorMainFilter.from=e.target.value;renderDoctor();});
+  document.getElementById('docMainTo')?.addEventListener('change',e=>{doctorMainFilter.to=e.target.value;renderDoctor();});
+  document.getElementById('docMainReset')?.addEventListener('click',()=>{doctorMainFilter={from:'',to:''};renderDoctor();});
   attachExportMenu('docShip',()=>({
     headers:['Caz','Pacient','Clinică','Tip lucrare','Dată expediere','Finală'],
     rows:sortedVisible.map(c=>['#'+(c.seq||c.id),c.name,(getClinic(c.clinic)||{}).name||c.clinic||'—',c.type,c.sentDate||c.completedDate||c.finala||'',c.finala||'']),
@@ -2697,7 +2738,7 @@ function renderTechnicianPortal(){
 }
 
 // === ARCHIVE ===
-let archiveFilter={year:String(new Date().getFullYear()),month:'all',clinic:'all',tech:'all',type:'all',q:'',sort:'default'};
+let archiveFilter={year:String(new Date().getFullYear()),month:'all',clinic:'all',tech:'all',type:'all',q:'',sort:'default',from:'',to:''};
 function renderArchive(){
   const root=document.getElementById('archiveShell');if(!root)return;
   if(typeof assignCaseNumbers==='function')assignCaseNumbers();
@@ -2719,8 +2760,14 @@ function renderArchive(){
   if(archiveFilter.q){const q=archiveFilter.q.toLowerCase();archived=archived.filter(c=>c.name.toLowerCase().includes(q)||String(c.id).includes(q))}
   // Filtrare după an: păstrăm cazurile cu data în anul selectat. Cazurile fără
   // dată parsabilă (grupate la „Necunoscută") rămân vizibile indiferent de an.
-  if(archiveFilter.year)archived=archived.filter(c=>{const d=archiveDate(c);return !d||String(d.getFullYear())===String(archiveFilter.year)});
-  if(archiveFilter.month!=='all')archived=archived.filter(c=>{const d=archiveDate(c);return d&&d.getMonth()===Number(archiveFilter.month)});
+  // Interval explicit (De la / Până la) pe data arhivării — are prioritate față de an/lună.
+  const arFromD=archiveFilter.from?parseShortDate(archiveFilter.from):null;
+  const arToD=archiveFilter.to?parseShortDate(archiveFilter.to):null;
+  const hasRange=arFromD||arToD;
+  if(arFromD)archived=archived.filter(c=>{const d=archiveDate(c);return d&&d>=arFromD});
+  if(arToD)archived=archived.filter(c=>{const d=archiveDate(c);return d&&d<=arToD});
+  if(!hasRange&&archiveFilter.year)archived=archived.filter(c=>{const d=archiveDate(c);return !d||String(d.getFullYear())===String(archiveFilter.year)});
+  if(!hasRange&&archiveFilter.month!=='all')archived=archived.filter(c=>{const d=archiveDate(c);return d&&d.getMonth()===Number(archiveFilter.month)});
   const total=archived.length;
   const finished=archived.filter(c=>c.stage==='terminat').length;
   const shipped=archived.filter(c=>typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis').length;
@@ -2749,7 +2796,7 @@ function renderArchive(){
   const clinicFilterHTML=clinicArchiveId
     ? `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><input class="ar-input" value="${escAttr(archiveClinic?.name||clinicArchiveId)}" disabled></div>`
     : `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${clinicListForFilter.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div>`;
-  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">${archiveTitle}</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div>${clinicArchiveId?'<a href="clinic.html" class="ar-btn">Portal clinică</a>':''}${doctorArchiveName?'<a href="doctor.html" class="ar-btn">Portal medic</a>':''}${exportMenuHTML('arch','Export')}</div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">${clinicArchiveId?'Clinică':'Clinică top'}</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY">${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>${clinicFilterHTML}${scoped?'':`<div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div>`}<div class="ar-filter"><label class="ar-filter-label">Sortare</label><select class="ar-select" id="arS">${[['default','Pe luni'],['date-desc','Dată arhivă ↓ (recent)'],['date-asc','Dată arhivă ↑ (vechi)']].map(([v,l])=>`<option value="${v}" ${archiveFilter.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">${archiveTitle}</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div>${clinicArchiveId?'<a href="clinic.html" class="ar-btn">Portal clinică</a>':''}${doctorArchiveName?'<a href="doctor.html" class="ar-btn">Portal medic</a>':''}${exportMenuHTML('arch','Export')}</div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">${clinicArchiveId?'Clinică':'Clinică top'}</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY"${hasRange?' disabled':''}>${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"${hasRange?' disabled':''}><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">De la</label><input type="date" class="ar-input" id="arFrom" value="${escAttr(archiveFilter.from||'')}"></div><div class="ar-filter"><label class="ar-filter-label">Până la</label><input type="date" class="ar-input" id="arTo" value="${escAttr(archiveFilter.to||'')}"></div>${hasRange?'<div class="ar-filter" style="justify-content:flex-end"><label class="ar-filter-label">&nbsp;</label><button class="ar-btn" id="arRangeClear" type="button">Șterge interval</button></div>':''}${clinicFilterHTML}${scoped?'':`<div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div>`}<div class="ar-filter"><label class="ar-filter-label">Sortare</label><select class="ar-select" id="arS">${[['default','Pe luni'],['date-desc','Dată arhivă ↓ (recent)'],['date-asc','Dată arhivă ↑ (vechi)']].map(([v,l])=>`<option value="${v}" ${archiveFilter.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>`;
   if(!sortedKeys.length){h+='<div style="padding:60px;text-align:center;color:var(--text-dim)">Nicio lucrare terminată sau expediată în filtrul curent.</div>'}
   sortedKeys.forEach(k=>{
     const cs=groups[k];
@@ -2783,6 +2830,9 @@ function renderArchive(){
     renderArchive()
   })});
   document.getElementById('arQ')?.addEventListener('input',e=>{archiveFilter.q=e.target.value;renderArchive()});
+  document.getElementById('arFrom')?.addEventListener('change',e=>{archiveFilter.from=e.target.value;renderArchive()});
+  document.getElementById('arTo')?.addEventListener('change',e=>{archiveFilter.to=e.target.value;renderArchive()});
+  document.getElementById('arRangeClear')?.addEventListener('click',()=>{archiveFilter.from='';archiveFilter.to='';renderArchive()});
   document.querySelectorAll('[data-pdf]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const c=getCase(Number(b.dataset.pdf));if(c)generateFisaPDF(c)}));
   document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();location.href=`case.html?id=${b.dataset.view}`}));
   document.querySelectorAll('.ar-tbl tbody tr').forEach(r=>r.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${r.dataset.caseId}`}));
