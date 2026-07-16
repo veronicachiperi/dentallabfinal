@@ -2754,7 +2754,7 @@ function renderArchive(){
   const statusLabel=c=>c.stage==='anulat'?'Anulată':c.stage==='trimis'?'Expediată':'Terminat';
   if(clinicArchiveId)archived=archived.filter(c=>c.clinic===clinicArchiveId);
   if(doctorArchiveName)archived=archived.filter(c=>normDoctorName(c.doctor)===normDoctorName(doctorArchiveName));
-  else if(archiveFilter.clinic!=='all')archived=archived.filter(c=>c.clinic===archiveFilter.clinic);
+  if(!clinicArchiveId&&archiveFilter.clinic!=='all')archived=archived.filter(c=>c.clinic===archiveFilter.clinic);
   if(archiveFilter.tech!=='all')archived=archived.filter(c=>archiveTech(c)===archiveFilter.tech||Object.keys(c.assignees||{}).some(s=>stageAssignees(c,s).includes(archiveFilter.tech)));
   if(archiveFilter.type!=='all')archived=archived.filter(c=>c.type===archiveFilter.type);
   if(archiveFilter.q){const q=archiveFilter.q.toLowerCase();archived=archived.filter(c=>c.name.toLowerCase().includes(q)||String(c.id).includes(q))}
