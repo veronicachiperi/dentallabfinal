@@ -53,6 +53,65 @@ function withTimeout(promise,ms,label){
 function dateInputValue(v){const d=parseShortDate(v);return d?fmtShortDate(d):''}
 function readDateInput(id){const el=document.getElementById(id);if(!el)return'';const v=el.tagName==='INPUT'?(el.value||''):(el.dataset.val||'');return v?fmtShortDate(parseShortDate(v)||new Date(v)):''}
 function readDateTimeInput(dateId,timeId){const d=readDateInput(dateId);if(!d)return'';const t=(document.getElementById(timeId)?.value||'').trim();return t?d+' '+t:d;}
+
+// === EXPORT GENERIC (CSV / Excel / PDF / JSON) ===============================
+// Instrument unic de export tabelar, folosit peste tot printr-un dropdown.
+function _downloadBlob(blob,filename){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
+function _csvCell(v){return '"'+String(v==null?'':v).replace(/"/g,'""')+'"';}
+function exportTable(fmt,cfg){
+  const headers=cfg.headers||[];const rows=cfg.rows||[];
+  const filename=(cfg.filename||'export').replace(/[^\w\-]+/g,'-');
+  const title=cfg.title||'';
+  if(!rows.length){alert('Nu există date de exportat în filtrul curent.');return;}
+  if(fmt==='csv'){
+    const csv=[headers,...rows].map(r=>r.map(_csvCell).join(',')).join('\n');
+    _downloadBlob(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}),filename+'.csv');
+  }else if(fmt==='json'){
+    const objs=rows.map(r=>{const o={};headers.forEach((h,i)=>o[h]=r[i]);return o;});
+    _downloadBlob(new Blob([JSON.stringify(objs,null,2)],{type:'application/json'}),filename+'.json');
+  }else if(fmt==='excel'){
+    const esc=s=>escHTML(String(s==null?'':s));
+    const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table border="1"><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+esc(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></body></html>';
+    _downloadBlob(new Blob(['﻿'+html],{type:'application/vnd.ms-excel'}),filename+'.xls');
+  }else if(fmt==='pdf'){
+    if(typeof html2pdf==='undefined'){alert('Exportul PDF nu este disponibil pe această pagină.');return;}
+    const esc=s=>escHTML(String(s==null?'':s));
+    const el=document.createElement('div');
+    el.style.cssText='padding:16px;font-family:Arial,Helvetica,sans-serif;color:#111;background:#fff';
+    el.innerHTML=(title?'<h2 style="font-size:16px;margin:0 0 12px">'+esc(title)+'</h2>':'')
+      +'<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>'
+      +headers.map(h=>'<th style="border:1px solid #ccc;padding:6px 8px;background:#f2f4f7;text-align:left">'+esc(h)+'</th>').join('')
+      +'</tr></thead><tbody>'
+      +rows.map(r=>'<tr>'+r.map(c=>'<td style="border:1px solid #e2e5ea;padding:5px 8px">'+esc(c)+'</td>').join('')+'</tr>').join('')
+      +'</tbody></table>';
+    html2pdf().from(el).set({margin:8,filename:filename+'.pdf',image:{type:'jpeg',quality:.95},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},jsPDF:{unit:'mm',format:'a4',orientation:'landscape'}}).save();
+  }
+}
+// HTML pentru dropdown-ul de export. `id` trebuie să fie unic pe pagină.
+function exportMenuHTML(id,label,cls){
+  return `<div class="export-dd" data-export-id="${id}"><button class="btn ${cls||''} export-dd-btn" type="button">${label||'Export'} ▾</button><div class="export-dd-menu" hidden>
+    <button type="button" data-fmt="csv">CSV (.csv)</button>
+    <button type="button" data-fmt="excel">Excel (.xls)</button>
+    <button type="button" data-fmt="pdf">PDF (.pdf)</button>
+    <button type="button" data-fmt="json">JSON (.json)</button>
+  </div></div>`;
+}
+// Leagă dropdown-ul. `getData` = funcție ce întoarce {headers,rows,filename,title}.
+// `extra` = obiect opțional {label:handlerFn} pentru formate/acțiuni suplimentare.
+function attachExportMenu(id,getData,extra){
+  const wrap=document.querySelector(`.export-dd[data-export-id="${id}"]`);if(!wrap)return;
+  const btn=wrap.querySelector('.export-dd-btn');const menu=wrap.querySelector('.export-dd-menu');
+  if(extra){Object.keys(extra).forEach(lbl=>{const b=document.createElement('button');b.type='button';b.textContent=lbl;b.dataset.fmtCustom=lbl;menu.appendChild(b);});}
+  btn.addEventListener('click',e=>{e.stopPropagation();menu.hidden=!menu.hidden;});
+  menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();menu.hidden=true;
+    if(b.dataset.fmtCustom&&extra&&extra[b.dataset.fmtCustom]){extra[b.dataset.fmtCustom]();return;}
+    const data=(typeof getData==='function')?getData():getData;if(!data)return;
+    exportTable(b.dataset.fmt,data);
+  }));
+  document.addEventListener('click',ev=>{if(!wrap.contains(ev.target))menu.hidden=true;});
+}
+
 function formatBytes(bytes){
   if(!bytes)return'0 KB';
   const units=['B','KB','MB','GB'];
@@ -1576,11 +1635,11 @@ function renderClinic(){
             ${clinicFlowHTML(c)}
           </div>
           <div class="tbl-due-bold ${c.late||labDeadlineStatus(c).urgent?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div>
-          <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
             ${a.action!=='note'?`<button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button>`:''}
-            <button class="pc-action note" data-action="edit" data-case-id="${c.id}">Editează</button>
-            <button class="pc-action note" data-action="note" data-case-id="${c.id}">Notă</button>
-            <button class="pc-action note" data-action="menu" data-case-id="${c.id}">Acțiuni ▾</button>
+            <button class="pc-action ghost" data-action="edit" data-case-id="${c.id}">Editează</button>
+            <button class="pc-action note-strong" data-action="note" data-case-id="${c.id}">Notă</button>
+            <button class="pc-action" data-action="menu" data-case-id="${c.id}">Acțiuni ▾</button>
           </div>
         </div>`;
       }).join(''):`<div style="padding:28px;text-align:center;color:var(--text-dim);font-size:13px">Nu există lucrări în această secțiune.</div>`}
@@ -1735,7 +1794,7 @@ function renderDoctor(){
       <select id="docShipClinic">${shipClinicOpts}</select>
       <div class="spacer" style="flex:1"></div>
       <button class="btn" id="docShipReset" type="button">Resetează</button>
-      <button class="btn primary" id="docShipExport" type="button">Export CSV (${sortedVisible.length})</button>
+      ${exportMenuHTML('docShip','Export ('+sortedVisible.length+')','primary')}
     </div>`:'';
 
   root.innerHTML=`<div class="pc-topbar-wrap">
@@ -1814,13 +1873,12 @@ function renderDoctor(){
   document.getElementById('docShipTo')?.addEventListener('change',e=>{doctorShipFilter.to=e.target.value;renderDoctor();});
   document.getElementById('docShipClinic')?.addEventListener('change',e=>{doctorShipFilter.clinic=e.target.value;renderDoctor();});
   document.getElementById('docShipReset')?.addEventListener('click',()=>{doctorShipFilter={from:'',to:'',clinic:'all'};renderDoctor();});
-  document.getElementById('docShipExport')?.addEventListener('click',()=>{
-    const headers=['Caz','Pacient','Clinică','Tip lucrare','Dată expediere','Finală'];
-    const rows=sortedVisible.map(c=>['#'+(c.seq||c.id),c.name,(getClinic(c.clinic)||{}).name||c.clinic||'—',c.type,c.sentDate||c.completedDate||c.finala||'',c.finala||'']);
-    const csv=[headers,...rows].map(r=>r.map(cell=>`"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`expediate-${normDoctorName(doctorName)||'medic'}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
-  });
+  attachExportMenu('docShip',()=>({
+    headers:['Caz','Pacient','Clinică','Tip lucrare','Dată expediere','Finală'],
+    rows:sortedVisible.map(c=>['#'+(c.seq||c.id),c.name,(getClinic(c.clinic)||{}).name||c.clinic||'—',c.type,c.sentDate||c.completedDate||c.finala||'',c.finala||'']),
+    filename:`expediate-${normDoctorName(doctorName)||'medic'}-${new Date().toISOString().slice(0,10)}`,
+    title:`Lucrări expediate · ${doctorName}`
+  }));
   document.getElementById('doctorLogoutBtn')?.addEventListener('click',()=>sbSignOut&&sbSignOut());
 }
 
@@ -2645,12 +2703,16 @@ function renderArchive(){
   if(typeof assignCaseNumbers==='function')assignCaseNumbers();
   const archiveUser=getCurrentUser()||{role:'admin'};
   const clinicArchiveId=archiveUser.role==='clinic'&&archiveUser.clinic?archiveUser.clinic:null;
+  // Medicul vede DOAR arhiva propriilor lucrări (câmpul „Medic" = numele lui).
+  const doctorArchiveName=archiveUser.role==='doctor'?(archiveUser.doctorName||''):null;
+  const scoped=clinicArchiveId||doctorArchiveName;
   if(clinicArchiveId)archiveFilter.clinic=clinicArchiveId;
   let archived=CASES.filter(c=>c.stage==='terminat'||(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis'));
   const archiveDate=c=>parseShortDate(c.sentDate||c.completedDate||c.finala);
   const archiveTech=c=>c.finalTech||c.assignee||primaryStageAssignee(c,getEtapeLabStages(c.type).slice(-1)[0]);
   const statusLabel=c=>c.stage==='anulat'?'Anulată':c.stage==='trimis'?'Expediată':'Terminat';
   if(clinicArchiveId)archived=archived.filter(c=>c.clinic===clinicArchiveId);
+  if(doctorArchiveName)archived=archived.filter(c=>normDoctorName(c.doctor)===normDoctorName(doctorArchiveName));
   else if(archiveFilter.clinic!=='all')archived=archived.filter(c=>c.clinic===archiveFilter.clinic);
   if(archiveFilter.tech!=='all')archived=archived.filter(c=>archiveTech(c)===archiveFilter.tech||Object.keys(c.assignees||{}).some(s=>stageAssignees(c,s).includes(archiveFilter.tech)));
   if(archiveFilter.type!=='all')archived=archived.filter(c=>c.type===archiveFilter.type);
@@ -2680,11 +2742,14 @@ function renderArchive(){
   // Ordinea exactă afișată (sortată sau grupată pe luni) — folosită și la export CSV.
   const orderedArchived=sortedKeys.flatMap(k=>groups[k]||[]);
   const archiveClinic=getClinic(clinicArchiveId);
-  const archiveTitle=clinicArchiveId?`Arhiva ${archiveClinic?.name||'clinicii'}`:'Arhivă lucrări';
+  const archiveTitle=clinicArchiveId?`Arhiva ${archiveClinic?.name||'clinicii'}`:doctorArchiveName?`Arhiva mea · ${doctorArchiveName}`:'Arhivă lucrări';
+  // Pentru medic: doar clinicile în care apar lucrările lui.
+  const doctorClinicIds=doctorArchiveName?[...new Set(CASES.filter(c=>normDoctorName(c.doctor)===normDoctorName(doctorArchiveName)).map(c=>c.clinic).filter(Boolean))]:null;
+  const clinicListForFilter=doctorClinicIds?CLINICS.filter(cl=>doctorClinicIds.includes(cl.id)):CLINICS;
   const clinicFilterHTML=clinicArchiveId
     ? `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><input class="ar-input" value="${escAttr(archiveClinic?.name||clinicArchiveId)}" disabled></div>`
-    : `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${CLINICS.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div>`;
-  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">${archiveTitle}</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div>${clinicArchiveId?'<a href="clinic.html" class="ar-btn">Portal clinică</a>':''}<button class="ar-btn" id="arExport">Export CSV</button></div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">${clinicArchiveId?'Clinică':'Clinică top'}</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY">${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>${clinicFilterHTML}${clinicArchiveId?'':`<div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div>`}<div class="ar-filter"><label class="ar-filter-label">Sortare</label><select class="ar-select" id="arS">${[['default','Pe luni'],['date-desc','Dată arhivă ↓ (recent)'],['date-asc','Dată arhivă ↑ (vechi)']].map(([v,l])=>`<option value="${v}" ${archiveFilter.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>`;
+    : `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${clinicListForFilter.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div>`;
+  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">${archiveTitle}</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div>${clinicArchiveId?'<a href="clinic.html" class="ar-btn">Portal clinică</a>':''}${doctorArchiveName?'<a href="doctor.html" class="ar-btn">Portal medic</a>':''}${exportMenuHTML('arch','Export')}</div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">${clinicArchiveId?'Clinică':'Clinică top'}</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY">${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>${clinicFilterHTML}${scoped?'':`<div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div>`}<div class="ar-filter"><label class="ar-filter-label">Sortare</label><select class="ar-select" id="arS">${[['default','Pe luni'],['date-desc','Dată arhivă ↓ (recent)'],['date-asc','Dată arhivă ↑ (vechi)']].map(([v,l])=>`<option value="${v}" ${archiveFilter.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>`;
   if(!sortedKeys.length){h+='<div style="padding:60px;text-align:center;color:var(--text-dim)">Nicio lucrare terminată sau expediată în filtrul curent.</div>'}
   sortedKeys.forEach(k=>{
     const cs=groups[k];
@@ -2721,13 +2786,12 @@ function renderArchive(){
   document.querySelectorAll('[data-pdf]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const c=getCase(Number(b.dataset.pdf));if(c)generateFisaPDF(c)}));
   document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();location.href=`case.html?id=${b.dataset.view}`}));
   document.querySelectorAll('.ar-tbl tbody tr').forEach(r=>r.addEventListener('click',e=>{if(e.target.tagName==='BUTTON')return;location.href=`case.html?id=${r.dataset.caseId}`}));
-  document.getElementById('arExport')?.addEventListener('click',()=>{
-    const headers=['ID','Pacient','Clinică','Tip','Status','Intrată','Data arhivă','Durată'];
-    const rows=orderedArchived.map(c=>[c.id,c.name,(getClinic(c.clinic)||{name:c.clinic||'—'}).name,c.type,statusLabel(c),c.intrata,c.sentDate||c.completedDate||c.finala,c.durationDays||'']);
-    const csv=[headers,...rows].map(r=>r.map(cell=>`"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`arhiva-${clinicArchiveId||'toate'}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
-  });
+  attachExportMenu('arch',()=>({
+    headers:['ID','Pacient','Clinică','Tip','Status','Intrată','Data arhivă','Durată'],
+    rows:orderedArchived.map(c=>[c.id,c.name,(getClinic(c.clinic)||{name:c.clinic||'—'}).name,c.type,statusLabel(c),c.intrata,c.sentDate||c.completedDate||c.finala,c.durationDays||'']),
+    filename:`arhiva-${doctorArchiveName?normDoctorName(doctorArchiveName):(clinicArchiveId||'toate')}-${new Date().toISOString().slice(0,10)}`,
+    title:archiveTitle
+  }));
 }
 
 // === ECHIPA ===
@@ -3049,7 +3113,7 @@ function renderStats(){
       </tbody></table></div>`:'<div style="color:var(--text-dim);font-size:13px;padding:8px">Nu există încă lucrări cu termeni măsurabili (au nevoie de dată de intrare + finală + tip recunoscut).</div>'}
     </div>`:'';
 
-  root.innerHTML=`<div class="app">${adminSidebarHTML('stats')}<main class="main"><div id="statsExportArea" style="padding:24px"><div class="stats-export-bar" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap"><h1 style="font-size:22px;font-weight:500;margin:0">Statistici</h1><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="statsExportPng" type="button">Export PNG</button><button class="btn" id="statsExportPdf" type="button">Export PDF</button><button class="btn" id="statsExportCsv" type="button">Export CSV</button></div></div>${filterBarHTML}<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px"><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${totalCount}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Total</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:${onTime.late?'#A32D2D':'#1D9E75'}">${onTime.rate}%</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">La timp</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${active}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Active</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:#27500A">${trimise}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Trimise / anulate</div></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:13px;font-weight:500;margin-bottom:4px">Lucrări pe tip (pe filtrul curent)</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">${typeData.length} tipuri de lucrări · ${typeData.reduce((s,t)=>s+t.count,0)} lucrări totale</div><div style="position:relative;height:${Math.max(220,typeData.length*30)}px"><canvas id="chartType"></canvas></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe etapă</div><div style="position:relative;height:240px"><canvas id="chartStage"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe clinică</div><div style="position:relative;height:240px"><canvas id="chartClinic"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Pe tehnician</div><div style="position:relative;height:240px"><canvas id="chartTech"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">La timp vs întârziere</div><div style="position:relative;height:240px"><canvas id="chartOnTime"></canvas></div></div></div>${perClinicHTML}${termsClinicHTML}</div></main></div>`;
+  root.innerHTML=`<div class="app">${adminSidebarHTML('stats')}<main class="main"><div id="statsExportArea" style="padding:24px"><div class="stats-export-bar" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap"><h1 style="font-size:22px;font-weight:500;margin:0">Statistici</h1><div class="export-dd" data-export-id="stats"><button class="btn export-dd-btn" type="button">Export ▾</button><div class="export-dd-menu" hidden><button type="button" data-stx="png">PNG (imagine)</button><button type="button" data-stx="pdf">PDF (pagină)</button><button type="button" data-stx="csv">CSV (.csv)</button><button type="button" data-stx="excel">Excel (.xls)</button><button type="button" data-stx="json">JSON (.json)</button></div></div></div>${filterBarHTML}<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px"><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${totalCount}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Total</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:${onTime.late?'#A32D2D':'#1D9E75'}">${onTime.rate}%</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">La timp</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500">${active}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Active</div></div><div style="background:var(--bg-soft);padding:16px;border-radius:8px"><div style="font-size:24px;font-weight:500;color:#27500A">${trimise}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px">Trimise / anulate</div></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px"><div style="font-size:13px;font-weight:500;margin-bottom:4px">Lucrări pe tip (pe filtrul curent)</div><div style="font-size:11px;color:var(--text-dim);margin-bottom:14px">${typeData.length} tipuri de lucrări · ${typeData.reduce((s,t)=>s+t.count,0)} lucrări totale</div><div style="position:relative;height:${Math.max(220,typeData.length*30)}px"><canvas id="chartType"></canvas></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe etapă</div><div style="position:relative;height:240px"><canvas id="chartStage"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Cazuri pe clinică</div><div style="position:relative;height:240px"><canvas id="chartClinic"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">Pe tehnician</div><div style="position:relative;height:240px"><canvas id="chartTech"></canvas></div></div><div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px"><div style="font-size:13px;font-weight:500;margin-bottom:14px">La timp vs întârziere</div><div style="position:relative;height:240px"><canvas id="chartOnTime"></canvas></div></div></div>${perClinicHTML}${termsClinicHTML}</div></main></div>`;
   setTimeout(()=>{
     if(typeof Chart==='undefined')return;
     Chart.defaults.font.size=11;Chart.defaults.color='#6b7280';
@@ -3067,9 +3131,27 @@ function renderStats(){
     new Chart(document.getElementById('chartTech'),{type:'bar',data:{labels:EMPLOYEES.map(e=>e.name),datasets:[{data:EMPLOYEES.map(e=>techCnt[e.id]),backgroundColor:EMPLOYEES.map(e=>({tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'})[e.id]||'#8B8B8B')}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
     new Chart(document.getElementById('chartOnTime'),{type:'doughnut',data:{labels:['La timp','Întârziate'],datasets:[{data:[onTime.onTime,onTime.late],backgroundColor:['#1D9E75','#A32D2D'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%'}});
   },50);
-  document.getElementById('statsExportPng')?.addEventListener('click',exportStatsPNG);
-  document.getElementById('statsExportPdf')?.addEventListener('click',exportStatsPDF);
-  document.getElementById('statsExportCsv')?.addEventListener('click',exportStatsCSV);
+  (function(){
+    const wrap=document.querySelector('.export-dd[data-export-id="stats"]');if(!wrap)return;
+    const btn=wrap.querySelector('.export-dd-btn');const menu=wrap.querySelector('.export-dd-menu');
+    const statsTableData=()=>{
+      const isAdmin=(getCurrentUser()||{}).role==='admin';
+      const L=_statsLast||{typeData:statsCountsByType(),clinicTypeData:statsTypesByClinic(),periodLabel:'Toate perioadele',clinicLabel:'Toate clinicile'};
+      const rows=[];
+      (L.typeData||[]).forEach(t=>rows.push([L.clinicLabel,t.type,t.count]));
+      if(isAdmin)(L.clinicTypeData||[]).forEach(cl=>cl.types.forEach(t=>rows.push([cl.name,t.type,t.count])));
+      return{headers:['Clinică','Tip lucrare','Număr lucrări'],rows,filename:`statistici-${new Date().toISOString().slice(0,10)}`,title:'Statistici · '+(L.periodLabel||'')+' · '+(L.clinicLabel||'')};
+    };
+    btn.addEventListener('click',e=>{e.stopPropagation();menu.hidden=!menu.hidden;});
+    menu.querySelectorAll('button').forEach(b=>b.addEventListener('click',e=>{
+      e.stopPropagation();menu.hidden=true;const x=b.dataset.stx;
+      if(x==='png')return exportStatsPNG();
+      if(x==='pdf')return exportStatsPDF();
+      if(x==='csv')return exportStatsCSV();
+      exportTable(x,statsTableData());
+    }));
+    document.addEventListener('click',ev=>{if(!wrap.contains(ev.target))menu.hidden=true;});
+  })();
   // Filtre: presets perioadă, interval custom, clinică — re-randează pagina.
   root.querySelectorAll('[data-stats-period]').forEach(b=>b.addEventListener('click',()=>{_statsFilter={..._statsFilter,period:b.dataset.statsPeriod};renderStats();}));
   root.querySelector('#statsApplyRange')?.addEventListener('click',()=>{const f=root.querySelector('#statsFrom')?.value||'';const t=root.querySelector('#statsTo')?.value||'';if(!f&&!t){_statsFilter={..._statsFilter,period:'all',from:'',to:''};}else{_statsFilter={..._statsFilter,period:'custom',from:f,to:t};}renderStats();});

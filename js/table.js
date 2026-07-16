@@ -324,9 +324,10 @@ function handleStageClick(caseId, stageId) {
   if (typeof renderPipeline === 'function') renderPipeline();
 }
 
-function exportCSV() {
+// Construiește setul de date (headers+rows) pentru exportul tabelar al dashboard-ului,
+// în ACEEAȘI ordine ca afișarea (sortare aleasă sau grupare pe luni).
+function _dashExportData() {
   const filtered = applyFilter(CASES);
-  // Exportăm în ACEEAȘI ordine ca afișarea: sortare aleasă sau grupare pe luni.
   const sortMode = (typeof activeFilter !== 'undefined' && activeFilter.sort) || 'default';
   let cases;
   if (sortMode !== 'default') {
@@ -347,6 +348,11 @@ function exportCSV() {
   }
   const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Intrată','Probă','Finală','Prioritate','Dinți','Punți','Implant','Amprentă','Note'];
   const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');const cl=getClinic(c.clinic)||{name:c.clinic||'—',doctor:''};const punti=(c.bridges||[]).filter(g=>g&&g.length>=2).map(g=>g.join('-')).join(' | ');return [c.id, c.name, cl.name, c.doctor || cl.doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), punti, c.implantType || '', c.amprentaType || '', notes]});
+  return { headers, rows, filename: `lucrari-${new Date().toISOString().slice(0,10)}`, title: 'Lucrări' };
+}
+function exportCSV() {
+  if (typeof exportTable === 'function') { exportTable('csv', _dashExportData()); return; }
+  const { headers, rows } = _dashExportData();
   const csv = [headers, ...rows].map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -470,8 +476,17 @@ function setMainView(view) {
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.getElementById('tableView')) return;
   document.querySelectorAll('.view-tab').forEach(tab => tab.addEventListener('click', () => setMainView(tab.dataset.view)));
-  document.getElementById('exportCsvBtn')?.addEventListener('click', exportCSV);
-  document.getElementById('exportPdfBtn')?.addEventListener('click', openExportPdfDialog);
+  (function(){
+    const wrap = document.querySelector('.export-dd[data-export-id="dash"]'); if (!wrap) return;
+    const btn = wrap.querySelector('.export-dd-btn'); const menu = wrap.querySelector('.export-dd-menu');
+    btn.addEventListener('click', e => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+    menu.querySelectorAll('button').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation(); menu.hidden = true; const x = b.dataset.dx;
+      if (x === 'pdf') { openExportPdfDialog(); return; }
+      if (typeof exportTable === 'function') exportTable(x, _dashExportData());
+    }));
+    document.addEventListener('click', ev => { if (!wrap.contains(ev.target)) menu.hidden = true; });
+  })();
   const savedView = localStorage.getItem('dental-lab-view') || 'table';
   if (typeof SUPABASE_CONFIGURED === 'undefined' || !SUPABASE_CONFIGURED) {
     setMainView(savedView);

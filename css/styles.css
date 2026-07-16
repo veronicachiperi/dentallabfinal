@@ -530,6 +530,11 @@ button{font-family:inherit;cursor:pointer}
 .pc-action.ghost{border:1px solid var(--border,#E2E5EA);border-radius:7px;padding:5px 10px;color:var(--text-muted,#555);font-weight:500}
 .pc-action.ghost:hover{background:#F3F4F6;text-decoration:none}
 .pc-row-clinic{font-size:12px;color:var(--text-dim);font-weight:400;margin-top:2px}
+.export-dd{position:relative;display:inline-block}
+.export-dd-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:60;background:#fff;border:1px solid var(--border,#E2E5EA);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:5px;min-width:150px;display:flex;flex-direction:column;gap:2px}
+.export-dd-menu[hidden]{display:none}
+.export-dd-menu button{text-align:left;font-size:13px;padding:8px 10px;border:none;background:transparent;border-radius:6px;cursor:pointer;font-family:inherit;color:var(--text,#1a1a1a)}
+.export-dd-menu button:hover{background:#F3F4F6}
 .pc-ship-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0 2px}
 .pc-ship-bar input[type=date],.pc-ship-bar select{font-size:12px;padding:5px 8px;border:1px solid var(--border,#E2E5EA);border-radius:7px;font-family:inherit;background:#fff}
 .pc-row-grid > div:last-child{text-align:right}

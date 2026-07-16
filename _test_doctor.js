@@ -29,16 +29,16 @@ ok('only doctor cases (2 active rows)',q('.pc-row-grid[data-case-id]').length===
 ok('no other-doctor case (#999)',!html().includes('#999'));
 
 vm.runInContext("history.replaceState({},'','doctor.html?view=shipped');renderDoctor();",ctx);
-ok('export bar present in shipped',/docShipExport/.test(html()));
+ok('export bar present in shipped',/data-export-id="docShip"/.test(html()));
 ok('clinic filter has both clinics',/CL1/.test(html())&&/CL2/.test(html()));
 ok('2 shipped rows before filter',q('.pc-row-grid[data-case-id]').length===2);
 
 vm.runInContext("doctorShipFilter={from:'2026-07-01',to:'2026-07-31',clinic:'all'};renderDoctor();",ctx);
 ok('date filter keeps 1 row',q('.pc-row-grid[data-case-id]').length===1);
-ok('date filter kept #291',html().includes('#291'));
+ok('date filter kept Ana Maria',html().includes('Ana Maria'));
 
 vm.runInContext("doctorShipFilter={from:'',to:'',clinic:'CL1'};renderDoctor();",ctx);
-ok('clinic filter keeps only CL1 shipped (#290)',q('.pc-row-grid[data-case-id]').length===1 && html().includes('#290'));
+ok('clinic filter keeps only CL1 shipped (Pop Ion)',q('.pc-row-grid[data-case-id]').length===1 && html().includes('Pop Ion'));
 
 vm.runInContext("doctorShipFilter={from:'',to:'',clinic:'all'};history.replaceState({},'','doctor.html?view=active');renderDoctor();openDoctorFinalaEdit(2);",ctx);
 const dInput=w.document.getElementById('docFinDate');
