@@ -1620,6 +1620,7 @@ function renderClinic(){
 // === PORTAL MEDIC (doctor) — arhitectură identică portalului clinicii,
 // dar cazurile sunt filtrate după câmpul liber "Medic" (c.doctor). ===
 let doctorSort='default';
+let doctorShipFilter={from:'',to:'',clinic:'all'};
 function renderDoctor(){
   const root=document.getElementById('doctorShell');
   if(!root)return;
@@ -1662,7 +1663,19 @@ function renderDoctor(){
   const viewParam=new URLSearchParams(location.search).get('view')||'active';
   const allowed=['active','notstarted','proba','finished','shipped'];
   const dView=allowed.includes(viewParam)?viewParam:'active';
-  const visibleCases=dView==='notstarted'?notStarted:dView==='proba'?proba:dView==='finished'?finished:dView==='shipped'?shipped:active;
+  // Filtru expediate: interval dată expediere + clinică.
+  const shipDate=c=>parseShortDate(c.sentDate||c.completedDate||c.finala);
+  const shippedFiltered=shipped.filter(c=>{
+    const f=doctorShipFilter;
+    if(f.clinic!=='all'&&c.clinic!==f.clinic)return false;
+    if(f.from||f.to){
+      const d=shipDate(c);if(!d)return false;
+      if(f.from){const df=parseShortDate(f.from);if(df&&d<df)return false;}
+      if(f.to){const dt=parseShortDate(f.to);if(dt&&d>dt)return false;}
+    }
+    return true;
+  });
+  const visibleCases=dView==='notstarted'?notStarted:dView==='proba'?proba:dView==='finished'?finished:dView==='shipped'?shippedFiltered:active;
   const sortedVisible=(()=>{
     if(doctorSort==='default')return visibleCases;
     const field=doctorSort.startsWith('proba')?'probaDate':'finala';
@@ -1710,6 +1723,20 @@ function renderDoctor(){
   const docTabs=isAdminOrTech&&typeof allDoctorNames==='function'
     ? allDoctorNames().map(n=>`<button class="pc-clinic-tab ${normDoctorName(n)===normDoctorName(doctorName)?'on':''}" data-doctor-name="${escHTML(n)}">${escHTML(n)}</button>`).join('')
     : '';
+  // Bară export pentru „Expediate": interval dată + clinică + CSV.
+  const shipClinicIds=[...new Set(shipped.map(c=>c.clinic).filter(Boolean))];
+  const shipClinicOpts=['<option value="all">Toate clinicile</option>']
+    .concat(shipClinicIds.map(id=>`<option value="${escAttr(id)}" ${doctorShipFilter.clinic===id?'selected':''}>${escHTML((getClinic(id)||{}).name||id)}</option>`)).join('');
+  const exportBar=dView==='shipped'?`<div class="pc-ship-bar">
+      <span class="pc-sort-label">Interval expediere:</span>
+      <input type="date" id="docShipFrom" value="${escAttr(doctorShipFilter.from)}">
+      <span style="color:var(--text-dim)">–</span>
+      <input type="date" id="docShipTo" value="${escAttr(doctorShipFilter.to)}">
+      <select id="docShipClinic">${shipClinicOpts}</select>
+      <div class="spacer" style="flex:1"></div>
+      <button class="btn" id="docShipReset" type="button">Resetează</button>
+      <button class="btn primary" id="docShipExport" type="button">Export CSV (${sortedVisible.length})</button>
+    </div>`:'';
 
   root.innerHTML=`<div class="pc-topbar-wrap">
     <div class="pc-topbar">
@@ -1735,15 +1762,17 @@ function renderDoctor(){
       ${dStat('shipped',shipped.length,'Expediate','shipped')}
     </div>
     <div class="pc-sort-row"><span class="pc-sort-label">Sortare:</span>${sortChips}</div>
+    ${exportBar}
     <div class="pc-table">
       <div class="pc-row-grid head">
         <div>Caz</div><div>Pacient</div><div>Tip lucrare</div><div>Etapă</div><div>Finală</div><div></div>
       </div>
       ${sortedVisible.length?sortedVisible.map(c=>{
         const a=ra(c);const pct=dPct(c);const stageName=publicStageName(c);
+        const clName=(getClinic(c.clinic)||{}).name||c.clinic||'';
         return `<div class="pc-row-grid ${isCaseNotStarted(c)?'not-started':''} ${isCaseAtProba(c)?'proba-row':''} ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}" data-case-id="${c.id}">
           <div class="tbl-num">#${c.seq||c.id}</div>
-          <div class="tbl-name">${c.name}</div>
+          <div><div class="tbl-name">${escHTML(c.name)}</div>${clName?`<div class="pc-row-clinic">${escHTML(clName)}</div>`:''}</div>
           <div><span class="tag">${c.type}</span></div>
           <div class="pc-progress-cell">
             <div class="pc-progress-bar"><div class="pc-progress-fill" style="width:${pct}%"></div></div>
@@ -1751,10 +1780,11 @@ function renderDoctor(){
             ${dFlowHTML(c)}
           </div>
           <div class="tbl-due-bold ${c.late||labDeadlineStatus(c).urgent?'late':''}">${c.late?'restant':shortDayMonTime(c.finala)}</div>
-          <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
             ${a.action!=='note'?`<button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button>`:''}
-            <button class="pc-action note" data-action="note" data-case-id="${c.id}">Notă</button>
-            <button class="pc-action note" data-action="menu" data-case-id="${c.id}">Acțiuni ▾</button>
+            <button class="pc-action ghost" data-action="finala" data-case-id="${c.id}">Dată finală</button>
+            <button class="pc-action note-strong" data-action="note" data-case-id="${c.id}">Notă</button>
+            <button class="pc-action" data-action="menu" data-case-id="${c.id}">Acțiuni ▾</button>
           </div>
         </div>`;
       }).join(''):`<div style="padding:28px;text-align:center;color:var(--text-dim);font-size:13px">Nu există lucrări în această secțiune.</div>`}
@@ -1771,6 +1801,7 @@ function renderDoctor(){
     b.addEventListener('click',async e=>{
       e.stopPropagation();
       if(b.dataset.action==='menu'){const c=getCase(Number(b.dataset.caseId));if(c)openClinicCaseMenu(b,c);return;}
+      if(b.dataset.action==='finala'){openDoctorFinalaEdit(Number(b.dataset.caseId));return;}
       b.disabled=true;
       try{await handleClinicAction(b.dataset.action,Number(b.dataset.caseId));renderDoctor();}
       finally{b.disabled=false}
@@ -1779,7 +1810,41 @@ function renderDoctor(){
   root.querySelectorAll('.pc-sort-chip[data-doctor-sort]').forEach(b=>{
     b.addEventListener('click',()=>{doctorSort=b.dataset.doctorSort;renderDoctor();});
   });
+  document.getElementById('docShipFrom')?.addEventListener('change',e=>{doctorShipFilter.from=e.target.value;renderDoctor();});
+  document.getElementById('docShipTo')?.addEventListener('change',e=>{doctorShipFilter.to=e.target.value;renderDoctor();});
+  document.getElementById('docShipClinic')?.addEventListener('change',e=>{doctorShipFilter.clinic=e.target.value;renderDoctor();});
+  document.getElementById('docShipReset')?.addEventListener('click',()=>{doctorShipFilter={from:'',to:'',clinic:'all'};renderDoctor();});
+  document.getElementById('docShipExport')?.addEventListener('click',()=>{
+    const headers=['Caz','Pacient','Clinică','Tip lucrare','Dată expediere','Finală'];
+    const rows=sortedVisible.map(c=>['#'+(c.seq||c.id),c.name,(getClinic(c.clinic)||{}).name||c.clinic||'—',c.type,c.sentDate||c.completedDate||c.finala||'',c.finala||'']);
+    const csv=[headers,...rows].map(r=>r.map(cell=>`"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`expediate-${normDoctorName(doctorName)||'medic'}-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);
+  });
   document.getElementById('doctorLogoutBtn')?.addEventListener('click',()=>sbSignOut&&sbSignOut());
+}
+
+// Medicul poate schimba data și ora finală (se sincronizează live către laborator).
+function openDoctorFinalaEdit(caseId){
+  const c=getCase(caseId);if(!c)return;
+  const dVal=c.finala?fmtShortDate(parseShortDate(c.finala)||new Date()):'';
+  const tVal=extractTime(c.finala||'');
+  openModal(`<div class="modal-head"><div class="modal-title">Dată finală · ${escHTML(c.name)}</div><button class="modal-close" type="button">×</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:12.5px;color:var(--text-muted)">Alege noua dată de livrare finală. Laboratorul vede modificarea imediat.</div>
+      <div class="field"><label>Data finală</label><input type="date" id="docFinDate" value="${escAttr(dVal)}"></div>
+      <div class="field"><label>Ora (opțional)</label><input type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" id="docFinTime" value="${escAttr(tVal)}"></div>
+    </div>
+    <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="docFinSave" type="button">Salvează</button></div>`);
+  document.getElementById('docFinSave')?.addEventListener('click',()=>{
+    const d=(document.getElementById('docFinDate')?.value||'').trim();
+    const t=(document.getElementById('docFinTime')?.value||'').trim();
+    if(!d){alert('Alege o dată.');return;}
+    if(t&&!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)){alert('Ora trebuie să fie în format HH:MM (24h).');return;}
+    const dd=parseShortDate(d);if(!dd){alert('Dată invalidă.');return;}
+    updateCaseField(c,'finala',fmtShortDate(dd)+(t?' '+t:''));
+    closeModal();renderDoctor();
+  });
 }
 
 // === LINKURI VIEW-ONLY (private, doar citire) ==================

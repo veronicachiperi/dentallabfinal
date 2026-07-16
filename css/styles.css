@@ -525,6 +525,13 @@ button{font-family:inherit;cursor:pointer}
 .pc-action:hover{text-decoration:underline}
 .pc-action.primary{color:#3B82F6;font-weight:500}
 .pc-action.note{color:#3B82F6}
+.pc-action.note-strong{background:#EEF3FF;color:#2563EB;border:1px solid #C7D7FE;border-radius:7px;padding:5px 12px;font-weight:600}
+.pc-action.note-strong:hover{background:#DCE7FF;text-decoration:none}
+.pc-action.ghost{border:1px solid var(--border,#E2E5EA);border-radius:7px;padding:5px 10px;color:var(--text-muted,#555);font-weight:500}
+.pc-action.ghost:hover{background:#F3F4F6;text-decoration:none}
+.pc-row-clinic{font-size:12px;color:var(--text-dim);font-weight:400;margin-top:2px}
+.pc-ship-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0 2px}
+.pc-ship-bar input[type=date],.pc-ship-bar select{font-size:12px;padding:5px 8px;border:1px solid var(--border,#E2E5EA);border-radius:7px;font-family:inherit;background:#fff}
 .pc-row-grid > div:last-child{text-align:right}
 .pc-quick-row{padding:14px 24px 0}
 .pc-quick-card{display:flex;align-items:center;justify-content:space-between;gap:18px;background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;color:var(--text);text-decoration:none}
