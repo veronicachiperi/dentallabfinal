@@ -933,6 +933,20 @@ function refreshDerivedNotifications(){
         time:'acum'
       }));
     }
+    // Notă nouă de la medic — anunță laboratorul (admin/tehnician).
+    const _notes=typeof _parseNotes==='function'?_parseNotes(c.notes):[];
+    _notes.forEach(nt=>{
+      if(nt.role!=='doctor'||!nt.ts)return;
+      if(Date.now()-nt.ts>21*86400000)return; // doar notele din ultimele 21 de zile
+      pushNotification({
+        id:`note-${c.id}-${nt.ts}`,
+        caseId:c.id,
+        targetUserId:null,
+        kind:'Notă de la medic',
+        text:`${c.name}: ${String(nt.text||'').slice(0,90)}`,
+        time:new Date(nt.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','')
+      });
+    });
   });
   // Probele de azi urcă în capul listei, sortate după oră (HH:MM ascending).
   NOTIFICATIONS.sort((a,b)=>{
@@ -1868,6 +1882,7 @@ function renderDoctor(){
       ${sortedVisible.length?sortedVisible.map(c=>{
         const a=ra(c);const pct=dPct(c);const stageName=publicStageName(c);
         const clName=(getClinic(c.clinic)||{}).name||c.clinic||'';
+        const nCount=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).length;
         return `<div class="pc-row-grid ${isCaseNotStarted(c)?'not-started':''} ${isCaseAtProba(c)?'proba-row':''} ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}" data-case-id="${c.id}">
           <div class="tbl-num">#${c.seq||c.id}</div>
           <div><div class="tbl-name">${escHTML(c.name)}</div>${clName?`<div class="pc-row-clinic">${escHTML(clName)}</div>`:''}</div>
@@ -1881,7 +1896,7 @@ function renderDoctor(){
           <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;align-items:center">
             ${a.action!=='note'?`<button class="pc-action ${a.cls}" data-action="${a.action}" data-case-id="${c.id}">${a.label}</button>`:''}
             <button class="pc-action ghost" data-action="finala" data-case-id="${c.id}">Dată finală</button>
-            <button class="pc-action note-strong" data-action="note" data-case-id="${c.id}">Notă</button>
+            <button class="pc-action note-strong" data-action="note" data-case-id="${c.id}">Notă${nCount?` (${nCount})`:''}</button>
             <button class="pc-action" data-action="menu" data-case-id="${c.id}">Acțiuni ▾</button>
           </div>
         </div>`;
@@ -2105,11 +2120,14 @@ async function handleClinicAction(action,caseId){
       const txt=document.getElementById('clinicNoteInput')?.value.trim();if(!txt)return;
       const user=getCurrentUser()||{name:'Clinică',initials:'CL'};
       const notes=_parseNotes(c.notes);
-      notes.push({text:txt,author:user.name,initials:user.initials,ts:Date.now()});
+      notes.push({text:txt,author:user.name,initials:user.initials,role:user.role||'',ts:Date.now()});
       c.notes=JSON.stringify(notes);
       overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};
       saveOverrides(overrides);_syncCase(c);closeModal();
       auditCaseAction(c,'add_note',{note:txt.slice(0,140)});
+      if(typeof updateMainSummary==='function')updateMainSummary();
+      if(typeof renderClinic==='function')renderClinic();
+      if(typeof renderDoctor==='function')renderDoctor();
     });
   } else if(action==='edit'){
     openClinicCaseEdit(caseId);
@@ -4241,7 +4259,8 @@ function _normalizeNote(n,fallback){
   const author=String((typeof n==='object'&&n?.author)||fb.name||'Utilizator').trim()||fb.name;
   const initials=String((typeof n==='object'&&n?.initials)||fb.initials||'?').trim()||fb.initials;
   const ts=Number(typeof n==='object'?n?.ts:0)||0;
-  return{text,author,initials,ts};
+  const role=String((typeof n==='object'&&n?.role)||'').trim();
+  return{text,author,initials,ts,role};
 }
 function _parseNotes(raw){
   if(!raw)return[];
