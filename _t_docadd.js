@@ -46,6 +46,16 @@ setTimeout(()=>{
   // apare in portalul medicului
   vm.runInContext('renderDoctor();',ctx);
   ok('cazul nou apare in portal',/Test Pacient/.test(w.document.getElementById('doctorShell').innerHTML));
+  // marcaj creator
+  ok('caz nou marcat createdByRole=doctor',added&&added.createdByRole==='doctor');
+  ok('caz nou are createdTs',added&&!!added.createdTs);
+  // laboratorul primeste notificare "Caz nou de la medic"
+  vm.runInContext('window.getCurrentUser=function(){return{role:"admin",name:"Lab",initials:"LB"};};getCurrentUser=window.getCurrentUser;refreshDerivedNotifications();',ctx);
+  const nc=vm.runInContext('NOTIFICATIONS.filter(n=>n.kind==="Caz nou de la medic")',ctx);
+  ok('exista notificare "Caz nou de la medic"',nc.length===1);
+  ok('notificarea trimite la cazul nou',nc[0]&&nc[0].caseId===added.id);
+  ok('notificarea necitita',nc[0]&&nc[0].unread===true);
+  ok('notificarea contine numele pacientului',nc[0]&&nc[0].text.includes('Test Pacient'));
   console.log('\nRESULT',pass,'passed,',fail,'failed');
   process.exit(fail?1:0);
 },50);

@@ -933,6 +933,17 @@ function refreshDerivedNotifications(){
         time:'acum'
       }));
     }
+    // Caz nou adăugat de medic — anunță laboratorul (admin/tehnician).
+    if(c.createdByRole==='doctor'&&c.createdTs&&Date.now()-Number(c.createdTs)<=21*86400000){
+      pushNotification({
+        id:`newcase-${c.id}`,
+        caseId:c.id,
+        targetUserId:null,
+        kind:'Caz nou de la medic',
+        text:`${c.name} · ${c.type||''}${c.doctor?' — '+c.doctor:''}`,
+        time:new Date(Number(c.createdTs)).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','')
+      });
+    }
     // Notă nouă de la medic — anunță laboratorul (admin/tehnician).
     const _notes=typeof _parseNotes==='function'?_parseNotes(c.notes):[];
     _notes.forEach(nt=>{
@@ -3554,7 +3565,7 @@ function openNewCaseModal(defClinic,defDoctor){
     rememberWorkType(type);
     const caseClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
     const ncNoProba=document.getElementById('ncNoProba')?.checked||false;
-    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:lockedDoctorName||document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,bridges:bridgesOut,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true};
+    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:lockedDoctorName||document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,bridges:bridgesOut,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true,createdByRole:(getCurrentUser()||{}).role||'',createdTs:Date.now()};
     if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
     nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
     nc.priority=computePriority(nc);
@@ -3567,7 +3578,8 @@ function openNewCaseModal(defClinic,defDoctor){
     else CASES.unshift(nc);
     // Punțile nu au coloană dedicată în DB — le păstrăm prin stratul local de
     // overrides, keyed pe id-ul cazului (supraviețuiește reload-ului).
-    if(bridgesOut.length){overrides.edits=overrides.edits||{};overrides.edits[nc.id]={...overrides.edits[nc.id],bridges:bridgesOut};saveOverrides(overrides);}
+    // Marcaj creator + punți — păstrate prin stratul local de overrides (supraviețuiesc reload-ului).
+    overrides.edits=overrides.edits||{};overrides.edits[nc.id]={...overrides.edits[nc.id],createdByRole:nc.createdByRole,createdTs:nc.createdTs,...(bridgesOut.length?{bridges:bridgesOut}:{})};saveOverrides(overrides);
     if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
     updateMainSummary();
     if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
