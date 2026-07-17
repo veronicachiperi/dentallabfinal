@@ -1842,6 +1842,7 @@ function renderDoctor(){
         <div class="pc-clinic-sub">Portalul medicului · ${active.length} active · ${shipped.length} expediate</div>
       </div>
       <div class="spacer"></div>
+      <button class="btn primary" id="doctorNewCaseBtn" type="button">+ Caz nou</button>
       <a href="arhiva.html" class="btn">Arhivă</a>
       ${isAdminOrTech?'<a href="dashboard.html" class="btn">Vezi panoul echipei</a>':''}
       ${isDoctorUser?'<button class="btn" id="doctorLogoutBtn" style="color:#A32D2D;border-color:#A32D2D">Deconectare</button>':''}
@@ -1914,6 +1915,7 @@ function renderDoctor(){
   document.getElementById('docMainFrom')?.addEventListener('change',e=>{doctorMainFilter.from=e.target.value;renderDoctor();});
   document.getElementById('docMainTo')?.addEventListener('change',e=>{doctorMainFilter.to=e.target.value;renderDoctor();});
   document.getElementById('docMainReset')?.addEventListener('click',()=>{doctorMainFilter={from:'',to:''};renderDoctor();});
+  document.getElementById('doctorNewCaseBtn')?.addEventListener('click',()=>openNewCaseModal(null,doctorName));
   attachExportMenu('docShip',()=>({
     headers:['Caz','Pacient','Clinică','Tip lucrare','Dată expediere','Finală'],
     rows:sortedVisible.map(c=>['#'+(c.seq||c.id),c.name,(getClinic(c.clinic)||{}).name||c.clinic||'—',c.type,c.sentDate||c.completedDate||c.finala||'',c.finala||'']),
@@ -3319,11 +3321,16 @@ function openModal(content, modalClass=''){
 function closeModal(){document.querySelector('.modal-overlay')?.remove();document.removeEventListener('keydown',escClose)}
 function escClose(e){if(e.key==='Escape')closeModal()}
 
-function openNewCaseModal(defClinic){
+function openNewCaseModal(defClinic,defDoctor){
   const user=getCurrentUser();
   const lockedClinicId=(user&&user.role==='clinic'&&user.clinic)?user.clinic:null;
-  const selectedClinicId=lockedClinicId||defClinic||'UNKNOWN';
-  const visibleClinics=lockedClinicId?(CLINICS.filter(c=>c.id===lockedClinicId).length?CLINICS.filter(c=>c.id===lockedClinicId):[{id:lockedClinicId,name:user.name||lockedClinicId}]):CLINICS;
+  // Medicul își adaugă propriile cazuri: numele lui e blocat, clinicile sunt limitate la ale lui.
+  const lockedDoctorName=(user&&user.role==='doctor')?(user.doctorName||''):null;
+  const prefillDoctor=lockedDoctorName||defDoctor||'';
+  const doctorClinicIds=lockedDoctorName?[...new Set(CASES.filter(c=>normDoctorName(c.doctor)===normDoctorName(lockedDoctorName)).map(c=>c.clinic).filter(Boolean))]:null;
+  const doctorClinics=(doctorClinicIds&&doctorClinicIds.length)?CLINICS.filter(c=>doctorClinicIds.includes(c.id)):null;
+  const selectedClinicId=lockedClinicId||defClinic||(doctorClinics&&doctorClinics[0]?doctorClinics[0].id:'UNKNOWN');
+  const visibleClinics=lockedClinicId?(CLINICS.filter(c=>c.id===lockedClinicId).length?CLINICS.filter(c=>c.id===lockedClinicId):[{id:lockedClinicId,name:user.name||lockedClinicId}]):(doctorClinics||CLINICS);
   const unknownClinicOption=lockedClinicId?'':`<option value="UNKNOWN" ${selectedClinicId==='UNKNOWN'?'selected':''}>UNKNOWN</option>`;
   const cOpts=unknownClinicOption+visibleClinics.map(c=>`<option value="${escAttr(c.id)}" ${c.id===selectedClinicId?'selected':''}>${escHTML(c.name||c.id||'Clinică')}</option>`).join('');
   const tOpts=allWorkTypes().map(t=>`<option value="${escAttr(t)}">${escHTML(t)}</option>`).join('');
@@ -3349,7 +3356,7 @@ function openNewCaseModal(defClinic){
           <section class="wizard-panel">
             <div class="wizard-panel-title">Pacient & clinică</div>
             <div class="field-row"><div class="field"><label>Nume</label><input id="ncLast" placeholder="Nume pacient" autofocus></div><div class="field"><label>Prenume</label><input id="ncFirst" placeholder="Prenume"></div></div>
-            <div class="field-row"><div class="field"><label>Clinică</label><select id="ncClinic" ${lockedClinicId?'disabled':''}>${cOpts}</select>${lockedClinicId?`<input type="hidden" id="ncClinicLocked" value="${escAttr(lockedClinicId)}">`:''}</div><div class="field"><label>Medic</label><input id="ncDoctor"></div></div>
+            <div class="field-row"><div class="field"><label>Clinică</label><select id="ncClinic" ${lockedClinicId?'disabled':''}>${cOpts}</select>${lockedClinicId?`<input type="hidden" id="ncClinicLocked" value="${escAttr(lockedClinicId)}">`:''}</div><div class="field"><label>Medic</label><input id="ncDoctor" value="${escAttr(prefillDoctor)}" ${lockedDoctorName?'disabled':''}></div></div>
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Lucrare</div>
@@ -3529,7 +3536,7 @@ function openNewCaseModal(defClinic){
     rememberWorkType(type);
     const caseClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
     const ncNoProba=document.getElementById('ncNoProba')?.checked||false;
-    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,bridges:bridgesOut,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true};
+    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:lockedDoctorName||document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,bridges:bridgesOut,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true};
     if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
     nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
     nc.priority=computePriority(nc);
@@ -3546,6 +3553,7 @@ function openNewCaseModal(defClinic){
     if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
     updateMainSummary();
     if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
+    if(typeof renderDoctor==='function')renderDoctor();
   });
 }
 
