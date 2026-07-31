@@ -2122,23 +2122,39 @@ async function handleClinicAction(action,caseId){
   } else if(action==='note'){
     openModal(`<div class="modal-head"><div class="modal-title">Notă · ${escHTML(c.name)}</div><button class="modal-close" type="button">×</button></div>
       <div class="modal-body">
-        <div class="note-list" id="clinicNoteList" style="margin-bottom:14px;max-height:200px;overflow-y:auto">${_parseNotes(c.notes).slice().reverse().map(n=>`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div class="note-text">${escHTML(n.text)}</div></div></div>`).join('')||'<div style="color:var(--text-dim);font-size:12px">Nicio notă.</div>'}
+        <div class="note-list" id="clinicNoteList" style="margin-bottom:14px;max-height:200px;overflow-y:auto">${_parseNotes(c.notes).slice().reverse().map(_noteItemHTML).join('')||'<div style="color:var(--text-dim);font-size:12px">Nicio notă.</div>'}
         </div>
-        <div class="field"><label>Notă nouă</label><textarea id="clinicNoteInput" rows="3" placeholder="Scrie o notă..."></textarea></div>
+        <div class="field"><label>Notă nouă</label><textarea id="clinicNoteInput" rows="3" placeholder="Scrie o notă... (poți lipi și un screenshot cu Ctrl+V)"></textarea>
+          <div class="note-photo-pending-list" id="clinicNotePhotoPreview" hidden></div>
+          <div class="note-composer-actions"><input type="file" accept="image/*" multiple hidden id="clinicNotePhotoInput"><button type="button" class="btn-mini" id="clinicNotePhotoBtn">+ Foto</button></div>
+        </div>
       </div>
       <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="clinicNoteSave" type="button">Trimite</button></div>`);
-    document.getElementById('clinicNoteSave')?.addEventListener('click',()=>{
-      const txt=document.getElementById('clinicNoteInput')?.value.trim();if(!txt)return;
+    const clinicPhotoPicker=wireNotePhotoPicker({
+      textarea:document.getElementById('clinicNoteInput'),
+      photoBtn:document.getElementById('clinicNotePhotoBtn'),
+      fileInput:document.getElementById('clinicNotePhotoInput'),
+      previewEl:document.getElementById('clinicNotePhotoPreview'),
+    });
+    function commitClinicNote(txt,photos){
       const user=getCurrentUser()||{name:'Clinică',initials:'CL'};
       const notes=_parseNotes(c.notes);
-      notes.push({text:txt,author:user.name,initials:user.initials,role:user.role||'',ts:Date.now()});
+      notes.push({text:txt,author:user.name,initials:user.initials,role:user.role||'',ts:Date.now(),photos});
       c.notes=JSON.stringify(notes);
       overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};
       saveOverrides(overrides);_syncCase(c);closeModal();
-      auditCaseAction(c,'add_note',{note:txt.slice(0,140)});
+      auditCaseAction(c,'add_note',{note:txt.slice(0,140),photos:photos.length});
       if(typeof updateMainSummary==='function')updateMainSummary();
       if(typeof renderClinic==='function')renderClinic();
       if(typeof renderDoctor==='function')renderDoctor();
+    }
+    document.getElementById('clinicNoteSave')?.addEventListener('click',()=>{
+      const saveBtn=document.getElementById('clinicNoteSave');
+      const txt=document.getElementById('clinicNoteInput')?.value.trim()||'';
+      if(!txt&&!clinicPhotoPicker.hasPending())return;
+      if(!clinicPhotoPicker.hasPending()){commitClinicNote(txt,[]);return;}
+      if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Se trimite...';}
+      clinicPhotoPicker.upload(c.id).then(photos=>commitClinicNote(txt,photos));
     });
   } else if(action==='edit'){
     openClinicCaseEdit(caseId);
@@ -2206,14 +2222,14 @@ function openClinicCaseEdit(caseId){
     ? `<select id="ceClinic">${clinicOptions}</select>`
     : `<input value="${escAttr(clinic.name)}" disabled>`;
   const typeOptions=allWorkTypes().map(t=>`<option value="${escAttr(t)}" ${t===c.type?'selected':''}>${escHTML(t)}</option>`).join('');
-  const colorOptions=COLORS_VITA.map(x=>`<option ${x===c.color?'selected':''}>${x}</option>`).join('');
+  const colorOptions=`<option value="" ${c.color?'':'selected'}>— fără culoare —</option>`+COLORS_VITA.map(x=>`<option ${x===c.color?'selected':''}>${x}</option>`).join('');
   const amprentaOptions=['Silicon','Polieter','Alginat','Digital','STL'].map(x=>`<option ${x===c.amprentaType?'selected':''}>${x}</option>`).join('');
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
   const toothType=n=>((c.teeth||[]).find(t=>Number(t.n)===Number(n))||{}).type||'';
   const tooth=n=>`<button type="button" class="tooth-cell ${toothType(n)}" data-tooth="${n}">${n}</button>`;
   const renderRow=arr=>arr.slice(0,8).map(tooth).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tooth).join('');
-  const notesText=_parseNotes(c.notes).map(n=>n.text).join('\n');
+  const notesText=_parseNotes(c.notes).map(n=>n.text).join(NOTE_BLOCK_SEP);
   openModal(`<div class="modal-head"><div><div class="modal-kicker">${editorKicker}</div><div class="modal-title">Editează cazul · #${c.seq||c.id}</div></div><button class="modal-close" type="button">×</button></div>
     <div class="modal-body modal-body-compact">
       <div class="field-row ${canEditWorkflow?'three':''}"><div class="field"><label>Pacient</label><input id="ceName" value="${safeVal(c.name)}" autofocus></div><div class="field"><label>Clinică</label>${clinicField}</div>${stageField}</div>
@@ -2235,7 +2251,7 @@ function openClinicCaseEdit(caseId){
         <div class="tc-form-wrap" id="clinicEditToothChart"><div class="tc-row-form">${renderRow(upper)}</div><div class="tc-row-form">${renderRow(lower)}</div></div>
         <div class="tc-summary" id="clinicEditToothSummary"></div>
       </div>
-      <div class="field"><label>Note / indicații speciale</label><textarea id="ceNotes" rows="4">${escHTML(notesText)}</textarea></div>
+      <div class="field"><label>Note / indicații speciale</label><textarea id="ceNotes" rows="4">${escHTML(notesText)}</textarea>${_parseNotes(c.notes).length>1?'<div class="field-hint">Fiecare notă e despărțită de un rând cu „───”. Nu șterge aceste rânduri dacă vrei să păstrezi notele ca intrări separate — poți totuși scrie text pe mai multe rânduri în interiorul unei note.</div>':''}</div>
     </div>
     <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="ceSave" type="button">Salvează modificările</button></div>`, 'modal-wide');
 
@@ -2399,7 +2415,7 @@ function renderCaseDetail(){
   const actionsMenu=isClinicView
     ?`<button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`
     :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button><button type="button" data-case-action="block">Blochează temporar</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`;
-  root.innerHTML=`<div class="case-shell ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.seq||c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-muted);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}${bridgeSummaryHTML(c.bridges)}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă..."></textarea><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=typeof displayLabStageStatus==='function'?displayLabStageStatus(c,sId):(c.stageStatuses?.[sId]||'neincepute');const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" ${isClinicView?'':'style="cursor:pointer" title="Click pentru a schimba starea"'}><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
+  root.innerHTML=`<div class="case-shell ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz #${c.seq||c.id}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div><div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-muted);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}${bridgeSummaryHTML(c.bridges)}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă... (poți lipi și un screenshot cu Ctrl+V)"></textarea><div class="note-photo-pending-list" id="noteInputPhotoPreview" hidden></div><div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:8px"><div><input type="file" accept="image/*" multiple hidden id="noteInputPhotoInput"><button type="button" class="btn-mini" id="noteInputPhotoBtn">+ Foto</button></div><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=typeof displayLabStageStatus==='function'?displayLabStageStatus(c,sId):(c.stageStatuses?.[sId]||'neincepute');const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" ${isClinicView?'':'style="cursor:pointer" title="Click pentru a schimba starea"'}><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
   applyBridgeConnectors(root.querySelector('.tc-display-wrap'),c.bridges);
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
   document.querySelector('.fisa-fmeta')?.replaceChildren(document.createTextNode('A5 · alb-negru'));
@@ -2543,19 +2559,36 @@ function renderCaseDetail(){
     const list=document.getElementById('noteList');if(!list)return;
     const notes=parseNotes(c.notes);
     if(!notes.length){list.innerHTML='<div style="color:var(--text-dim);font-size:12px;padding:8px 0">Nicio notă adăugată.</div>';return}
-    list.innerHTML=notes.slice().reverse().map(n=>`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div class="note-text">${escHTML(n.text)}</div></div></div>`).join('');
+    list.innerHTML=notes.slice().reverse().map(_noteItemHTML).join('');
   }
   renderNoteList();
-  document.getElementById('addNoteBtn')?.addEventListener('click',()=>{
-    const ta=document.getElementById('noteInput');const txt=ta.value.trim();if(!txt)return;
+  const noteInputPhotoPicker=wireNotePhotoPicker({
+    textarea:document.getElementById('noteInput'),
+    photoBtn:document.getElementById('noteInputPhotoBtn'),
+    fileInput:document.getElementById('noteInputPhotoInput'),
+    previewEl:document.getElementById('noteInputPhotoPreview'),
+  });
+  function commitDetailNote(txt,photos){
+    const ta=document.getElementById('noteInput');
+    const btn=document.getElementById('addNoteBtn');
     const user=getCurrentUser()||{name:'Utilizator',initials:'?'};
     const notes=parseNotes(c.notes);
-    notes.push({text:txt,author:user.name,initials:user.initials,ts:Date.now()});
+    notes.push({text:txt,author:user.name,initials:user.initials,ts:Date.now(),photos});
     c.notes=JSON.stringify(notes);
     overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],notes:c.notes};
     saveOverrides(overrides);_syncCase(c);
-    auditCaseAction(c,'add_note',{note:txt.slice(0,140)});
-    ta.value='';renderNoteList();
+    auditCaseAction(c,'add_note',{note:txt.slice(0,140),photos:photos.length});
+    if(ta)ta.value='';
+    noteInputPhotoPicker.reset();renderNoteList();
+    if(btn){btn.disabled=false;btn.textContent='Trimite';}
+  }
+  document.getElementById('addNoteBtn')?.addEventListener('click',()=>{
+    const btn=document.getElementById('addNoteBtn');
+    const ta=document.getElementById('noteInput');const txt=ta.value.trim();
+    if(!txt&&!noteInputPhotoPicker.hasPending())return;
+    if(!noteInputPhotoPicker.hasPending()){commitDetailNote(txt,[]);return;}
+    if(btn){btn.disabled=true;btn.textContent='Se trimite...';}
+    noteInputPhotoPicker.upload(c.id).then(photos=>commitDetailNote(txt,photos));
   });
 }
 
@@ -3363,7 +3396,7 @@ function openNewCaseModal(defClinic,defDoctor){
   const unknownClinicOption=lockedClinicId?'':`<option value="UNKNOWN" ${selectedClinicId==='UNKNOWN'?'selected':''}>UNKNOWN</option>`;
   const cOpts=unknownClinicOption+visibleClinics.map(c=>`<option value="${escAttr(c.id)}" ${c.id===selectedClinicId?'selected':''}>${escHTML(c.name||c.id||'Clinică')}</option>`).join('');
   const tOpts=allWorkTypes().map(t=>`<option value="${escAttr(t)}">${escHTML(t)}</option>`).join('');
-  const colOpts=COLORS_VITA.map(c=>`<option>${c}</option>`).join('');
+  const colOpts=`<option value="" selected>— fără culoare —</option>`+COLORS_VITA.map(c=>`<option>${c}</option>`).join('');
   const today=new Date();const pD=new Date(today);pD.setDate(today.getDate()+5);const fD=new Date(today);fD.setDate(today.getDate()+7);
   const upper=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
   const lower=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
@@ -3557,8 +3590,11 @@ function openNewCaseModal(defClinic,defDoctor){
     ncRefreshBridges();
   }
   document.getElementById('ncSave').addEventListener('click',async()=>{
+    const saveBtn=document.getElementById('ncSave');
+    if(saveBtn.disabled)return; // guard: previne dublu-click / dublu-submit → cazuri duplicate
     const last=document.getElementById('ncLast').value.trim();const first=document.getElementById('ncFirst').value.trim();
     if(!last&&!first){document.getElementById('ncLast').style.borderColor='#A32D2D';return}
+    saveBtn.disabled=true;
     const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
     const bridgesOut=normalizeBridges(bridges);
     const type=document.getElementById('ncType').value.trim()||allWorkTypes()[0]||'Lucrare';
@@ -3569,7 +3605,7 @@ function openNewCaseModal(defClinic,defDoctor){
     if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
     nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
     nc.priority=computePriority(nc);
-    if(SUPABASE_CONFIGURED){try{await sbSaveCase(nc)}catch(e){alert('Eroare la salvare: '+e.message);return}}
+    if(SUPABASE_CONFIGURED){try{await sbSaveCase(nc)}catch(e){alert('Eroare la salvare: '+e.message);saveBtn.disabled=false;return}}
     else{persistNewCase(nc)}
     // Guard against the realtime INSERT event adding the same row first
     // (race condition that produced a duplicate row with default values).
@@ -4267,12 +4303,24 @@ function _noteFallbackUser(){
 function _normalizeNote(n,fallback){
   const fb=fallback||_noteFallbackUser();
   const text=String((typeof n==='string'?n:n?.text)||'').trim();
-  if(!text)return null;
+  const photos=Array.isArray(n?.photos)?n.photos.map(_normalizeNotePhoto).filter(Boolean):[];
+  if(!text&&!photos.length)return null;
   const author=String((typeof n==='object'&&n?.author)||fb.name||'Utilizator').trim()||fb.name;
   const initials=String((typeof n==='object'&&n?.initials)||fb.initials||'?').trim()||fb.initials;
   const ts=Number(typeof n==='object'?n?.ts:0)||0;
   const role=String((typeof n==='object'&&n?.role)||'').trim();
-  return{text,author,initials,ts,role};
+  return{text,author,initials,ts,role,photos};
+}
+function _normalizeNotePhoto(p){
+  if(!p)return null;
+  const url=String(p.url||'').trim();
+  const dataUrl=String(p.dataUrl||'').trim();
+  if(!url&&!dataUrl)return null;
+  const out={name:String(p.name||'').trim()||'imagine.jpg'};
+  if(url)out.url=url;
+  if(dataUrl)out.dataUrl=dataUrl;
+  if(p.path)out.path=String(p.path);
+  return out;
 }
 function _parseNotes(raw){
   if(!raw)return[];
@@ -4286,6 +4334,11 @@ function _parseNotes(raw){
     return text?[_normalizeNote({text,author:fb.name,initials:fb.initials,ts:0},fb)]:[];
   }
 }
+// Notele existente sunt afișate într-un singur textarea (editare în bloc, din
+// modalul "Editare completă"). Blocurile sunt despărțite de NOTE_BLOCK_SEP —
+// NU de un simplu "\n" — ca o notă cu text pe mai multe rânduri (paragrafe)
+// să nu fie ruptă în mai multe notițe separate la salvare.
+const NOTE_BLOCK_SEP='\n\n───\n\n';
 function notesFromTextArea(text,existingRaw){
   const fb=_noteFallbackUser();
   const existing=_parseNotes(existingRaw);
@@ -4295,13 +4348,107 @@ function notesFromTextArea(text,existingRaw){
     if(!byText.has(key))byText.set(key,[]);
     byText.get(key).push(n);
   });
-  const notes=String(text||'').split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
-    const bucket=byText.get(line);
-    return bucket&&bucket.length?bucket.shift():_normalizeNote({text:line,author:fb.name,initials:fb.initials,ts:Date.now()},fb);
+  const notes=String(text||'').split(NOTE_BLOCK_SEP).map(x=>x.trim()).filter(Boolean).map(block=>{
+    const bucket=byText.get(block);
+    return bucket&&bucket.length?bucket.shift():_normalizeNote({text:block,author:fb.name,initials:fb.initials,ts:Date.now()},fb);
   }).filter(Boolean);
+  // Notele nemodificate (inclusiv cele care aveau doar fotografii, fără text
+  // în textarea) își păstrează fotografiile — le readăugăm dacă lipsesc din
+  // rezultat (nu au echivalent pe text, deci nu ajung în byText/blocks).
+  existing.forEach(n=>{
+    if((n.photos||[]).length&&!notes.includes(n))notes.push(n);
+  });
   return notes.length?JSON.stringify(notes):'';
 }
-function _noteItemHTML(n){return`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div class="note-text">${escHTML(n.text)}</div></div></div>`}
+function notePhotoSrc(p){return p&&(p.url||p.dataUrl)||''}
+function _notePhotosHTML(photos){
+  if(!photos||!photos.length)return'';
+  return `<div class="note-photos">${photos.map(p=>`<img class="note-photo-thumb" src="${escAttr(notePhotoSrc(p))}" alt="${escAttr(p.name||'imagine')}" title="${escAttr(p.name||'')}">`).join('')}</div>`;
+}
+function _noteItemHTML(n){return`<div class="note-item"><div class="note-author">${escHTML(n.initials||'?')}</div><div style="flex:1"><div class="note-meta"><b>${escHTML(n.author||'—')}</b>${n.ts?' · '+new Date(n.ts).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div>${n.text?`<div class="note-text">${escHTML(n.text)}</div>`:''}${_notePhotosHTML(n.photos)}</div></div>`}
+document.addEventListener('click',e=>{
+  const thumb=e.target.closest('.note-photo-thumb');
+  if(!thumb)return;
+  const ov=document.createElement('div');
+  ov.className='note-photo-lightbox';
+  ov.innerHTML=`<img src="${escAttr(thumb.src)}" alt=""><button type="button" class="note-photo-lightbox-close" aria-label="Închide">×</button>`;
+  ov.addEventListener('click',()=>ov.remove());
+  document.body.appendChild(ov);
+});
+function _readImageAsDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result);
+    r.onerror=()=>reject(r.error||new Error('Nu am putut citi imaginea.'));
+    r.readAsDataURL(file);
+  });
+}
+// Încarcă o fotografie de notă în Supabase Storage (bucket note-photos).
+// Dacă Supabase nu e configurat sau upload-ul eșuează, cade pe stocare
+// locală (base64) ca să nu blocheze utilizatorul — doar nu se va sincroniza
+// pe alte dispozitive până la configurarea Supabase.
+async function uploadNotePhoto(caseId,file){
+  if(!file)return null;
+  if(!/^image\//.test(file.type||'')){alert(`"${file.name}" nu este o imagine.`);return null;}
+  if(typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED&&typeof sbUploadNotePhoto==='function'){
+    try{
+      const up=await sbUploadNotePhoto(caseId,file);
+      if(up)return{url:up.url,path:up.path,name:file.name};
+    }catch(e){
+      console.warn('[note-photo] upload eșuat, cad pe stocare locală:',e?.message||e);
+    }
+  }
+  try{
+    const dataUrl=await _readImageAsDataURL(file);
+    return{dataUrl,name:file.name};
+  }catch(e){
+    alert('Nu am putut atașa imaginea "'+(file.name||'')+'".');
+    return null;
+  }
+}
+// Leagă un buton "+ Foto" + input ascuns + lipire din clipboard (Ctrl+V) de
+// un textarea de notă. Întoarce funcții pentru a citi/goli fotografiile
+// atașate (dar încă netrimise) ale notei curente.
+function wireNotePhotoPicker({textarea,photoBtn,fileInput,previewEl}){
+  let pending=[];
+  function renderPreview(){
+    if(!previewEl)return;
+    if(!pending.length){previewEl.innerHTML='';previewEl.hidden=true;return}
+    previewEl.hidden=false;
+    previewEl.innerHTML=pending.map((f,i)=>`<span class="note-photo-pending"><img src="${escAttr(f.previewUrl)}" alt=""><button type="button" data-remove-pending="${i}" aria-label="Elimină">×</button></span>`).join('');
+    previewEl.querySelectorAll('[data-remove-pending]').forEach(b=>b.addEventListener('click',()=>{
+      const i=Number(b.dataset.removePending);
+      URL.revokeObjectURL(pending[i].previewUrl);
+      pending.splice(i,1);
+      renderPreview();
+    }));
+  }
+  function addFiles(files){
+    Array.from(files||[]).forEach(f=>{
+      if(!/^image\//.test(f.type||''))return;
+      pending.push({file:f,previewUrl:URL.createObjectURL(f)});
+    });
+    renderPreview();
+  }
+  photoBtn?.addEventListener('click',()=>fileInput?.click());
+  fileInput?.addEventListener('change',()=>{addFiles(fileInput.files);fileInput.value='';});
+  textarea?.addEventListener('paste',e=>{
+    const items=Array.from(e.clipboardData?.items||[]).filter(it=>it.kind==='file'&&/^image\//.test(it.type));
+    if(!items.length)return;
+    e.preventDefault();
+    addFiles(items.map(it=>it.getAsFile()).filter(Boolean));
+  });
+  return{
+    hasPending:()=>pending.length>0,
+    async upload(caseId){
+      const files=pending.map(p=>p.file);
+      const results=[];
+      for(const f of files){const up=await uploadNotePhoto(caseId,f);if(up)results.push(up);}
+      return results;
+    },
+    reset(){pending.forEach(p=>URL.revokeObjectURL(p.previewUrl));pending=[];renderPreview();}
+  };
+}
 
 function openInlineNoteEditor(anchor, c) {
   document.querySelectorAll('.inline-note-editor').forEach(p => p.remove());
@@ -4310,28 +4457,42 @@ function openInlineNoteEditor(anchor, c) {
   pop.className = 'inline-note-editor';
   pop.innerHTML = `<div class="inline-pop-header">Notițe · ${escHTML(c.name)}</div>
     ${existing.length?`<div class="note-list" style="max-height:140px;overflow-y:auto;margin-bottom:8px">${existing.slice().reverse().map(_noteItemHTML).join('')}</div>`:''}
-    <textarea class="inline-note-input" rows="3" placeholder="Adaugă o notă nouă..."></textarea>
-    <div class="inline-note-actions"><button class="btn" type="button" data-note-cancel>Anulează</button><button class="btn primary" type="button" data-note-save>Trimite</button></div>`;
+    <textarea class="inline-note-input" rows="3" placeholder="Adaugă o notă nouă... (Ctrl+V pentru screenshot)"></textarea>
+    <div class="note-photo-pending-list" data-inline-note-photo-preview hidden></div>
+    <div class="inline-note-actions"><input type="file" accept="image/*" multiple hidden data-inline-note-photo-input><button class="btn-mini" type="button" data-inline-note-photo-btn>+ Foto</button><button class="btn" type="button" data-note-cancel>Anulează</button><button class="btn primary" type="button" data-note-save>Trimite</button></div>`;
   document.body.appendChild(pop);
   positionFloatingUnder(pop, anchor.closest('td') || anchor);
   const ta=pop.querySelector('.inline-note-input');
   ta.focus();
+  const inlinePhotoPicker=wireNotePhotoPicker({
+    textarea:ta,
+    photoBtn:pop.querySelector('[data-inline-note-photo-btn]'),
+    fileInput:pop.querySelector('[data-inline-note-photo-input]'),
+    previewEl:pop.querySelector('[data-inline-note-photo-preview]'),
+  });
   pop.querySelector('[data-note-cancel]')?.addEventListener('click',()=>pop.remove());
-  pop.querySelector('[data-note-save]')?.addEventListener('click',()=>{
-    const txt=ta.value.trim();if(!txt)return;
+  function commitInlineNote(txt,photos){
     const user=getCurrentUser()||{name:'Utilizator',initials:'?'};
     const notes=_parseNotes(c.notes);
-    notes.push({text:txt,author:user.name,initials:user.initials,ts:Date.now()});
+    notes.push({text:txt,author:user.name,initials:user.initials,ts:Date.now(),photos});
     c.notes=JSON.stringify(notes);
     overrides.edits=overrides.edits||{};
     overrides.edits[c.id]=overrides.edits[c.id]||{};
     overrides.edits[c.id].notes=c.notes;
     saveOverrides(overrides);
     _syncCase(c);
-    auditCaseAction(c,'add_note',{note:txt.slice(0,140)});
+    auditCaseAction(c,'add_note',{note:txt.slice(0,140),photos:photos.length});
     pop.remove();
     if(typeof renderTable==='function')renderTable();
     if(typeof renderPipeline==='function')renderPipeline();
+  }
+  pop.querySelector('[data-note-save]')?.addEventListener('click',()=>{
+    const saveBtn=pop.querySelector('[data-note-save]');
+    const txt=ta.value.trim();
+    if(!txt&&!inlinePhotoPicker.hasPending())return;
+    if(!inlinePhotoPicker.hasPending()){commitInlineNote(txt,[]);return;}
+    if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Se trimite...';}
+    inlinePhotoPicker.upload(c.id).then(photos=>commitInlineNote(txt,photos));
   });
   setTimeout(()=>{
     const close=ev=>{if(!pop.contains(ev.target)&&ev.target!==anchor){pop.remove();document.removeEventListener('click',close)}};

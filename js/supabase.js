@@ -248,6 +248,30 @@ async function sbDeleteCase(caseId, caseName) {
   await _sbLog('delete_case', 'case', String(caseId), { patient: caseName });
 }
 
+// ── Note photos (Supabase Storage) ─────────────────────────────
+// Bucket "note-photos" trebuie creat o singură dată — vezi
+// migrare-note-photos-storage.sql pentru SQL-ul de creare + politici RLS.
+const NOTE_PHOTOS_BUCKET = 'note-photos';
+async function sbUploadNotePhoto(caseId, file) {
+  if (!SUPABASE_CONFIGURED) return null;
+  const extMatch = /\.([a-z0-9]+)$/i.exec(file.name || '');
+  const ext = (extMatch ? extMatch[1] : 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const rand = Math.random().toString(36).slice(2, 8);
+  const path = `${caseId}/${Date.now()}_${rand}.${ext}`;
+  const { error } = await _client().storage.from(NOTE_PHOTOS_BUCKET).upload(path, file, {
+    contentType: file.type || 'image/jpeg',
+    upsert: false,
+  });
+  if (error) throw error;
+  const { data } = _client().storage.from(NOTE_PHOTOS_BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, path };
+}
+async function sbDeleteNotePhoto(path) {
+  if (!SUPABASE_CONFIGURED || !path) return;
+  const { error } = await _client().storage.from(NOTE_PHOTOS_BUCKET).remove([path]);
+  if (error) console.warn('[supabase] deleteNotePhoto:', error.message);
+}
+
 // ── Activity log ─────────────────────────────────────────────
 async function _sbLog(action, entityType, entityId, details) {
   if (!SUPABASE_CONFIGURED || !_session) return;
