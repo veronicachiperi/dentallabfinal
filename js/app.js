@@ -547,28 +547,60 @@ function auditCaseChangesFrom(c,before,action,details={}){
   if(changes.length)auditCaseAction(c,action,{...details,changes});
 }
 
-// === AVATAR COLOR PICKER ===
+// === AVATAR (culoare + poză de profil) ===
 const AVATAR_PASTEL_COLORS=['#F28B82','#FBBC04','#34A853','#4285F4','#AA46BB','#FA7B17','#3DC4BF','#E8C27A','#B39DDB','#80DEEA','#A5D6A7','#FFAB91'];
 function getUserAvatarColor(userId){return localStorage.getItem('dental-lab-av-color-'+(userId||'me'))||'';}
 function setUserAvatarColor(userId,color){localStorage.setItem('dental-lab-av-color-'+(userId||'me'),color);}
+// Randează conținutul unui cerc de avatar: poza (dacă există) sau inițialele.
+// Folosit peste tot unde apare un avatar — sidebar, topbar, echipă etc.
+function avatarInnerHTML(u){
+  const url=u&&u.avatarUrl;
+  if(url)return`<img class="av-photo" src="${escAttr(url)}" alt="">`;
+  return escHTML((u&&u.initials)||'?');
+}
 function applyUserAvatarColor(){
   const user=getCurrentUser()||{id:'admin'};
-  const color=getUserAvatarColor(user.id);
-  if(!color)return;
   const spAv=document.getElementById('spAvatar');
   const topAv=document.getElementById('userAvatar');
+  if(user.avatarUrl){
+    // Poza acoperă cercul — nu suprapunem o culoare de fundal peste ea.
+    if(spAv){spAv.style.background='';spAv.style.color='';}
+    if(topAv){topAv.style.background='';topAv.style.color='';}
+    return;
+  }
+  const color=getUserAvatarColor(user.id);
+  if(!color)return;
   if(spAv){spAv.style.background=color;spAv.style.color='white';}
   if(topAv){topAv.style.background=color;topAv.style.color='white';}
+}
+// Încarcă poza de profil — pe Supabase Storage (bucket "avatars") dacă e
+// configurat, altfel cade pe stocare locală (base64, doar pe acest
+// dispozitiv) ca să nu blocheze utilizatorul.
+async function uploadAvatarPhoto(file){
+  if(!file)return null;
+  if(!/^image\//.test(file.type||'')){alert(`"${file.name}" nu este o imagine.`);return null;}
+  if(typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED&&typeof sbUploadAvatar==='function'){
+    try{const url=await sbUploadAvatar(file);if(url)return url;}
+    catch(e){console.warn('[avatar] upload eșuat, cad pe stocare locală:',e?.message||e);}
+  }
+  try{return await fileToDataURL(file)}
+  catch(e){alert('Nu am putut încărca poza.');return null;}
 }
 function openAvatarColorPicker(){
   const existing=document.getElementById('avatarColorPicker');
   if(existing){existing.remove();return;}
   const user=getCurrentUser()||{id:'admin'};
   const current=getUserAvatarColor(user.id);
+  const hasPhoto=Boolean(user.avatarUrl);
   const picker=document.createElement('div');
   picker.id='avatarColorPicker';
   picker.className='avatar-color-picker';
-  picker.innerHTML=AVATAR_PASTEL_COLORS.map(c=>`<div class="av-swatch${c===current?' selected':''}" data-color="${c}" style="background:${c}" title="${c}"></div>`).join('');
+  picker.innerHTML=`<div class="av-swatches">${AVATAR_PASTEL_COLORS.map(c=>`<div class="av-swatch${c===current?' selected':''}" data-color="${c}" style="background:${c}" title="${c}"></div>`).join('')}</div>
+<div class="av-photo-actions">
+  <button type="button" class="av-photo-btn" id="avUploadPhotoBtn">${hasPhoto?'Schimbă poza':'Încarcă poză'}</button>
+  ${hasPhoto?'<button type="button" class="av-photo-btn av-photo-remove" id="avRemovePhotoBtn">Șterge poza</button>':''}
+  <input type="file" id="avPhotoInput" accept="image/*" hidden>
+</div>`;
   picker.querySelectorAll('.av-swatch').forEach(sw=>{
     sw.addEventListener('click',e=>{
       e.stopPropagation();
@@ -577,6 +609,38 @@ function openAvatarColorPicker(){
       applyUserAvatarColor();
       picker.remove();
     });
+  });
+  picker.querySelector('#avUploadPhotoBtn')?.addEventListener('click',e=>{
+    e.stopPropagation();
+    picker.querySelector('#avPhotoInput')?.click();
+  });
+  const fileInput=picker.querySelector('#avPhotoInput');
+  fileInput?.addEventListener('click',e=>e.stopPropagation());
+  fileInput?.addEventListener('change',async e=>{
+    e.stopPropagation();
+    const file=e.target.files&&e.target.files[0];
+    if(!file)return;
+    const btn=picker.querySelector('#avUploadPhotoBtn');
+    if(btn){btn.disabled=true;btn.textContent='Se încarcă…';}
+    const url=await uploadAvatarPhoto(file);
+    if(url){
+      const u=getCurrentUser()||{};
+      u.avatarUrl=url;
+      setCurrentUser(u);
+      applySidebarRoles();
+    }
+    picker.remove();
+  });
+  picker.querySelector('#avRemovePhotoBtn')?.addEventListener('click',async e=>{
+    e.stopPropagation();
+    if(typeof SUPABASE_CONFIGURED!=='undefined'&&SUPABASE_CONFIGURED&&typeof sbRemoveAvatar==='function'){
+      try{await sbRemoveAvatar()}catch(err){console.warn('[avatar] ștergere eșuată:',err?.message||err);}
+    }
+    const u=getCurrentUser()||{};
+    u.avatarUrl='';
+    setCurrentUser(u);
+    applySidebarRoles();
+    picker.remove();
   });
   const spAv=document.getElementById('spAvatar');
   if(spAv){
@@ -593,13 +657,13 @@ function applySidebarRoles(){
   const roleKey=user.role==='technician'?'tech':user.role;
   // Topbar avatar
   const av=document.getElementById('userAvatar');
-  if(av){av.textContent=user.initials;av.title=user.name;}
+  if(av){av.innerHTML=avatarInnerHTML(user);av.title=user.name;}
   // Sidebar profile block
   const spAv=document.getElementById('spAvatar');
   const spName=document.getElementById('spName');
   const spRole=document.getElementById('spRole');
   const roleLabel={admin:'Administrator',technician:'Tehnician',tech:'Tehnician',clinic:'Clinică'}[user.role]||user.role;
-  if(spAv){spAv.textContent=user.initials;spAv.onclick=e=>{e.stopPropagation();openAvatarColorPicker();};}
+  if(spAv){spAv.innerHTML=avatarInnerHTML(user);spAv.onclick=e=>{e.stopPropagation();openAvatarColorPicker();};}
   if(spName)spName.textContent=user.name;
   if(spRole)spRole.textContent=roleLabel;
   applyUserAvatarColor();
@@ -648,7 +712,7 @@ ${item('doctor.html','Portal')}
 ${item('arhiva.html','Arhivă')}
 <div class="sidebar-profile" id="sidebarProfile">
   <div class="sp-user">
-    <div class="sp-avatar" id="spAvatar">${escHTML(u.initials||'?')}</div>
+    <div class="sp-avatar" id="spAvatar">${avatarInnerHTML(u)}</div>
     <div class="sp-info">
       <div class="sp-name" id="spName">${escHTML(u.name||'')}</div>
       <div class="sp-role" id="spRole">${roleLabel}</div>
@@ -666,7 +730,7 @@ ${item('arhiva.html','Arhivă')}
 ${item(`termeni.html?view=clinic&clinic=${encodeURIComponent(u.clinic||'')}`,'Termeni')}
 <div class="sidebar-profile" id="sidebarProfile">
   <div class="sp-user">
-    <div class="sp-avatar" id="spAvatar">${escHTML(u.initials||'?')}</div>
+    <div class="sp-avatar" id="spAvatar">${avatarInnerHTML(u)}</div>
     <div class="sp-info">
       <div class="sp-name" id="spName">${escHTML(u.name||'')}</div>
       <div class="sp-role" id="spRole">${roleLabel}</div>
@@ -691,7 +755,7 @@ ${role!=='clinic'?item('termeni.html','Termeni'):''}
 ${role==='admin'?item('activity.html','Activitate'):''}
 <div class="sidebar-profile" id="sidebarProfile">
   <div class="sp-user">
-    <div class="sp-avatar" id="spAvatar">${escHTML(u.initials||'?')}</div>
+    <div class="sp-avatar" id="spAvatar">${avatarInnerHTML(u)}</div>
     <div class="sp-info">
       <div class="sp-name" id="spName">${escHTML(u.name||'')}</div>
       <div class="sp-role" id="spRole">${roleLabel}</div>
@@ -2882,6 +2946,14 @@ function renderArchive(){
       const statusTone=c.stage==='anulat'?{bg:'rgba(122,31,31,.14)',color:'#7A1F1F'}:c.stage==='trimis'?{bg:'rgba(39,80,10,.15)',color:'#27500A'}:{bg:'rgba(29,158,117,.15)',color:'#1D9E75'};
       return `<tr data-case-id="${c.id}"><td><span class="tbl-num">#${c.seq||c.id}</span></td><td><span class="tbl-name">${c.name}</span></td><td><span class="tbl-clinic">${(getClinic(c.clinic)||{name:c.clinic||'—'}).name}</span></td><td><span class="tag">${c.type}</span></td><td><span class="tbl-pill" style="background:${statusTone.bg};color:${statusTone.color}">${statusLabel(c)}</span></td><td style="min-width:180px">${techHTML}</td><td><span class="tbl-due">${c.intrata}</span></td><td><span class="tbl-due-bold">${c.sentDate||c.completedDate||c.finala}</span></td><td><span class="tbl-due">${c.durationDays||'—'} zile</span></td><td><button class="ar-action-icon" data-pdf="${c.id}">PDF</button> <button class="ar-action-icon" data-view="${c.id}">Vezi</button></td></tr>`}).join('')}</tbody></table></div>`;
   });
+  const doneTasks=(!scoped&&typeof QUICK_TASKS!=='undefined')?QUICK_TASKS.filter(t=>t.done).sort((a,b)=>new Date(b.completed_at||0)-new Date(a.completed_at||0)):[];
+  if(!scoped){
+    h+=`<div class="ar-month-section">Task-uri rapide finalizate · ${doneTasks.length}</div>`;
+    h+=doneTasks.length
+      ? `<div class="ar-tbl-wrap"><table class="ar-tbl"><thead><tr><th>Task</th><th>Creat de</th><th>Creat la</th><th>Finalizat de</th><th>Finalizat la</th></tr></thead><tbody>${doneTasks.map(t=>`<tr><td>${escHTML(t.text)}</td><td>${escHTML(t.created_by||'—')}</td><td>${_todoFmt(t.created_at)}</td><td>${escHTML(t.completed_by||'—')}</td><td>${_todoFmt(t.completed_at)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div style="padding:20px;text-align:center;color:var(--text-dim)">Niciun task rapid finalizat încă.</div>';
+    h+=`<div style="padding:14px 20px">${exportMenuHTML('qtasks','Descarcă task-uri')}</div>`;
+  }
   h+=`</div></main></div>`;
   root.innerHTML=h;
   ['arQ','arY','arM','arC','arT','arS'].forEach(id=>{document.getElementById(id)?.addEventListener('change',()=>{
@@ -2893,7 +2965,13 @@ function renderArchive(){
     archiveFilter.sort=document.getElementById('arS')?.value||'default';
     renderArchive()
   })});
-  document.getElementById('arQ')?.addEventListener('input',e=>{archiveFilter.q=e.target.value;renderArchive()});
+  document.getElementById('arQ')?.addEventListener('input',e=>{
+    archiveFilter.q=e.target.value;
+    const pos=e.target.selectionStart;
+    renderArchive();
+    const freshQ=document.getElementById('arQ');
+    if(freshQ){freshQ.focus();freshQ.setSelectionRange(pos,pos);}
+  });
   document.getElementById('arFrom')?.addEventListener('change',e=>{archiveFilter.from=e.target.value;renderArchive()});
   document.getElementById('arTo')?.addEventListener('change',e=>{archiveFilter.to=e.target.value;renderArchive()});
   document.getElementById('arRangeClear')?.addEventListener('click',()=>{archiveFilter.from='';archiveFilter.to='';renderArchive()});
@@ -2906,6 +2984,14 @@ function renderArchive(){
     filename:`arhiva-${doctorArchiveName?normDoctorName(doctorArchiveName):(clinicArchiveId||'toate')}-${new Date().toISOString().slice(0,10)}`,
     title:archiveTitle
   }));
+  if(!scoped){
+    attachExportMenu('qtasks',()=>({
+      headers:['Task','Creat de','Creat la','Finalizat de','Finalizat la'],
+      rows:doneTasks.map(t=>[t.text,t.created_by||'',_todoFmt(t.created_at),t.completed_by||'',_todoFmt(t.completed_at)]),
+      filename:`task-uri-rapide-finalizate-${new Date().toISOString().slice(0,10)}`,
+      title:'Task-uri rapide finalizate'
+    }));
+  }
 }
 
 // === ECHIPA ===
@@ -3092,7 +3178,7 @@ function renderEchipa(){
   const isAdmin=(getCurrentUser()||{}).role==='admin';
   const TECH_COLORS={tchi:'#5B8DEF',vcel:'#534AB7',ikar:'#185FA5',acur:'#D85A30',vgra:'#1D9E75',amoi:'#B07D2A',avar:'#444441'};
   const TECH_ROLES={design:'Designer CAD',cam:'Tehnician CAM',ceramica:'Tehnician ceramică',prelucrare:'Tehnician prelucrare'};
-  root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Echipa</h1>${isAdmin?'<button class="btn primary" id="addEmpBtn" type="button">+ Angajat nou</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')).length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id]||{active:0,done:0,late:0};const stageColor=e.color||TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0">${escHTML(e.initials)}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div>${isAdmin?`<div id="accountStatusTools" style="margin-top:22px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi angajați</div><div style="font-size:12px;color:var(--text-muted)">Se verifică...</div></div>`:''}${isAdmin?`<div id="doctorAccountTools" style="margin-top:16px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi medici</div><div style="font-size:12px;color:var(--text-muted)">Se verifică...</div></div>`:''}</div></main></div>`;
+  root.innerHTML=`<div class="app">${adminSidebarHTML('echipa')}<main class="main"><div style="padding:24px;max-width:900px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:22px;font-weight:500;margin:0">Echipa</h1>${isAdmin?'<button class="btn primary" id="addEmpBtn" type="button">+ Angajat nou</button>':''}</div><div style="font-size:13px;color:var(--text-muted);margin-bottom:24px">${EMPLOYEES.length} tehnicieni · ${CASES.filter(c=>!(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis')).length} lucrări active</div><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${EMPLOYEES.map(e=>{const st=stats[e.id]||{active:0,done:0,late:0};const stageColor=e.color||TECH_COLORS[e.id]||'#8B8B8B';const role=TECH_ROLES[e.stage]||'Tehnician';return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;display:flex;align-items:center;gap:14px"><div style="width:44px;height:44px;border-radius:50%;background:${stageColor};color:white;display:flex;align-items:center;justify-content:center;font-weight:500;font-size:14px;flex-shrink:0;overflow:hidden">${avatarInnerHTML(e)}</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">${escHTML(e.name)}</div><div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px">${role}</div></div><div style="display:flex;gap:14px;font-size:11px;text-align:center"><div><div style="font-size:18px;font-weight:500;color:#BA7517">${st.active}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">activ</div></div><div><div style="font-size:18px;font-weight:500;color:#1D9E75">${st.done}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">terminat</div></div>${st.late?`<div><div style="font-size:18px;font-weight:500;color:#A32D2D">${st.late}</div><div style="color:var(--text-dim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px">restant</div></div>`:''}</div></div>`}).join('')}</div>${isAdmin?`<div id="accountStatusTools" style="margin-top:22px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi angajați</div><div style="font-size:12px;color:var(--text-muted)">Se verifică...</div></div>`:''}${isAdmin?`<div id="doctorAccountTools" style="margin-top:16px;background:var(--bg);border:0.5px solid var(--border);border-radius:8px;padding:14px"><div style="font-size:13px;font-weight:500;margin-bottom:10px">Conturi medici</div><div style="font-size:12px;color:var(--text-muted)">Se verifică...</div></div>`:''}</div></main></div>`;
   document.getElementById('addEmpBtn')?.addEventListener('click',openAddEmployeeModal);
   if(isAdmin&&SUPABASE_CONFIGURED){
     (async()=>{

@@ -51,6 +51,7 @@ async function sbRequireAuth() {
       clinic:     _profile.clinic_id  || null,
       employeeId: _profile.employee_id || null,
       doctorName: _profile.doctor_name || null,
+      avatarUrl:  _profile.avatar_url  || '',
     });
   }
   return _profile;
@@ -86,6 +87,8 @@ async function sbSignIn(username, password) {
     role:       _profile.role,
     clinic:     _profile.clinic_id  || null,
     employeeId: _profile.employee_id || null,
+    doctorName: _profile.doctor_name || null,
+    avatarUrl:  _profile.avatar_url  || '',
   });
   // Log successful sign-in
   await _sbLog('login', 'auth', _profile.username, { role: _profile.role });
@@ -272,6 +275,55 @@ async function sbDeleteNotePhoto(path) {
   if (error) console.warn('[supabase] deleteNotePhoto:', error.message);
 }
 
+// ── Avatar (poză de profil, Supabase Storage) ──────────────────
+// Bucket "avatars" trebuie creat o singură dată — vezi
+// migrare-avatar-poza-profil.sql pentru SQL-ul de creare + politici RLS.
+// Fiecare user încarcă poza proprie, într-un folder numit după uid-ul lui
+// din Auth, ca RLS să poată garanta că nu poate scrie peste poza altcuiva.
+const AVATARS_BUCKET = 'avatars';
+async function sbUploadAvatar(file) {
+  if (!SUPABASE_CONFIGURED || !_session) return null;
+  const extMatch = /\.([a-z0-9]+)$/i.exec(file.name || '');
+  const ext = (extMatch ? extMatch[1] : 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `${_session.user.id}/avatar.${ext}`;
+  const { error } = await _client().storage.from(AVATARS_BUCKET).upload(path, file, {
+    contentType: file.type || 'image/jpeg',
+    upsert: true,
+  });
+  if (error) throw error;
+  const { data } = _client().storage.from(AVATARS_BUCKET).getPublicUrl(path);
+  const url = `${data.publicUrl}?v=${Date.now()}`; // cache-bust: aceeași cale, poză nouă
+  await _sbSaveAvatarUrl(url);
+  return url;
+}
+
+// Scrie avatar_url pe rândul propriu al userului curent — pe profiles
+// mereu (sursă pentru propriul topbar/sidebar), plus pe employees/clinics
+// dacă e cazul (ca poza să fie vizibilă și pentru ceilalți useri).
+async function _sbSaveAvatarUrl(url) {
+  if (!SUPABASE_CONFIGURED || !_profile) return;
+  const { error: pe } = await _client().from('profiles').update({ avatar_url: url }).eq('id', _profile.id);
+  if (pe) throw pe;
+  _profile.avatar_url = url;
+  if (_profile.role === 'technician' && _profile.employee_id) {
+    const { error } = await _client().from('employees').update({ avatar_url: url }).eq('id', _profile.employee_id);
+    if (error) throw error;
+  } else if (_profile.role === 'clinic' && _profile.clinic_id) {
+    const { error } = await _client().from('clinics').update({ avatar_url: url }).eq('id', _profile.clinic_id);
+    if (error) throw error;
+  }
+}
+
+async function sbRemoveAvatar() {
+  if (!SUPABASE_CONFIGURED || !_session) return;
+  const folder = `${_session.user.id}`;
+  const { data: files } = await _client().storage.from(AVATARS_BUCKET).list(folder);
+  if (files && files.length) {
+    await _client().storage.from(AVATARS_BUCKET).remove(files.map(f => `${folder}/${f.name}`));
+  }
+  await _sbSaveAvatarUrl(null);
+}
+
 // ── Activity log ─────────────────────────────────────────────
 async function _sbLog(action, entityType, entityId, details) {
   if (!SUPABASE_CONFIGURED || !_session) return;
@@ -347,7 +399,7 @@ async function sbLoadClinics() {
   if (!SUPABASE_CONFIGURED) return null;
   const { data, error } = await _client().from('clinics').select('*').order('name');
   if (error) { console.error('[supabase] loadClinics:', error.message); return null; }
-  return data.map(r => ({ id: r.id, name: r.name, doctor: r.doctor || '', phone: r.phone || '', color: r.color || '' }));
+  return data.map(r => ({ id: r.id, name: r.name, doctor: r.doctor || '', phone: r.phone || '', color: r.color || '', avatarUrl: r.avatar_url || '' }));
 }
 
 async function sbSaveClinic(clinic) {
@@ -373,7 +425,7 @@ async function sbLoadEmployees() {
   if (!SUPABASE_CONFIGURED) return null;
   const { data, error } = await _client().from('employees').select('*').order('name');
   if (error) { console.error('[supabase] loadEmployees:', error.message); return null; }
-  return data.map(r => ({ id: r.id, name: r.name, initials: r.initials || '', stage: r.stage || 'design', color: r.color || '' }));
+  return data.map(r => ({ id: r.id, name: r.name, initials: r.initials || '', stage: r.stage || 'design', color: r.color || '', avatarUrl: r.avatar_url || '' }));
 }
 
 async function sbSaveEmployee(emp) {
