@@ -54,32 +54,7 @@ function renderTable() {
   let html = '';
   const sortMode = (typeof activeFilter !== 'undefined' && activeFilter.sort) || 'default';
 
-  if (sortMode === 'tech') {
-    // Grupare pe persoana care lucrează curent la caz (assignee activ pe etapa curentă).
-    const groups = {};
-    filtered.forEach(c => {
-      const emp = typeof getEmployee === 'function' ? getEmployee(c.assignee) : null;
-      const key = emp ? emp.id : '__none';
-      (groups[key] = groups[key] || []).push(c);
-    });
-    const keys = Object.keys(groups).sort((a, b) => {
-      if (a === '__none') return 1;
-      if (b === '__none') return -1;
-      const na = getEmployee(a)?.name || '';
-      const nb = getEmployee(b)?.name || '';
-      return na.localeCompare(nb, 'ro');
-    });
-    keys.forEach(k => {
-      const cases = groups[k].slice().sort((a, b) => (parseShortDate(a.finala) || 0) - (parseShortDate(b.finala) || 0));
-      const label = k === '__none' ? 'Nealocat' : escHTML(getEmployee(k)?.name || k);
-      html += `
-        <div class="month-section">
-          <div class="month-header"><span class="month-name">${label}</span><span class="month-count">${cases.length} ${cases.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
-          <div class="tbl-wrap"><table class="tbl">${tblHeaders}<tbody>${cases.map(renderTableRow).join('')}</tbody></table></div>
-        </div>`;
-    });
-    if (!keys.length) html = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Nicio lucrare pentru filtrul curent.</div>';
-  } else if (sortMode !== 'default') {
+  if (sortMode !== 'default') {
     // Sortare globală pe Data Probei sau Data Finală (asc/desc), fără grupare pe luni.
     const field = sortMode.startsWith('proba') ? 'probaDate' : 'finala';
     const dir = sortMode.endsWith('-desc') ? -1 : 1;
@@ -355,20 +330,7 @@ function _dashExportData() {
   const filtered = applyFilter(CASES);
   const sortMode = (typeof activeFilter !== 'undefined' && activeFilter.sort) || 'default';
   let cases;
-  if (sortMode === 'tech') {
-    const groups = {};
-    filtered.forEach(c => {
-      const emp = typeof getEmployee === 'function' ? getEmployee(c.assignee) : null;
-      const key = emp ? emp.id : '__none';
-      (groups[key] = groups[key] || []).push(c);
-    });
-    const keys = Object.keys(groups).sort((a, b) => {
-      if (a === '__none') return 1;
-      if (b === '__none') return -1;
-      return (getEmployee(a)?.name || '').localeCompare(getEmployee(b)?.name || '', 'ro');
-    });
-    cases = keys.flatMap(k => groups[k]);
-  } else if (sortMode !== 'default') {
+  if (sortMode !== 'default') {
     const field = sortMode.startsWith('proba') ? 'probaDate' : 'finala';
     const dir = sortMode.endsWith('-desc') ? -1 : 1;
     cases = filtered.slice().sort((a, b) => {

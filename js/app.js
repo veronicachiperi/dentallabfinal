@@ -213,7 +213,7 @@ function chooseFilesForCase(caseId,onDone){
   input.click();
 }
 
-const activeFilter={tab:'all',clinic:'all',sort:'default',q:'',scope:'current',range:{field:'finala',from:'',to:''}};
+const activeFilter={tab:'all',clinic:'all',person:'all',sort:'default',q:'',scope:'current',range:{field:'finala',from:'',to:''}};
 function normalizePersonKey(value){
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 }
@@ -290,6 +290,12 @@ function applyFilter(cases){
   return src.filter(c=>{
     const isArchived=typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis';
     if(activeFilter.clinic!=='all'&&c.clinic!==activeFilter.clinic)return false;
+    // Filtru pe persoana care a lucrat la caz (orice etapă, nu doar cea curentă).
+    if(activeFilter.person&&activeFilter.person!=='all'){
+      const pid=activeFilter.person;
+      const worked=c.assignee===pid||c.finalTech===pid||Object.keys(c.assignees||{}).some(s=>stageAssignees(c,s).includes(pid));
+      if(!worked)return false;
+    }
     // Search persistent: numele pacientului, clinica, tipul, #caz, notițe, dinți, urgență, etc.
     if(activeFilter.q){
       const q=activeFilter.q.toLowerCase();
@@ -4142,11 +4148,27 @@ function attachFilters(){
       renderPipeline();if(typeof renderTable==='function')renderTable();
     }));
   }
+  // Filtru „Persoană" — icoane cu tehnicienii, ca să vezi rapid cine a lucrat la caz.
+  const pch=document.getElementById('personFilterChip');
+  const pmenu=document.getElementById('personFilterMenu');
+  if(pch&&pmenu){
+    pmenu.innerHTML=`<div class="chip-person-item ${activeFilter.person==='all'?'on':''}" data-value="all"><span class="node-em">—</span><span>Toți</span></div>`
+      +EMPLOYEES.map(e=>`<div class="chip-person-item ${activeFilter.person===e.id?'on':''}" data-value="${escAttr(e.id)}"><span class="node ${escAttr(e.id)}">${typeof avatarInnerHTML==='function'?avatarInnerHTML(e):escHTML(e.initials||'?')}</span><span>${escHTML(e.name)}</span></div>`).join('');
+    pch.addEventListener('click',e=>{e.stopPropagation();pmenu.classList.toggle('open')});
+    document.addEventListener('click',()=>pmenu.classList.remove('open'));
+    pmenu.querySelectorAll('.chip-person-item').forEach(it=>it.addEventListener('click',()=>{
+      pmenu.querySelectorAll('.chip-person-item').forEach(x=>x.classList.remove('on'));
+      it.classList.add('on');
+      activeFilter.person=it.dataset.value;
+      pch.textContent='Persoană: '+(it.dataset.value==='all'?'toți':(getEmployee(it.dataset.value)?.name||it.dataset.value));
+      renderPipeline();if(typeof renderTable==='function')renderTable();
+    }));
+  }
   // Sort chip — sortare opțională după Data Probei sau Data Finală.
   const sortCh=document.getElementById('sortFilterChip');
   const sortMenu=document.getElementById('sortFilterMenu');
   if(sortCh&&sortMenu){
-    const sortLabels={'default':'pe luni','proba-asc':'data probei crescător','proba-desc':'data probei descrescător','finala-asc':'data finală crescător','finala-desc':'data finală descrescător','tech':'persoană'};
+    const sortLabels={'default':'pe luni','proba-asc':'data probei crescător','proba-desc':'data probei descrescător','finala-asc':'data finală crescător','finala-desc':'data finală descrescător'};
     sortCh.addEventListener('click',e=>{e.stopPropagation();sortMenu.classList.toggle('open')});
     document.addEventListener('click',()=>sortMenu.classList.remove('open'));
     sortMenu.querySelectorAll('.chip-menu-item').forEach(it=>it.addEventListener('click',()=>{

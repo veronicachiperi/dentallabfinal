@@ -93,6 +93,12 @@ button{font-family:inherit;cursor:pointer}
 .chip-menu-item{padding:6px 10px;font-size:12px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text)}
 .chip-menu-item:hover{background:var(--bg-soft)}
 .chip-menu-item.on{font-weight:500;background:var(--bg-soft)}
+.chip-menu-person{max-height:320px;overflow-y:auto}
+.chip-menu-person.open{display:flex;flex-direction:column;gap:2px}
+.chip-person-item{display:flex;align-items:center;gap:8px;padding:5px 8px;font-size:12px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text);white-space:nowrap}
+.chip-person-item:hover{background:var(--bg-soft)}
+.chip-person-item.on{font-weight:500;background:var(--bg-soft)}
+.chip-person-item .node,.chip-person-item .node-em{width:20px;height:20px;font-size:8px;overflow:hidden}
 
 /* Table */
 .month-section{margin-bottom:24px}
