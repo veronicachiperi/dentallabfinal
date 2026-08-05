@@ -54,7 +54,32 @@ function renderTable() {
   let html = '';
   const sortMode = (typeof activeFilter !== 'undefined' && activeFilter.sort) || 'default';
 
-  if (sortMode !== 'default') {
+  if (sortMode === 'tech') {
+    // Grupare pe persoana care lucrează curent la caz (assignee activ pe etapa curentă).
+    const groups = {};
+    filtered.forEach(c => {
+      const emp = typeof getEmployee === 'function' ? getEmployee(c.assignee) : null;
+      const key = emp ? emp.id : '__none';
+      (groups[key] = groups[key] || []).push(c);
+    });
+    const keys = Object.keys(groups).sort((a, b) => {
+      if (a === '__none') return 1;
+      if (b === '__none') return -1;
+      const na = getEmployee(a)?.name || '';
+      const nb = getEmployee(b)?.name || '';
+      return na.localeCompare(nb, 'ro');
+    });
+    keys.forEach(k => {
+      const cases = groups[k].slice().sort((a, b) => (parseShortDate(a.finala) || 0) - (parseShortDate(b.finala) || 0));
+      const label = k === '__none' ? 'Nealocat' : escHTML(getEmployee(k)?.name || k);
+      html += `
+        <div class="month-section">
+          <div class="month-header"><span class="month-name">${label}</span><span class="month-count">${cases.length} ${cases.length === 1 ? 'lucrare' : 'lucrări'}</span></div>
+          <div class="tbl-wrap"><table class="tbl">${tblHeaders}<tbody>${cases.map(renderTableRow).join('')}</tbody></table></div>
+        </div>`;
+    });
+    if (!keys.length) html = '<div style="padding:40px;text-align:center;color:var(--text-dim)">Nicio lucrare pentru filtrul curent.</div>';
+  } else if (sortMode !== 'default') {
     // Sortare globală pe Data Probei sau Data Finală (asc/desc), fără grupare pe luni.
     const field = sortMode.startsWith('proba') ? 'probaDate' : 'finala';
     const dir = sortMode.endsWith('-desc') ? -1 : 1;
@@ -330,7 +355,20 @@ function _dashExportData() {
   const filtered = applyFilter(CASES);
   const sortMode = (typeof activeFilter !== 'undefined' && activeFilter.sort) || 'default';
   let cases;
-  if (sortMode !== 'default') {
+  if (sortMode === 'tech') {
+    const groups = {};
+    filtered.forEach(c => {
+      const emp = typeof getEmployee === 'function' ? getEmployee(c.assignee) : null;
+      const key = emp ? emp.id : '__none';
+      (groups[key] = groups[key] || []).push(c);
+    });
+    const keys = Object.keys(groups).sort((a, b) => {
+      if (a === '__none') return 1;
+      if (b === '__none') return -1;
+      return (getEmployee(a)?.name || '').localeCompare(getEmployee(b)?.name || '', 'ro');
+    });
+    cases = keys.flatMap(k => groups[k]);
+  } else if (sortMode !== 'default') {
     const field = sortMode.startsWith('proba') ? 'probaDate' : 'finala';
     const dir = sortMode.endsWith('-desc') ? -1 : 1;
     cases = filtered.slice().sort((a, b) => {
@@ -346,8 +384,8 @@ function _dashExportData() {
     keys.forEach(k => groups[k].sort((a, b) => (groupDate(b) || 0) - (groupDate(a) || 0)));
     cases = keys.filter(k => k !== 'unknown').flatMap(k => groups[k]);
   }
-  const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Intrată','Probă','Finală','Prioritate','Dinți','Punți','Implant','Amprentă','Note'];
-  const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');const cl=getClinic(c.clinic)||{name:c.clinic||'—',doctor:''};const punti=(c.bridges||[]).filter(g=>g&&g.length>=2).map(g=>g.join('-')).join(' | ');return [c.id, c.name, cl.name, c.doctor || cl.doctor, c.type, c.color || '', publicStageName(c), c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), punti, c.implantType || '', c.amprentaType || '', notes]});
+  const headers = ['ID','Pacient','Clinică','Medic','Tip','Culoare','Etapă','Tehnician','Intrată','Probă','Finală','Prioritate','Dinți','Punți','Implant','Amprentă','Note'];
+  const rows = cases.map(c => {const notes=(typeof _parseNotes==='function'?_parseNotes(c.notes):[]).map(n=>n.text).join(' | ');const cl=getClinic(c.clinic)||{name:c.clinic||'—',doctor:''};const punti=(c.bridges||[]).filter(g=>g&&g.length>=2).map(g=>g.join('-')).join(' | ');const tech=getEmployee(c.assignee)?.name||'';return [c.id, c.name, cl.name, c.doctor || cl.doctor, c.type, c.color || '', publicStageName(c), tech, c.intrata, c.probaDate || '', c.finala, c.priority, (c.teeth || []).map(t => t.n).join(' '), punti, c.implantType || '', c.amprentaType || '', notes]});
   return { headers, rows, filename: `lucrari-${new Date().toISOString().slice(0,10)}`, title: 'Lucrări' };
 }
 function exportCSV() {

@@ -4146,7 +4146,7 @@ function attachFilters(){
   const sortCh=document.getElementById('sortFilterChip');
   const sortMenu=document.getElementById('sortFilterMenu');
   if(sortCh&&sortMenu){
-    const sortLabels={'default':'pe luni','proba-asc':'data probei crescător','proba-desc':'data probei descrescător','finala-asc':'data finală crescător','finala-desc':'data finală descrescător'};
+    const sortLabels={'default':'pe luni','proba-asc':'data probei crescător','proba-desc':'data probei descrescător','finala-asc':'data finală crescător','finala-desc':'data finală descrescător','tech':'persoană'};
     sortCh.addEventListener('click',e=>{e.stopPropagation();sortMenu.classList.toggle('open')});
     document.addEventListener('click',()=>sortMenu.classList.remove('open'));
     sortMenu.querySelectorAll('.chip-menu-item').forEach(it=>it.addEventListener('click',()=>{
