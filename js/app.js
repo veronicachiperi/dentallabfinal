@@ -3532,7 +3532,7 @@ function openNewCaseModal(defClinic,defDoctor){
                 <div class="tc-summary" id="toothSummary"><div style="color:var(--text-dim)">Niciun dinte selectat</div></div>
               </div>
             </details>
-            <div class="field-row"><div class="field"><label>Tip implant</label><input id="ncImplant"></div><div class="field"><label>Tip amprentă</label><select id="ncAmprenta"><option>Silicon</option><option>Polieter</option><option>Alginat</option><option>Digital</option><option>STL</option></select></div></div>
+            <div class="field-row"><div class="field"><label>Tip implant</label><input id="ncImplant"></div><div class="field"><label>Tip amprentă</label><select id="ncAmprenta"><option>Silicon</option><option>Polieter</option><option>Alginat</option><option selected>Digital</option><option>STL</option></select></div></div>
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Planificare</div>
