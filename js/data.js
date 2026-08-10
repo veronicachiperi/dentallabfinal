@@ -561,16 +561,18 @@ function recalculateAllCaseNumbers() {
   return ordered;
 }
 
-// Badge-ul de număr de caz (ex. "#141"), cu marcaj ↺ când cazul e o
-// refacere (are previousCaseId setat) — vizibil peste tot unde apare
-// numărul: tabel, carduri pipeline, portal clinică, detalii caz.
+// Badge-ul de număr de caz (ex. "#141"), cu marcaj ↺ când cazul e legat
+// de o lucrare anterioară a aceluiași pacient (are previousCaseId setat —
+// fie că e o refacere propriu-zisă, fie doar o legătură de istoric) —
+// vizibil peste tot unde apare numărul: tabel, carduri pipeline, portal
+// clinică, detalii caz.
 function caseNumHTML(c) {
   if (!c) return '';
   const n = c.seq || c.id;
   if (!c.previousCaseId) return `#${n}`;
   const prev = typeof getCase === 'function' ? getCase(c.previousCaseId) : null;
   const prevN = prev ? (prev.seq || prev.id) : c.previousCaseId;
-  return `<span class="redo-mark" title="Refacere a cazului #${prevN}">↺</span>#${n}`;
+  return `<span class="redo-mark" title="Legat de cazul precedent #${prevN}">↺</span>#${n}`;
 }
 
 // Nu asignăm tehnicieni automat. Cazurile primesc responsabil doar printr-o
