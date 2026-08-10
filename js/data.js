@@ -498,6 +498,13 @@ function todayLabDate() {
 // veche primul), ca să nu strice numerotarea existentă la migrare.
 // Numerele nou-completate sunt trimise înapoi în DB (sbBackfillSeq) ca să
 // rămână fixe de-acum înainte.
+// _seqBackfillInFlight evită să pornim un al doilea backfill în timp ce
+// primul încă scrie în DB (mai multe funcții de render apelează
+// assignCaseNumbers() pe rând, în aceeași sesiune de pagină) — fără acest
+// paznic, un caz „missing" putea primi un # nou de fiecare dată când era
+// re-evaluat înainte ca scrierea anterioară să apuce să ajungă în DB,
+// umflând numărul progresiv (ex. #524 → #959) fără niciun motiv real.
+let _seqBackfillInFlight = false;
 function assignCaseNumbers() {
   const entryDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala)
     || (c.createdAt ? new Date(c.createdAt) : null);
@@ -515,10 +522,12 @@ function assignCaseNumbers() {
     return (a.id || 0) - (b.id || 0);
   });
   if (!missing.length) return;
+  if (_seqBackfillInFlight) return;
   const newlyAssigned = [];
   missing.forEach(c => { c.seq = ++maxSeq; newlyAssigned.push(c); });
   if (typeof sbBackfillSeq === 'function' && typeof SUPABASE_CONFIGURED !== 'undefined' && SUPABASE_CONFIGURED) {
-    sbBackfillSeq(newlyAssigned);
+    _seqBackfillInFlight = true;
+    Promise.resolve(sbBackfillSeq(newlyAssigned)).finally(() => { _seqBackfillInFlight = false; });
   }
 }
 
@@ -527,6 +536,29 @@ function nextCaseSeq() {
   let max = 0;
   CASES.forEach(c => { if (c.seq && c.seq > max) max = c.seq; });
   return max + 1;
+}
+
+// Recalculează de la zero # TUTUROR cazurilor valide, în ordine cronologică
+// (aceeași logică folosită dintotdeauna: data de intrare, cea mai veche
+// primul). Rulează STRICT manual, dintr-un buton admin — niciodată automat —
+// și suprascrie orice # existent. Folosit o singură dată ca să corecteze
+// numerele umflate/amestecate de bug-ul de mai sus; după rulare, fiecare caz
+// are un # corect și fix, iar assignCaseNumbers() nu va mai avea nimic de
+// completat (cazurile noi primesc deja # la creare).
+function recalculateAllCaseNumbers() {
+  const entryDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala)
+    || (c.createdAt ? new Date(c.createdAt) : null);
+  const valid = CASES.filter(c => typeof isValidCase === 'function' ? isValidCase(c)
+    : ((c.name||'').trim() || (c.clinic||'').trim() || (c.type||'').trim()));
+  const ordered = valid.slice().sort((a, b) => {
+    const da = entryDate(a), db = entryDate(b);
+    if (da && db && da - db !== 0) return da - db;
+    if (da && !db) return -1;
+    if (!da && db) return 1;
+    return (a.id || 0) - (b.id || 0);
+  });
+  ordered.forEach((c, i) => { c.seq = i + 1; });
+  return ordered;
 }
 
 // Badge-ul de număr de caz (ex. "#141"), cu marcaj ↺ când cazul e o

@@ -265,6 +265,24 @@ async function sbBackfillSeq(cases) {
   }
 }
 
+// Rescrie numărul (seq) pentru TOATE cazurile date, suprascriind orice
+// valoare existentă (spre deosebire de sbBackfillSeq, care scrie doar dacă
+// era goală). Folosit STRICT de acțiunea manuală de recalculare din pagina
+// Admin → Termeni, ca să corecteze numerele umflate de bug-ul de cursă.
+async function sbResetAllSeq(cases) {
+  if (!SUPABASE_CONFIGURED || !cases || !cases.length) return { ok: 0, fail: 0 };
+  let ok = 0, fail = 0;
+  for (const c of cases) {
+    if (!c || !c.id || !c.seq) continue;
+    try {
+      const { error } = await _client().from('cases').update({ seq: c.seq }).eq('id', c.id);
+      if (error) throw error;
+      ok++;
+    } catch (e) { console.warn('[supabase] resetAllSeq:', e.message); fail++; }
+  }
+  return { ok, fail };
+}
+
 async function sbDeleteCase(caseId, caseName) {
   if (!SUPABASE_CONFIGURED) return;
   const { error } = await _client().from('cases').delete().eq('id', caseId);

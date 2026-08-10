@@ -154,7 +154,7 @@ function renderTableRow(c) {
   const hasNote=parsedNotes.length>0;
   const rowClasses=[c.notStarted?'tbl-row-faded':'',typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'tbl-row-blocked':''].filter(Boolean).join(' ');
  return `<tr data-case-id="${c.id}" class="${rowClasses}">
-    <td class="tc-num" data-label="Nr"><span class="tbl-num">#${c.seq || c.id}</span></td>
+    <td class="tc-num" data-label="Nr"><span class="tbl-num">${caseNumHTML(c)}</span></td>
     <td class="tc-name" data-label="Pacient"><span class="tbl-name">${c.name}</span></td>
     <td data-label="Clinică"><span class="tbl-clinic">${clinic.name}</span></td>
     <td data-label="Tip"><span class="tag">${c.type}</span></td>
