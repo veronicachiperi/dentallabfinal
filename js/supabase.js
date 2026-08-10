@@ -131,6 +131,8 @@ function sbClinicId()  { return _profile?.clinic_id || null; }
 function _dbToCase(row) {
   return {
     id:           row.id,
+    seq:          row.seq            || null,
+    previousCaseId: row.previous_case_id || null,
     name:         row.name           || '',
     lastName:     row.last_name      || '',
     firstName:    row.first_name     || '',
@@ -165,6 +167,8 @@ function _dbToCase(row) {
 
 function _caseToDb(c) {
   return {
+    seq:            c.seq          || null,
+    previous_case_id: c.previousCaseId || null,
     name:           c.name         || '',
     last_name:      c.lastName     || '',
     first_name:     c.firstName    || '',
@@ -237,11 +241,28 @@ async function sbUpdateField(c, field, value) {
     teeth: 'teeth', doctor: 'doctor', clinic: 'clinic_id',
     noProba: 'no_proba', completedDate: 'completed_date',
     finalTech: 'final_tech', durationDays: 'duration_days',
+    previousCaseId: 'previous_case_id',
   };
   const col = colMap[field];
   if (!col) return;
   await _client().from('cases').update({ [col]: value }).eq('id', c.id);
   await _sbLog('update_case', 'case', String(c.id), { patient: c.name, field });
+}
+
+// Scrie numărul permanent (seq) în DB pentru cazuri care nu-l aveau încă
+// (date vechi migrate, sau atribuit local înainte de primul sync). Scrie
+// DOAR dacă rândul e încă necompletat (`.is('seq', null)`), ca să nu
+// suprascrie un număr deja fixat de un alt client — dacă altcineva l-a
+// completat între timp, update-ul nostru pur și simplu nu potrivește
+// niciun rând și e ignorat, fără eroare.
+async function sbBackfillSeq(cases) {
+  if (!SUPABASE_CONFIGURED || !cases || !cases.length) return;
+  for (const c of cases) {
+    if (!c || !c.id || !c.seq) continue;
+    try {
+      await _client().from('cases').update({ seq: c.seq }).eq('id', c.id).is('seq', null);
+    } catch (e) { console.warn('[supabase] backfillSeq:', e.message); }
+  }
 }
 
 async function sbDeleteCase(caseId, caseName) {

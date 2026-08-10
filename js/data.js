@@ -486,11 +486,18 @@ function todayLabDate() {
   return d;
 }
 
-// Global, continuous numbering across ALL cases by entry order:
-// #1 = first case entered (oldest "Intrată" date), #N = newest. The same
-// c.seq is used everywhere a case number is shown (table, clinic portal,
-// archive, case detail, lab fișă). Defined here in data.js so it is available
-// on every page, not only on pages that load table.js.
+// Numărul de caz (#) e PERMANENT — legat de pacientul căruia i-a fost
+// atribuit prima dată, indiferent ce cazuri se adaugă sau se editează
+// ulterior. Numărul e stocat o singură dată (coloana `seq` din DB, vezi
+// migrare-refacere-caz.sql) la crearea cazului și nu se mai schimbă.
+//
+// Această funcție NU renumerotează cazurile care au deja `seq` — doar
+// completează numărul pentru cele care încă nu au unul (date vechi
+// migrate, sau un caz nou-creat înainte să ajungă la Supabase). Pentru
+// acelea folosește aceeași ordine de mereu (data de intrare, cea mai
+// veche primul), ca să nu strice numerotarea existentă la migrare.
+// Numerele nou-completate sunt trimise înapoi în DB (sbBackfillSeq) ca să
+// rămână fixe de-acum înainte.
 function assignCaseNumbers() {
   const entryDate = c => parseShortDate(c.intrata) || parseShortDate(c.finala)
     || (c.createdAt ? new Date(c.createdAt) : null);
@@ -498,14 +505,40 @@ function assignCaseNumbers() {
   // rândurile goale din DB nu primesc seq, ca să nu inflateze contorul.
   const valid = CASES.filter(c => typeof isValidCase === 'function' ? isValidCase(c)
     : ((c.name||'').trim() || (c.clinic||'').trim() || (c.type||'').trim()));
-  const sorted = valid.slice().sort((a, b) => {
+  let maxSeq = 0;
+  valid.forEach(c => { if (c.seq && c.seq > maxSeq) maxSeq = c.seq; });
+  const missing = valid.filter(c => !c.seq).sort((a, b) => {
     const da = entryDate(a), db = entryDate(b);
     if (da && db && da - db !== 0) return da - db;
     if (da && !db) return -1;
     if (!da && db) return 1;
     return (a.id || 0) - (b.id || 0);
   });
-  sorted.forEach((c, i) => c.seq = i + 1);
+  if (!missing.length) return;
+  const newlyAssigned = [];
+  missing.forEach(c => { c.seq = ++maxSeq; newlyAssigned.push(c); });
+  if (typeof sbBackfillSeq === 'function' && typeof SUPABASE_CONFIGURED !== 'undefined' && SUPABASE_CONFIGURED) {
+    sbBackfillSeq(newlyAssigned);
+  }
+}
+
+// Următorul număr de caz permanent, pentru un caz nou-creat.
+function nextCaseSeq() {
+  let max = 0;
+  CASES.forEach(c => { if (c.seq && c.seq > max) max = c.seq; });
+  return max + 1;
+}
+
+// Badge-ul de număr de caz (ex. "#141"), cu marcaj ↺ când cazul e o
+// refacere (are previousCaseId setat) — vizibil peste tot unde apare
+// numărul: tabel, carduri pipeline, portal clinică, detalii caz.
+function caseNumHTML(c) {
+  if (!c) return '';
+  const n = c.seq || c.id;
+  if (!c.previousCaseId) return `#${n}`;
+  const prev = typeof getCase === 'function' ? getCase(c.previousCaseId) : null;
+  const prevN = prev ? (prev.seq || prev.id) : c.previousCaseId;
+  return `<span class="redo-mark" title="Refacere a cazului #${prevN}">↺</span>#${n}`;
 }
 
 // Nu asignăm tehnicieni automat. Cazurile primesc responsabil doar printr-o

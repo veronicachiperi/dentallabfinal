@@ -3496,6 +3496,13 @@ function openNewCaseModal(defClinic,defDoctor){
   const renderRow=arr=>arr.slice(0,8).map(tooth).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tooth).join('');
   const clinicWizardClass=lockedClinicId?' clinic-case-wizard':'';
   const toothDetailsOpen=lockedClinicId?'':' open';
+  // Refacere: listă de cazuri existente pentru legarea cazului nou de cel
+  // precedent. Doar cazuri valide, cele mai recente primele (id desc),
+  // limitate la 500 ca datalist-ul să rămână rapid.
+  const prevCaseLabel=x=>`#${x.seq||x.id} ${(x.name||'').trim()} — ${(getClinic(x.clinic)||{}).name||x.clinic||''}`.trim();
+  const prevCaseOpts=CASES.filter(x=>typeof isValidCase==='function'?isValidCase(x):((x.name||'').trim()||(x.clinic||'').trim()||(x.type||'').trim()))
+    .slice().sort((a,b)=>(b.id||0)-(a.id||0)).slice(0,500)
+    .map(x=>`<option value="${escAttr(prevCaseLabel(x))}">`).join('');
   openModal(`<div class="modal-head"><div><div class="modal-kicker">Flux organizat</div><div class="modal-title">Caz nou</div></div><button class="modal-close" type="button">×</button></div>
     <div class="modal-body modal-body-compact">
       <div class="case-wizard${clinicWizardClass}">
@@ -3511,6 +3518,7 @@ function openNewCaseModal(defClinic,defDoctor){
             <div class="wizard-panel-title">Pacient & clinică</div>
             <div class="field-row"><div class="field"><label>Nume</label><input id="ncLast" placeholder="Nume pacient" autofocus></div><div class="field"><label>Prenume</label><input id="ncFirst" placeholder="Prenume"></div></div>
             <div class="field-row"><div class="field"><label>Clinică</label><select id="ncClinic" ${lockedClinicId?'disabled':''}>${cOpts}</select>${lockedClinicId?`<input type="hidden" id="ncClinicLocked" value="${escAttr(lockedClinicId)}">`:''}</div><div class="field"><label>Medic</label><input id="ncDoctor" value="${escAttr(prefillDoctor)}" ${lockedDoctorName?'disabled':''}></div></div>
+            <div class="field"><label>Caz precedent <span style="font-weight:400;color:var(--text-dim)">— dacă e o refacere</span></label><input id="ncPrevCase" list="ncPrevCaseList" placeholder="Caută după nume sau nr. caz..." autocomplete="off"><datalist id="ncPrevCaseList">${prevCaseOpts}</datalist></div>
           </section>
           <section class="wizard-panel">
             <div class="wizard-panel-title">Lucrare</div>
