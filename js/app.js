@@ -2300,10 +2300,19 @@ function openClinicCaseEdit(caseId){
   const tooth=n=>`<button type="button" class="tooth-cell ${toothType(n)}" data-tooth="${n}">${n}</button>`;
   const renderRow=arr=>arr.slice(0,8).map(tooth).join('')+'<div class="tc-divider-form"></div>'+arr.slice(8).map(tooth).join('');
   const notesText=_parseNotes(c.notes).map(n=>n.text).join(NOTE_BLOCK_SEP);
+  // Caz precedent: aceeași legătură de istoric ca la „Caz nou", disponibilă
+  // și la editare — ca să poți lega retroactiv un caz deja creat de o
+  // lucrare mai veche a aceluiași pacient. Exclude cazul curent din listă.
+  const prevCaseLabel=x=>`#${x.seq||x.id} ${(x.name||'').trim()} — ${(getClinic(x.clinic)||{}).name||x.clinic||''}`.trim();
+  const prevCaseOpts=CASES.filter(x=>x.id!==c.id&&(typeof isValidCase==='function'?isValidCase(x):((x.name||'').trim()||(x.clinic||'').trim()||(x.type||'').trim())))
+    .slice().sort((a,b)=>(b.id||0)-(a.id||0))
+    .map(x=>`<option value="${escAttr(prevCaseLabel(x))}">`).join('');
+  const linkedPrevCase=c.previousCaseId?getCase(c.previousCaseId):null;
   openModal(`<div class="modal-head"><div><div class="modal-kicker">${editorKicker}</div><div class="modal-title">Editează cazul · #${c.seq||c.id}</div></div><button class="modal-close" type="button">×</button></div>
     <div class="modal-body modal-body-compact">
       <div class="field-row ${canEditWorkflow?'three':''}"><div class="field"><label>Pacient</label><input id="ceName" value="${safeVal(c.name)}" autofocus></div><div class="field"><label>Clinică</label>${clinicField}</div>${stageField}</div>
       <div class="field-row"><div class="field"><label>Medic</label><input id="ceDoctor" value="${safeVal(c.doctor)}"></div><div class="field"><label>Tip lucrare</label><input id="ceType" list="ceTypeList" value="${escAttr(c.type||'')}" placeholder="ex. ZR FULL — sau scrie alt tip" autocomplete="off"><datalist id="ceTypeList">${typeOptions}</datalist></div></div>
+      <div class="field"><label>Caz precedent al pacientului <span style="font-weight:400;color:var(--text-dim)">— opțional, orice lucrare anterioară (refacere sau doar istoric)</span></label><input id="cePrevCase" list="cePrevCaseList" value="${linkedPrevCase?escAttr(prevCaseLabel(linkedPrevCase)):''}" placeholder="Caută după nume sau nr. caz..." autocomplete="off"><datalist id="cePrevCaseList">${prevCaseOpts}</datalist></div>
       <div class="field-row three"><div class="field"><label>Culoare</label><select id="ceColor">${colorOptions}</select></div><div class="field"><label>Tip implant</label><input id="ceImplant" value="${safeVal(c.implantType)}"></div><div class="field"><label>Tip amprentă</label><select id="ceAmprenta">${amprentaOptions}</select></div></div>
       <div class="field-row three"><div class="field"><label>Intrată</label><div class="date-edit-btn${c.intrata?'':' is-empty'}" id="ceIntrata" data-val="${escAttr((c.intrata||'').split(' ')[0])}"><span>${(c.intrata||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceIntrataTime" value="${escAttr(extractTime(c.intrata||''))}" placeholder="--:--"></div><div class="field"><label style="display:flex;align-items:center;justify-content:space-between;gap:4px">Probă<label style="display:flex;align-items:center;gap:4px;font-weight:400;font-size:11px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ceNoProba"${c.noProba?' checked':''}> Fără probă</label></label><div class="date-edit-btn${c.noProba?' disabled':(c.probaDate?'':' is-empty')}" id="ceProba" data-val="${escAttr(c.noProba?'':(c.probaDate||'').split(' ')[0])}"><span>${c.noProba?'Fără probă':((c.probaDate||'').split(' ')[0]||'Alege data')}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceProbaTime" value="${escAttr(extractTime(c.probaDate||''))}" placeholder="--:--"></div><div class="field"><label>Finală</label><div class="date-edit-btn${c.finala?'':' is-empty'}" id="ceFinala" data-val="${escAttr((c.finala||'').split(' ')[0])}"><span>${(c.finala||'').split(' ')[0]||'Alege data'}</span><span class="cal-ico">&#128197;</span></div><input type="text" inputmode="numeric" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" class="time-input" id="ceFinalaTime" value="${escAttr(extractTime(c.finala||''))}" placeholder="--:--"></div></div>
       <div id="clinicEditDeadline"></div>
@@ -2455,8 +2464,17 @@ function openClinicCaseEdit(caseId){
     c.notes=notesFromTextArea(document.getElementById('ceNotes').value,c.notes);
     c.deadlineUrgent=labDeadlineStatus(c).urgent;
     c.priority=computePriority(c);
+    // Caz precedent: rezolvă potrivirea exactă pe eticheta din datalist. Câmp
+    // gol → dezleagă cazul (previousCaseId = null); altfel, leagă/actualizează.
+    const prevCaseRaw=(document.getElementById('cePrevCase')?.value||'').trim();
+    if(!prevCaseRaw){c.previousCaseId=null;}
+    else{
+      const match=CASES.find(x=>x.id!==c.id&&(typeof isValidCase==='function'?isValidCase(x):true)&&prevCaseLabel(x)===prevCaseRaw);
+      if(match)c.previousCaseId=match.id;
+      // dacă textul nu se potrivește exact cu nicio opțiune din listă, păstrăm legătura anterioară neschimbată
+    }
     overrides.edits=overrides.edits||{};
-    overrides.edits[c.id]={...overrides.edits[c.id],name:c.name,lastName:c.lastName,firstName:c.firstName,clinic:c.clinic,stage:c.stage,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,doctor:c.doctor,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,noProba:c.noProba,finala:c.finala,teeth:c.teeth,bridges:c.bridges,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority,finalTech:c.finalTech,completedDate:c.completedDate,sentDate:c.sentDate};
+    overrides.edits[c.id]={...overrides.edits[c.id],name:c.name,lastName:c.lastName,firstName:c.firstName,clinic:c.clinic,stage:c.stage,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,doctor:c.doctor,type:c.type,color:c.color,implantType:c.implantType,amprentaType:c.amprentaType,intrata:c.intrata,probaDate:c.probaDate,noProba:c.noProba,finala:c.finala,teeth:c.teeth,bridges:c.bridges,notes:c.notes,deadlineUrgent:c.deadlineUrgent,priority:c.priority,finalTech:c.finalTech,completedDate:c.completedDate,sentDate:c.sentDate,previousCaseId:c.previousCaseId};
     saveOverrides(overrides);_syncCase(c);closeModal();renderClinic();updateMainSummary();
     auditCaseChangesFrom(c,before,'edit_case');
     if(typeof renderTable==='function')renderTable();renderPipeline();
@@ -4155,10 +4173,20 @@ function attachFilters(){
   }));
   const tabs=document.querySelectorAll('.subbar .tab');if(!tabs.length)return;
   const tm=['all','mine','late','week','notstarted','probasoon','trimise'];
+  const sortLabelsForTab={'default':'pe luni','proba-asc':'data probei crescător','proba-desc':'data probei descrescător','finala-asc':'data finală crescător','finala-desc':'data finală descrescător'};
   tabs.forEach((t,i)=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('on'));t.classList.add('on');activeFilter.tab=tm[i];
     // Tab-ul „Trimise" = vederea Expediate; orice alt tab revine la Curente dacă eram pe Expediate
     const ns=tm[i]==='trimise'?'shipped':(activeFilter.scope==='shipped'?'current':activeFilter.scope);
     activeFilter.scope=ns;_syncScopeBtns(ns);
+    // Neîncepute: sortare implicită după data probei, crescător (cele mai
+    // apropiate primele) — doar dacă utilizatorul n-a ales deja manual altă sortare.
+    if(tm[i]==='notstarted'&&activeFilter.sort==='default'){
+      activeFilter.sort='proba-asc';
+      const sortCh2=document.getElementById('sortFilterChip');
+      const sortMenu2=document.getElementById('sortFilterMenu');
+      if(sortCh2)sortCh2.textContent='Sortare: '+sortLabelsForTab['proba-asc'];
+      if(sortMenu2)sortMenu2.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.toggle('on',x.dataset.value==='proba-asc'));
+    }
     renderPipeline();if(typeof renderTable==='function')renderTable()}));
   // Banner „în întârziere" → deschide tab-ul „În întârziere"
   const lateBn=document.getElementById('lateBanner');
