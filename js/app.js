@@ -4178,14 +4178,14 @@ function attachFilters(){
     // Tab-ul „Trimise" = vederea Expediate; orice alt tab revine la Curente dacă eram pe Expediate
     const ns=tm[i]==='trimise'?'shipped':(activeFilter.scope==='shipped'?'current':activeFilter.scope);
     activeFilter.scope=ns;_syncScopeBtns(ns);
-    // Neîncepute: sortare implicită după data probei, crescător (cele mai
+    // Neîncepute: sortare implicită după data finală, crescător (cele mai
     // apropiate primele) — doar dacă utilizatorul n-a ales deja manual altă sortare.
     if(tm[i]==='notstarted'&&activeFilter.sort==='default'){
-      activeFilter.sort='proba-asc';
+      activeFilter.sort='finala-asc';
       const sortCh2=document.getElementById('sortFilterChip');
       const sortMenu2=document.getElementById('sortFilterMenu');
-      if(sortCh2)sortCh2.textContent='Sortare: '+sortLabelsForTab['proba-asc'];
-      if(sortMenu2)sortMenu2.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.toggle('on',x.dataset.value==='proba-asc'));
+      if(sortCh2)sortCh2.textContent='Sortare: '+sortLabelsForTab['finala-asc'];
+      if(sortMenu2)sortMenu2.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.toggle('on',x.dataset.value==='finala-asc'));
     }
     renderPipeline();if(typeof renderTable==='function')renderTable()}));
   // Banner „în întârziere" → deschide tab-ul „În întârziere"
