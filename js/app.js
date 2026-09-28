@@ -213,7 +213,19 @@ function chooseFilesForCase(caseId,onDone){
   input.click();
 }
 
-const activeFilter={tab:'all',clinic:'all',person:'all',sort:'default',q:'',scope:'current',range:{field:'finala',from:'',to:''}};
+const activeFilter={tab:'all',clinic:'all',person:'all',doctor:'all',sort:'default',q:'',scope:'current',range:{field:'finala',from:'',to:''}};
+// Filtrele tabelului „Lucrări" rămân „blocate" între sesiuni — se salvează în
+// localStorage la fiecare schimbare și se reîncarcă la refresh (ca la Arhivă).
+const ACTIVE_FILTER_KEY='dental-lab-active-filter';
+(function loadActiveFilter(){
+  try{
+    const raw=localStorage.getItem(ACTIVE_FILTER_KEY);
+    if(raw)Object.assign(activeFilter,JSON.parse(raw));
+  }catch{}
+})();
+function saveActiveFilter(){
+  try{localStorage.setItem(ACTIVE_FILTER_KEY,JSON.stringify(activeFilter))}catch{}
+}
 function normalizePersonKey(value){
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
 }
@@ -290,6 +302,9 @@ function applyFilter(cases){
   return src.filter(c=>{
     const isArchived=typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis';
     if(activeFilter.clinic!=='all'&&c.clinic!==activeFilter.clinic)return false;
+    if(activeFilter.doctor&&activeFilter.doctor!=='all'){
+      if((typeof normDoctorName==='function'?normDoctorName(c.doctor):(c.doctor||''))!==activeFilter.doctor)return false;
+    }
     // Filtru pe persoana care a lucrat la caz (orice etapă, nu doar cea curentă).
     if(activeFilter.person&&activeFilter.person!=='all'){
       const pid=activeFilter.person;
@@ -359,6 +374,10 @@ async function deleteCaseCore(id){
   if(typeof sbDeleteCase==='function'&&SUPABASE_CONFIGURED){
     try{await sbDeleteCase(c.id,c.name)}catch(e){alert('Eroare la ștergere: '+e.message);return false}
   }
+  // Dacă lucrarea era arhivată, salvăm un rezumat în registru ÎNAINTE de ștergere,
+  // ca statisticile de arhivă (KPI) să nu scadă — vezi recordArchiveLedgerEntry.
+  const wasArchived=c.stage==='terminat'||(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis');
+  if(wasArchived&&typeof recordArchiveLedgerEntry==='function')recordArchiveLedgerEntry(c);
   const i=CASES.findIndex(x=>x.id===id);
   if(i>=0)CASES.splice(i,1);
   purgeCaseFromLocalCache(id);
@@ -2918,6 +2937,27 @@ const ARCHIVE_FILTER_KEY='dental-lab-archive-filter';
 function saveArchiveFilter(){
   try{localStorage.setItem(ARCHIVE_FILTER_KEY,JSON.stringify(archiveFilter))}catch{}
 }
+// Registrul de arhivă: când o lucrare arhivată este ștearsă definitiv (curățare arhivă
+// sau ștergere manuală), păstrăm aici un rezumat minim al ei — ca KPI-urile de sus
+// (Total / Terminate / Expediate / Clinică top) să NU scadă doar pentru că am șters
+// fișierele grele ca să nu supraîncărcăm site-ul. Doar rândul din tabel dispare;
+// statistica agregată rămâne. Nu reținem tehnicianul (istoric pe etape) sau numele
+// pacientului, așa că registrul nu contribuie la KPI cât timp filtrele Tehnician sau
+// Căutare sunt active (nu le putem verifica retroactiv corect).
+const ARCHIVE_LEDGER_KEY='dental-lab-archive-ledger';
+function loadArchiveLedger(){
+  try{return JSON.parse(localStorage.getItem(ARCHIVE_LEDGER_KEY)||'[]')}catch{return []}
+}
+function saveArchiveLedger(list){
+  try{localStorage.setItem(ARCHIVE_LEDGER_KEY,JSON.stringify(list))}catch{}
+}
+function recordArchiveLedgerEntry(c){
+  const d=parseShortDate(c.sentDate||c.completedDate||c.finala);
+  if(!d)return; // fără dată de arhivare cunoscută nu poate fi reîncadrat corect în filtre
+  const list=loadArchiveLedger();
+  list.push({clinic:c.clinic||null,doctor:c.doctor||'',type:c.type||'',stage:c.stage,ts:d.getTime(),year:d.getFullYear(),month:d.getMonth(),durationDays:c.durationDays||null,late:!!c.late});
+  saveArchiveLedger(list);
+}
 function renderArchive(){
   const root=document.getElementById('archiveShell');if(!root)return;
   if(typeof assignCaseNumbers==='function')assignCaseNumbers();
@@ -2949,12 +2989,27 @@ function renderArchive(){
   if(arToD)archived=archived.filter(c=>{const d=archiveDate(c);return d&&d<=arToD});
   if(!hasRange&&archiveFilter.year)archived=archived.filter(c=>{const d=archiveDate(c);return !d||String(d.getFullYear())===String(archiveFilter.year)});
   if(!hasRange&&archiveFilter.month!=='all')archived=archived.filter(c=>{const d=archiveDate(c);return d&&d.getMonth()===Number(archiveFilter.month)});
-  const total=archived.length;
-  const finished=archived.filter(c=>c.stage==='terminat').length;
-  const shipped=archived.filter(c=>typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis').length;
-  const avgDays=total?Math.round(archived.reduce((s,c)=>s+(c.durationDays||5),0)/total*10)/10:0;
-  const onTime=total?Math.round(archived.filter(c=>!c.late).length/total*100):100;
+  // Registrul contribuie la KPI doar când filtrele Tehnician/Căutare sunt neutre —
+  // vezi comentariul de la recordArchiveLedgerEntry.
+  const ledgerMatches=(archiveFilter.tech==='all'&&!archiveFilter.q)?loadArchiveLedger().filter(e=>{
+    if(clinicArchiveId&&e.clinic!==clinicArchiveId)return false;
+    if(doctorArchiveName&&normDoctorName(e.doctor)!==normDoctorName(doctorArchiveName))return false;
+    if(!clinicArchiveId&&archiveFilter.clinic!=='all'&&e.clinic!==archiveFilter.clinic)return false;
+    if(!doctorArchiveName&&archiveFilter.doctor!=='all'&&normDoctorName(e.doctor)!==archiveFilter.doctor)return false;
+    if(archiveFilter.type!=='all'&&e.type!==archiveFilter.type)return false;
+    if(arFromD&&e.ts<arFromD.getTime())return false;
+    if(arToD&&e.ts>arToD.getTime())return false;
+    if(!hasRange&&archiveFilter.year&&String(e.year)!==String(archiveFilter.year))return false;
+    if(!hasRange&&archiveFilter.month!=='all'&&String(e.month)!==String(archiveFilter.month))return false;
+    return true;
+  }):[];
+  const total=archived.length+ledgerMatches.length;
+  const finished=archived.filter(c=>c.stage==='terminat').length+ledgerMatches.filter(e=>e.stage==='terminat').length;
+  const shipped=archived.filter(c=>typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis').length+ledgerMatches.filter(e=>e.stage==='trimis'||e.stage==='anulat').length;
+  const avgDays=total?Math.round((archived.reduce((s,c)=>s+(c.durationDays||5),0)+ledgerMatches.reduce((s,e)=>s+(e.durationDays||5),0))/total*10)/10:0;
+  const onTime=total?Math.round((archived.filter(c=>!c.late).length+ledgerMatches.filter(e=>!e.late).length)/total*100):100;
   const clCounts={};archived.forEach(c=>{clCounts[c.clinic]=(clCounts[c.clinic]||0)+1});
+  ledgerMatches.forEach(e=>{if(e.clinic)clCounts[e.clinic]=(clCounts[e.clinic]||0)+1});
   const topCl=Object.entries(clCounts).sort((a,b)=>b[1]-a[1])[0];
   const groups={};let sortedKeys;
   if(archiveFilter.sort&&archiveFilter.sort!=='default'){
@@ -4278,6 +4333,7 @@ function attachSearch(){
 function attachFilters(){
   // Butoane scope: Curente / Expediate / Toate
   const _syncScopeBtns=s=>document.querySelectorAll('.scope-btn').forEach(b=>b.classList.toggle('on',b.dataset.scope===s));
+  _syncScopeBtns(activeFilter.scope);
   document.querySelectorAll('.scope-btn').forEach(b=>b.addEventListener('click',()=>{
     activeFilter.scope=b.dataset.scope;_syncScopeBtns(b.dataset.scope);
     renderPipeline();if(typeof renderTable==='function')renderTable();
@@ -4285,6 +4341,8 @@ function attachFilters(){
   const tabs=document.querySelectorAll('.subbar .tab');if(!tabs.length)return;
   const tm=['all','mine','late','week','notstarted','probasoon','trimise'];
   const sortLabelsForTab={'default':'pe luni','proba-asc':'data probei crescător','proba-desc':'data probei descrescător','finala-asc':'data finală crescător','finala-desc':'data finală descrescător'};
+  const _tabIdx=tm.indexOf(activeFilter.tab);
+  if(_tabIdx>=0){tabs.forEach(x=>x.classList.remove('on'));tabs[_tabIdx].classList.add('on')}
   tabs.forEach((t,i)=>t.addEventListener('click',()=>{tabs.forEach(x=>x.classList.remove('on'));t.classList.add('on');activeFilter.tab=tm[i];
     // Tab-ul „Trimise" = vederea Expediate; orice alt tab revine la Curente dacă eram pe Expediate
     const ns=tm[i]==='trimise'?'shipped':(activeFilter.scope==='shipped'?'current':activeFilter.scope);
@@ -4313,8 +4371,9 @@ function attachFilters(){
   const menu=document.getElementById('clinicFilterMenu');
   if(ch&&menu){
     // Rebuild clinic list from live CLINICS array
-    menu.innerHTML=`<div class="chip-menu-item on" data-value="all">Toate clinicile</div>`
-      +CLINICS.map(cl=>`<div class="chip-menu-item" data-value="${escAttr(cl.id)}">${escHTML(cl.name)}</div>`).join('');
+    menu.innerHTML=`<div class="chip-menu-item ${activeFilter.clinic==='all'?'on':''}" data-value="all">Toate clinicile</div>`
+      +CLINICS.map(cl=>`<div class="chip-menu-item ${activeFilter.clinic===cl.id?'on':''}" data-value="${escAttr(cl.id)}">${escHTML(cl.name)}</div>`).join('');
+    ch.textContent='Clinică: '+(activeFilter.clinic==='all'?'toate':(getClinic(activeFilter.clinic)?.name||activeFilter.clinic));
     ch.addEventListener('click',e=>{e.stopPropagation();menu.classList.toggle('open')});
     document.addEventListener('click',()=>menu.classList.remove('open'));
     menu.querySelectorAll('.chip-menu-item').forEach(it=>it.addEventListener('click',()=>{
@@ -4331,6 +4390,7 @@ function attachFilters(){
   if(pch&&pmenu){
     pmenu.innerHTML=`<div class="chip-person-item ${activeFilter.person==='all'?'on':''}" data-value="all"><span class="node-em">—</span><span>Toți</span></div>`
       +EMPLOYEES.map(e=>`<div class="chip-person-item ${activeFilter.person===e.id?'on':''}" data-value="${escAttr(e.id)}"><span class="node ${escAttr(e.id)}">${typeof avatarInnerHTML==='function'?avatarInnerHTML(e):escHTML(e.initials||'?')}</span><span>${escHTML(e.name)}</span></div>`).join('');
+    pch.textContent='Persoană: '+(activeFilter.person==='all'?'toți':(getEmployee(activeFilter.person)?.name||activeFilter.person));
     pch.addEventListener('click',e=>{e.stopPropagation();pmenu.classList.toggle('open')});
     document.addEventListener('click',()=>pmenu.classList.remove('open'));
     pmenu.querySelectorAll('.chip-person-item').forEach(it=>it.addEventListener('click',()=>{
@@ -4341,11 +4401,31 @@ function attachFilters(){
       renderPipeline();if(typeof renderTable==='function')renderTable();
     }));
   }
+  // Filtru „Medic" — filtrează cazurile după medicul curant.
+  const dch=document.getElementById('doctorFilterChip');
+  const dmenu=document.getElementById('doctorFilterMenu');
+  if(dch&&dmenu){
+    const docPool=[...new Map(CASES.filter(c=>c.doctor&&c.doctor.trim()).map(c=>[normDoctorName(c.doctor),c.doctor.trim()])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'ro'));
+    dmenu.innerHTML=`<div class="chip-menu-item ${activeFilter.doctor==='all'?'on':''}" data-value="all">Toți</div>`
+      +docPool.map(([norm,label])=>`<div class="chip-menu-item ${activeFilter.doctor===norm?'on':''}" data-value="${escAttr(norm)}">${escHTML(label)}</div>`).join('');
+    dch.textContent='Medic: '+(activeFilter.doctor==='all'?'toți':(docPool.find(([norm])=>norm===activeFilter.doctor)?.[1]||activeFilter.doctor));
+    dch.addEventListener('click',e=>{e.stopPropagation();dmenu.classList.toggle('open')});
+    document.addEventListener('click',()=>dmenu.classList.remove('open'));
+    dmenu.querySelectorAll('.chip-menu-item').forEach(it=>it.addEventListener('click',()=>{
+      dmenu.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.remove('on'));
+      it.classList.add('on');
+      activeFilter.doctor=it.dataset.value;
+      dch.textContent='Medic: '+(it.dataset.value==='all'?'toți':(docPool.find(([norm])=>norm===it.dataset.value)?.[1]||it.dataset.value));
+      renderPipeline();if(typeof renderTable==='function')renderTable();
+    }));
+  }
   // Sort chip — sortare opțională după Data Probei sau Data Finală.
   const sortCh=document.getElementById('sortFilterChip');
   const sortMenu=document.getElementById('sortFilterMenu');
   if(sortCh&&sortMenu){
     const sortLabels={'default':'pe luni','proba-asc':'data probei crescător','proba-desc':'data probei descrescător','finala-asc':'data finală crescător','finala-desc':'data finală descrescător'};
+    sortCh.textContent='Sortare: '+(sortLabels[activeFilter.sort]||activeFilter.sort);
+    sortMenu.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.toggle('on',x.dataset.value===activeFilter.sort));
     sortCh.addEventListener('click',e=>{e.stopPropagation();sortMenu.classList.toggle('open')});
     document.addEventListener('click',()=>sortMenu.classList.remove('open'));
     sortMenu.querySelectorAll('.chip-menu-item').forEach(it=>it.addEventListener('click',()=>{
@@ -4369,6 +4449,10 @@ function attachFilters(){
       if(r.from||r.to){rgCh.textContent='Interval: '+(fmt(r.from)||'…')+'–'+(fmt(r.to)||'…')}
       else rgCh.textContent='Interval: toate';
     };
+    if(fld)fld.value=activeFilter.range.field||'finala';
+    if(inpFrom)inpFrom.value=activeFilter.range.from||'';
+    if(inpTo)inpTo.value=activeFilter.range.to||'';
+    updLabel();
     rgCh.addEventListener('click',e=>{e.stopPropagation();rgMenu.classList.toggle('open')});
     rgMenu.addEventListener('click',e=>e.stopPropagation());
     document.addEventListener('click',()=>rgMenu.classList.remove('open'));
@@ -4384,6 +4468,21 @@ function attachFilters(){
       renderPipeline();if(typeof renderTable==='function')renderTable();
     });
   }
+  // Șterge filtre — resetează totul la valorile implicite și resincronizează UI-ul static.
+  document.getElementById('clearFiltersBtn')?.addEventListener('click',()=>{
+    activeFilter.tab='all';activeFilter.clinic='all';activeFilter.person='all';activeFilter.doctor='all';
+    activeFilter.sort='default';activeFilter.q='';activeFilter.scope='current';
+    activeFilter.range={field:'finala',from:'',to:''};
+    _syncScopeBtns('current');
+    tabs.forEach((x,i)=>x.classList.toggle('on',tm[i]==='all'));
+    const searchInp=document.getElementById('tableSearchInput');if(searchInp)searchInp.value='';
+    if(ch&&menu){menu.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.toggle('on',x.dataset.value==='all'));ch.textContent='Clinică: toate'}
+    if(pch&&pmenu){pmenu.querySelectorAll('.chip-person-item').forEach(x=>x.classList.toggle('on',x.dataset.value==='all'));pch.textContent='Persoană: toți'}
+    if(dch&&dmenu){dmenu.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.toggle('on',x.dataset.value==='all'));dch.textContent='Medic: toți'}
+    if(sortCh&&sortMenu){sortMenu.querySelectorAll('.chip-menu-item').forEach(x=>x.classList.toggle('on',x.dataset.value==='default'));sortCh.textContent='Sortare: pe luni'}
+    if(rgCh&&rgMenu){const f2=document.getElementById('rangeField'),f3=document.getElementById('rangeFrom'),f4=document.getElementById('rangeTo');if(f2)f2.value='finala';if(f3)f3.value='';if(f4)f4.value='';rgCh.textContent='Interval: toate'}
+    renderPipeline();if(typeof renderTable==='function')renderTable();
+  });
 }
 function attachMobileMenu(){const b=document.querySelector('.mobile-menu-btn'),s=document.querySelector('.sidebar');if(!b||!s)return;b.addEventListener('click',()=>s.classList.toggle('open'))}
 

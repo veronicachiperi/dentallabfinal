@@ -10,6 +10,7 @@ let _expeditedOpen = false; // secțiunea „Expediate" e pliată implicit; reț
 function renderTable() {
   const root = document.getElementById('tableView');
   if (!root) return;
+  if (typeof saveActiveFilter === 'function') saveActiveFilter();
   assignCaseNumbers();
   const filtered = applyFilter(CASES);
 
