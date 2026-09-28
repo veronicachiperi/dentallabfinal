@@ -2906,6 +2906,18 @@ function renderTechnicianPortal(){
 
 // === ARCHIVE ===
 let archiveFilter={year:String(new Date().getFullYear()),month:'all',clinic:'all',tech:'all',type:'all',q:'',sort:'default',from:'',to:''};
+// Filtrele de arhivă rămân „blocate" între sesiuni — se salvează în localStorage
+// la fiecare schimbare și se reîncarcă la refresh, ca să nu se piardă selecția.
+const ARCHIVE_FILTER_KEY='dental-lab-archive-filter';
+(function loadArchiveFilter(){
+  try{
+    const raw=localStorage.getItem(ARCHIVE_FILTER_KEY);
+    if(raw)Object.assign(archiveFilter,JSON.parse(raw));
+  }catch{}
+})();
+function saveArchiveFilter(){
+  try{localStorage.setItem(ARCHIVE_FILTER_KEY,JSON.stringify(archiveFilter))}catch{}
+}
 function renderArchive(){
   const root=document.getElementById('archiveShell');if(!root)return;
   if(typeof assignCaseNumbers==='function')assignCaseNumbers();
@@ -2915,6 +2927,7 @@ function renderArchive(){
   const doctorArchiveName=archiveUser.role==='doctor'?(archiveUser.doctorName||''):null;
   const scoped=clinicArchiveId||doctorArchiveName;
   if(clinicArchiveId)archiveFilter.clinic=clinicArchiveId;
+  saveArchiveFilter();
   let archived=CASES.filter(c=>c.stage==='terminat'||(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis'));
   const archiveDate=c=>parseShortDate(c.sentDate||c.completedDate||c.finala);
   const archiveTech=c=>c.finalTech||c.assignee||primaryStageAssignee(c,getEtapeLabStages(c.type).slice(-1)[0]);
@@ -3044,41 +3057,50 @@ function renderArchive(){
   }
 }
 
-// Curăță arhiva: șterge definitiv lucrările terminate/expediate mai vechi
-// decât o dată aleasă, ca să nu se acumuleze date la nesfârșit în sistem.
+// Curăță arhiva: șterge definitiv lucrările terminate/expediate arhivate
+// într-un interval de date ales exact de utilizator (De la / Până la),
+// ca să nu se acumuleze date la nesfârșit în sistem.
 // Doar admin (nu clinică/medic) vede acest buton — vezi renderArchive.
 function openArchiveCleanupModal(){
   const archiveDateOf=c=>parseShortDate(c.sentDate||c.completedDate||c.finala);
   const getArchivedWithDate=()=>CASES.filter(c=>(c.stage==='terminat'||(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis'))&&archiveDateOf(c));
-  const def=new Date();def.setFullYear(def.getFullYear()-1);
-  const defStr=def.toISOString().slice(0,10);
   openModal(`<div class="modal-head"><div><div class="modal-kicker">Arhivă</div><div class="modal-title">Curăță arhiva</div></div><button class="modal-close" type="button">×</button></div>
     <div style="padding:20px">
-      <p style="color:var(--text-dim);margin:0 0 14px;font-size:13px">Șterge definitiv lucrările terminate sau expediate arhivate <b>înainte</b> de data aleasă, ca sistemul să nu se supraîncarce cu date vechi. Fișierele atașate acestor lucrări se șterg odată cu ele. Lucrările fără dată de arhivare cunoscută nu sunt afectate. <b>Acțiunea nu poate fi anulată.</b></p>
-      <label class="ar-filter-label" style="display:block;margin-bottom:6px">Șterge lucrările arhivate înainte de</label>
-      <input type="date" class="ar-input" id="cleanupCutoff" value="${defStr}" style="margin-bottom:12px;width:100%">
+      <p style="color:var(--text-dim);margin:0 0 14px;font-size:13px">Șterge definitiv lucrările terminate sau expediate cu data arhivării <b>în intervalul exact ales mai jos</b> (ambele capete incluse), ca sistemul să nu se supraîncarce cu date vechi. Fișierele atașate acestor lucrări se șterg odată cu ele. Lucrările fără dată de arhivare cunoscută nu sunt afectate. <b>Acțiunea nu poate fi anulată.</b></p>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex:1"><label class="ar-filter-label" style="display:block;margin-bottom:6px">De la</label><input type="date" class="ar-input" id="cleanupFrom" style="width:100%"></div>
+        <div style="flex:1"><label class="ar-filter-label" style="display:block;margin-bottom:6px">Până la</label><input type="date" class="ar-input" id="cleanupTo" style="width:100%"></div>
+      </div>
       <div id="cleanupPreview" style="font-size:13px;color:var(--text-dim);margin-bottom:16px"></div>
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button class="btn modal-close" type="button">Anulează</button>
         <button class="btn danger" id="cleanupConfirmBtn" type="button" disabled>Șterge definitiv</button>
       </div>
     </div>`);
-  const cutoffInp=document.getElementById('cleanupCutoff');
+  const fromInp=document.getElementById('cleanupFrom');
+  const toInp=document.getElementById('cleanupTo');
   const preview=document.getElementById('cleanupPreview');
   const confirmBtn=document.getElementById('cleanupConfirmBtn');
   let matching=[];
   const refresh=()=>{
-    const cutoff=cutoffInp.value?parseShortDate(cutoffInp.value):null;
-    matching=cutoff?getArchivedWithDate().filter(c=>archiveDateOf(c)<cutoff):[];
-    if(!cutoff){preview.textContent='Alege o dată.';confirmBtn.disabled=true;return}
-    preview.textContent=matching.length?`${matching.length} lucrări vor fi șterse definitiv.`:'Nicio lucrare arhivată nu este mai veche decât data aleasă.';
+    const from=fromInp.value?parseShortDate(fromInp.value):null;
+    const to=toInp.value?parseShortDate(toInp.value):null;
+    if(!from&&!to){preview.textContent='Alege cel puțin o dată (De la și/sau Până la).';confirmBtn.disabled=true;matching=[];return}
+    matching=getArchivedWithDate().filter(c=>{
+      const d=archiveDateOf(c);
+      if(from&&d<from)return false;
+      if(to&&d>to)return false;
+      return true;
+    });
+    preview.textContent=matching.length?`${matching.length} lucrări din intervalul ales vor fi șterse definitiv.`:'Nicio lucrare arhivată nu se încadrează în intervalul ales.';
     confirmBtn.disabled=!matching.length;
   };
-  cutoffInp.addEventListener('change',refresh);
+  fromInp.addEventListener('change',refresh);
+  toInp.addEventListener('change',refresh);
   refresh();
   confirmBtn.addEventListener('click',async()=>{
     if(!matching.length)return;
-    if(!confirm(`Ștergi definitiv ${matching.length} lucrări din arhivă? Această acțiune nu poate fi anulată.`))return;
+    if(!confirm(`Ștergi definitiv ${matching.length} lucrări din arhivă (interval ales)? Această acțiune nu poate fi anulată.`))return;
     confirmBtn.disabled=true;confirmBtn.textContent='Se șterge...';
     let done=0;
     for(const c of matching.slice()){
