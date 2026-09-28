@@ -352,17 +352,26 @@ function purgeCaseFromLocalCache(id){
   try{const stored=JSON.parse(localStorage.getItem(NEW_CASES_KEY)||'[]');localStorage.setItem(NEW_CASES_KEY,JSON.stringify(stored.filter(c=>c.id!==id&&c.id!==nid)));}catch{}
 }
 
+// Șterge definitiv un caz din CASES + Supabase + atașamente locale.
+// Nu cere confirmare — apelantul (deleteCase sau curățarea arhivei) o cere înainte.
+async function deleteCaseCore(id){
+  const c=getCase(id);if(!c)return false;
+  if(typeof sbDeleteCase==='function'&&SUPABASE_CONFIGURED){
+    try{await sbDeleteCase(c.id,c.name)}catch(e){alert('Eroare la ștergere: '+e.message);return false}
+  }
+  const i=CASES.findIndex(x=>x.id===id);
+  if(i>=0)CASES.splice(i,1);
+  purgeCaseFromLocalCache(id);
+  if(attachments[id]||attachments[c.id]){delete attachments[id];delete attachments[c.id];saveAttachments(attachments);}
+  return true;
+}
 // Delete case (admin + owning clinic)
 async function deleteCase(id){
   const c=getCase(id);if(!c)return;
   if(!confirm(`Ștergi cazul "${c.name}"? Această acțiune nu poate fi anulată.`))return;
   const redirectAfterDelete=getCurrentUser()?.role==='clinic'?`clinic.html?id=${getCurrentUser().clinic||c.clinic}`:'dashboard.html';
-  if(typeof sbDeleteCase==='function'&&SUPABASE_CONFIGURED){
-    try{await sbDeleteCase(c.id,c.name)}catch(e){alert('Eroare la ștergere: '+e.message);return}
-  }
-  const i=CASES.findIndex(x=>x.id===id);
-  if(i>=0)CASES.splice(i,1);
-  purgeCaseFromLocalCache(id);
+  const ok=await deleteCaseCore(id);
+  if(!ok)return;
   reRenderAll();
   if(typeof renderArchive==='function')renderArchive();
   if(location.pathname.includes('case.html'))location.href=redirectAfterDelete;
@@ -2962,7 +2971,7 @@ function renderArchive(){
   const clinicFilterHTML=clinicArchiveId
     ? `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><input class="ar-input" value="${escAttr(archiveClinic?.name||clinicArchiveId)}" disabled></div>`
     : `<div class="ar-filter"><label class="ar-filter-label">Clinică</label><select class="ar-select" id="arC"><option value="all">Toate</option>${clinicListForFilter.map(cl=>`<option value="${cl.id}" ${archiveFilter.clinic===cl.id?'selected':''}>${cl.name}</option>`).join('')}</select></div>`;
-  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">${archiveTitle}</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div>${clinicArchiveId?'<a href="clinic.html" class="ar-btn">Portal clinică</a>':''}${doctorArchiveName?'<a href="doctor.html" class="ar-btn">Portal medic</a>':''}${exportMenuHTML('arch','Export')}</div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">${clinicArchiveId?'Clinică':'Clinică top'}</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY"${hasRange?' disabled':''}>${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"${hasRange?' disabled':''}><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">De la</label><input type="date" class="ar-input" id="arFrom" value="${escAttr(archiveFilter.from||'')}"></div><div class="ar-filter"><label class="ar-filter-label">Până la</label><input type="date" class="ar-input" id="arTo" value="${escAttr(archiveFilter.to||'')}"></div>${hasRange?'<div class="ar-filter" style="justify-content:flex-end"><label class="ar-filter-label">&nbsp;</label><button class="ar-btn" id="arRangeClear" type="button">Șterge interval</button></div>':''}${clinicFilterHTML}${scoped?'':`<div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div>`}<div class="ar-filter"><label class="ar-filter-label">Sortare</label><select class="ar-select" id="arS">${[['default','Pe luni'],['date-desc','Dată arhivă ↓ (recent)'],['date-asc','Dată arhivă ↑ (vechi)'],['doctor-asc','Medic (A-Z)'],['doctor-desc','Medic (Z-A)']].map(([v,l])=>`<option value="${v}" ${archiveFilter.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>`;
+  let h=`<div class="app">${adminSidebarHTML('arhiva')}<main class="main" style="padding:0"><div class="ar-shell"><div class="ar-topbar"><div><div class="ar-title">${archiveTitle}</div><div class="ar-subtitle">${total} lucrări terminate / expediate · istoric filtrabil</div></div><div class="spacer"></div>${clinicArchiveId?'<a href="clinic.html" class="ar-btn">Portal clinică</a>':''}${doctorArchiveName?'<a href="doctor.html" class="ar-btn">Portal medic</a>':''}${scoped?'':'<button class="ar-btn" id="arCleanupBtn" type="button">🗑 Curăță arhivă</button>'}${exportMenuHTML('arch','Export')}</div><div class="ar-kpis"><div class="ar-kpi"><div class="ar-kpi-num">${total}</div><div class="ar-kpi-lbl">Total în arhivă</div></div><div class="ar-kpi"><div class="ar-kpi-num">${finished}</div><div class="ar-kpi-lbl">Terminate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${shipped}</div><div class="ar-kpi-lbl">Expediate</div></div><div class="ar-kpi"><div class="ar-kpi-num">${topCl?(getClinic(topCl[0])||{name:topCl[0]}).name:'—'}</div><div class="ar-kpi-lbl">${clinicArchiveId?'Clinică':'Clinică top'}</div><div class="ar-kpi-sub">${topCl?topCl[1]+' lucrări':''}</div></div></div><div class="ar-filters"><div class="ar-filter"><label class="ar-filter-label">Caută pacient</label><input class="ar-input" id="arQ" value="${archiveFilter.q}" placeholder="Nume pacient sau caz #"></div><div class="ar-filter"><label class="ar-filter-label">An</label><select class="ar-select" id="arY"${hasRange?' disabled':''}>${[0,1,2].map(i=>{const y=new Date().getFullYear()-i;return `<option value="${y}" ${archiveFilter.year===String(y)?'selected':''}>${y}</option>`}).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">Lună</label><select class="ar-select" id="arM"${hasRange?' disabled':''}><option value="all">Toate</option>${MONTH_NAMES_RO.map((m,i)=>`<option value="${i}" ${archiveFilter.month===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div class="ar-filter"><label class="ar-filter-label">De la</label><input type="date" class="ar-input" id="arFrom" value="${escAttr(archiveFilter.from||'')}"></div><div class="ar-filter"><label class="ar-filter-label">Până la</label><input type="date" class="ar-input" id="arTo" value="${escAttr(archiveFilter.to||'')}"></div>${hasRange?'<div class="ar-filter" style="justify-content:flex-end"><label class="ar-filter-label">&nbsp;</label><button class="ar-btn" id="arRangeClear" type="button">Șterge interval</button></div>':''}${clinicFilterHTML}${scoped?'':`<div class="ar-filter"><label class="ar-filter-label">Tehnician</label><select class="ar-select" id="arT"><option value="all">Toți</option>${EMPLOYEES.map(e=>`<option value="${e.id}" ${archiveFilter.tech===e.id?'selected':''}>${e.name}</option>`).join('')}</select></div>`}<div class="ar-filter"><label class="ar-filter-label">Sortare</label><select class="ar-select" id="arS">${[['default','Pe luni'],['date-desc','Dată arhivă ↓ (recent)'],['date-asc','Dată arhivă ↑ (vechi)'],['doctor-asc','Medic (A-Z)'],['doctor-desc','Medic (Z-A)']].map(([v,l])=>`<option value="${v}" ${archiveFilter.sort===v?'selected':''}>${l}</option>`).join('')}</select></div></div>`;
   if(!sortedKeys.length){h+='<div style="padding:60px;text-align:center;color:var(--text-dim)">Nicio lucrare terminată sau expediată în filtrul curent.</div>'}
   sortedKeys.forEach(k=>{
     const cs=groups[k];
@@ -3024,6 +3033,7 @@ function renderArchive(){
     filename:`arhiva-${doctorArchiveName?normDoctorName(doctorArchiveName):(clinicArchiveId||'toate')}-${new Date().toISOString().slice(0,10)}`,
     title:archiveTitle
   }));
+  document.getElementById('arCleanupBtn')?.addEventListener('click',()=>openArchiveCleanupModal());
   if(!scoped){
     attachExportMenu('qtasks',()=>({
       headers:['Task','Creat de','Creat la','Finalizat de','Finalizat la'],
@@ -3032,6 +3042,54 @@ function renderArchive(){
       title:'Task-uri rapide finalizate'
     }));
   }
+}
+
+// Curăță arhiva: șterge definitiv lucrările terminate/expediate mai vechi
+// decât o dată aleasă, ca să nu se acumuleze date la nesfârșit în sistem.
+// Doar admin (nu clinică/medic) vede acest buton — vezi renderArchive.
+function openArchiveCleanupModal(){
+  const archiveDateOf=c=>parseShortDate(c.sentDate||c.completedDate||c.finala);
+  const getArchivedWithDate=()=>CASES.filter(c=>(c.stage==='terminat'||(typeof isCaseArchived==='function'?isCaseArchived(c):c.stage==='trimis'))&&archiveDateOf(c));
+  const def=new Date();def.setFullYear(def.getFullYear()-1);
+  const defStr=def.toISOString().slice(0,10);
+  openModal(`<div class="modal-head"><div><div class="modal-kicker">Arhivă</div><div class="modal-title">Curăță arhiva</div></div><button class="modal-close" type="button">×</button></div>
+    <div style="padding:20px">
+      <p style="color:var(--text-dim);margin:0 0 14px;font-size:13px">Șterge definitiv lucrările terminate sau expediate arhivate <b>înainte</b> de data aleasă, ca sistemul să nu se supraîncarce cu date vechi. Fișierele atașate acestor lucrări se șterg odată cu ele. Lucrările fără dată de arhivare cunoscută nu sunt afectate. <b>Acțiunea nu poate fi anulată.</b></p>
+      <label class="ar-filter-label" style="display:block;margin-bottom:6px">Șterge lucrările arhivate înainte de</label>
+      <input type="date" class="ar-input" id="cleanupCutoff" value="${defStr}" style="margin-bottom:12px;width:100%">
+      <div id="cleanupPreview" style="font-size:13px;color:var(--text-dim);margin-bottom:16px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn modal-close" type="button">Anulează</button>
+        <button class="btn danger" id="cleanupConfirmBtn" type="button" disabled>Șterge definitiv</button>
+      </div>
+    </div>`);
+  const cutoffInp=document.getElementById('cleanupCutoff');
+  const preview=document.getElementById('cleanupPreview');
+  const confirmBtn=document.getElementById('cleanupConfirmBtn');
+  let matching=[];
+  const refresh=()=>{
+    const cutoff=cutoffInp.value?parseShortDate(cutoffInp.value):null;
+    matching=cutoff?getArchivedWithDate().filter(c=>archiveDateOf(c)<cutoff):[];
+    if(!cutoff){preview.textContent='Alege o dată.';confirmBtn.disabled=true;return}
+    preview.textContent=matching.length?`${matching.length} lucrări vor fi șterse definitiv.`:'Nicio lucrare arhivată nu este mai veche decât data aleasă.';
+    confirmBtn.disabled=!matching.length;
+  };
+  cutoffInp.addEventListener('change',refresh);
+  refresh();
+  confirmBtn.addEventListener('click',async()=>{
+    if(!matching.length)return;
+    if(!confirm(`Ștergi definitiv ${matching.length} lucrări din arhivă? Această acțiune nu poate fi anulată.`))return;
+    confirmBtn.disabled=true;confirmBtn.textContent='Se șterge...';
+    let done=0;
+    for(const c of matching.slice()){
+      const ok=await deleteCaseCore(c.id);
+      if(ok)done++;
+    }
+    closeModal();
+    reRenderAll();
+    if(typeof renderArchive==='function')renderArchive();
+    alert(`${done} din ${matching.length} lucrări au fost șterse definitiv.`);
+  });
 }
 
 // === ECHIPA ===
