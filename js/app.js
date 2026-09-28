@@ -3025,13 +3025,14 @@ function renderArchive(){
   }
   h+=`</div></main></div>`;
   root.innerHTML=h;
-  ['arQ','arY','arM','arC','arT','arS'].forEach(id=>{document.getElementById(id)?.addEventListener('change',()=>{
+  ['arQ','arY','arM','arC','arT','arS','arDoc'].forEach(id=>{document.getElementById(id)?.addEventListener('change',()=>{
     archiveFilter.q=document.getElementById('arQ')?.value||'';
     archiveFilter.year=document.getElementById('arY')?.value||archiveFilter.year;
     archiveFilter.month=document.getElementById('arM')?.value||'all';
     archiveFilter.clinic=clinicArchiveId||document.getElementById('arC')?.value||'all';
     archiveFilter.tech=document.getElementById('arT')?.value||'all';
     archiveFilter.sort=document.getElementById('arS')?.value||'default';
+    archiveFilter.doctor=document.getElementById('arDoc')?.value||'all';
     renderArchive()
   })});
   document.getElementById('arQ')?.addEventListener('input',e=>{
@@ -3051,6 +3052,7 @@ function renderArchive(){
     archiveFilter.month='all';
     archiveFilter.clinic=clinicArchiveId||'all';
     archiveFilter.tech='all';
+    archiveFilter.doctor='all';
     archiveFilter.sort='default';
     archiveFilter.from='';
     archiveFilter.to='';
