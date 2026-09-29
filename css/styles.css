@@ -934,6 +934,12 @@ button{font-family:inherit;cursor:pointer}
   grid-template-columns: 60px minmax(170px,1.2fr) minmax(110px,.7fr) minmax(320px,1.5fr) 95px 130px;
   align-items: center;
 }
+/* Fix: fără min-width:0 pe copiii gridului, un text lung (ex. tip lucrare
+   fără spații) forța coloana să se lărgească peste limita ei, suprapunându-se
+   peste secțiunile vecine (progres/etape). min-width:0 permite coloanei să se
+   micșoreze, iar ellipsis pe .tag taie vizual textul în loc să iasă din grid. */
+.pc-row-grid > div{min-width:0}
+.pc-row-grid .tag{max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
 
 /* Tab-uri clinici sus */
 .pc-clinic-tabs-row {
