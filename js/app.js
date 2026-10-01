@@ -457,6 +457,73 @@ async function unblockCase(id){
   reRenderAll();
 }
 
+// Avansează cazul la URMĂTOAREA etapă de tratament (ex. Mockup → PMMA →
+// Finală), păstrând istoricul etapelor anterioare în c.phases. Cazul rămâne
+// UN SINGUR rând în tabel — doar producția din laborator (design/cam/etc.)
+// se resetează pentru etapa nouă, cu date de intrată/finală proprii.
+async function advanceCasePhase(id,nextLabel,newFinala){
+  const c=getCase(id);if(!c)return;
+  const before=caseAuditSnapshot(c);
+  c.phases=Array.isArray(c.phases)?c.phases.slice():[];
+  c.phases.push({
+    label:c.currentPhaseLabel||c.type||('Etapa '+(c.phases.length+1)),
+    intrata:c.intrata||'',
+    finala:c.finala||'',
+    completedAt:typeof fmtShortDate==='function'?fmtShortDate(new Date()):''
+  });
+  c.currentPhaseLabel=(nextLabel||'').trim()||'Etapă nouă';
+  c.intrata=typeof fmtShortDate==='function'?fmtShortDate(new Date()):c.intrata;
+  c.finala=newFinala||c.finala;
+  c.probaDate='';c.noProba=true;
+  c.stage='design';
+  c.stageStatuses={};
+  c.assignees={};
+  c.assignee=null;
+  c.notStarted=true;
+  c.late=false;
+  c.deadlineUrgent=typeof labDeadlineStatus==='function'?labDeadlineStatus(c).urgent:false;
+  c.priority=typeof computePriority==='function'?computePriority(c):c.priority;
+  overrides.stages=overrides.stages||{};overrides.stages[c.id]=c.stage;
+  overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,phases:c.phases,currentPhaseLabel:c.currentPhaseLabel,intrata:c.intrata,finala:c.finala,probaDate:c.probaDate,noProba:c.noProba};
+  saveOverrides(overrides);
+  if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED){
+    try{await sbSaveCase(c)}catch(e){console.warn('[sb sync]',e.message)}
+  }
+  auditCaseChangesFrom(c,before,'advance_phase');
+  reRenderAll();
+  if(typeof renderCaseDetail==='function'&&document.getElementById('caseShell'))renderCaseDetail();
+}
+
+// Modal mic pentru a introduce eticheta etapei următoare (Mockup/PMMA/Finală
+// sau text liber) și noua dată finală — apoi apelează advanceCasePhase().
+function openAdvancePhaseModal(id){
+  const c=getCase(id);if(!c)return;
+  const suggestions=['Mockup','PMMA','Finală'];
+  const doneCount=Array.isArray(c.phases)?c.phases.length:0;
+  const guess=suggestions[doneCount]||'';
+  const today=new Date();const fD=new Date(today);fD.setDate(today.getDate()+7);
+  const fDStr=typeof fmtShortDate==='function'?fmtShortDate(fD):'';
+  openModal(`<div class="modal-head"><div><div class="modal-kicker">Flux organizat</div><div class="modal-title">Următoarea etapă a tratamentului</div></div><button class="modal-close" type="button">×</button></div>
+    <div class="modal-body modal-body-compact">
+      <p style="font-size:12.5px;color:var(--text-dim);margin:0 0 12px">Etapa curentă (${escHTML(c.currentPhaseLabel||c.type||'Lucrare')}) se închide, iar producția din laborator se resetează pentru etapa nouă. Cazul rămâne același — #${c.seq||c.id}.</p>
+      <div class="field"><label>Etapă nouă</label><input id="apLabel" list="apLabelList" value="${escAttr(guess)}" placeholder="ex. PMMA"><datalist id="apLabelList">${suggestions.map(s=>`<option value="${s}">`).join('')}</datalist></div>
+      <div class="field"><label>Dată finală nouă</label><div class="date-edit-btn" id="apFinala" data-val="${fDStr}"><span>${fDStr}</span><span class="cal-ico">&#128197;</span></div></div>
+    </div>
+    <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="apSave" type="button">Avansează etapa</button></div>`);
+  const fBtn=document.getElementById('apFinala');
+  fBtn?.addEventListener('click',()=>{
+    openDatePopover(fBtn,{finala:fBtn.dataset.val},'finala',(_c,_f,v)=>{
+      fBtn.dataset.val=v||'';const sp=fBtn.querySelector('span');if(sp)sp.textContent=v||'Alege data';
+    });
+  });
+  document.getElementById('apSave')?.addEventListener('click',async()=>{
+    const label=(document.getElementById('apLabel').value||'').trim();
+    const finala=document.getElementById('apFinala').dataset.val||'';
+    closeModal();
+    await advanceCasePhase(id,label,finala);
+  });
+}
+
 function reRenderAll(){
   applyOverrides();
   if(typeof assignCaseNumbers==='function')assignCaseNumbers();
@@ -2550,14 +2617,19 @@ function renderCaseDetail(){
   const backLabel=isClinicView?'← Portal clinică':'← Pipeline';
   const actionsMenu=isClinicView
     ?`<button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`
-    :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button>${c.stage==='blocat'?`<button type="button" data-case-action="unblock">Deblochează</button>`:`<button type="button" data-case-action="block">Blochează temporar</button>`}<button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`;
+    :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="advance-phase">+ Următoarea etapă a tratamentului</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button>${c.stage==='blocat'?`<button type="button" data-case-action="unblock">Deblochează</button>`:`<button type="button" data-case-action="block">Blochează temporar</button>`}<button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`;
   // Istoric pacient: bannerul de legătură — link înapoi la cazul anterior
   // legat (fie refacere, fie doar continuare a istoricului pacientului) și/sau
   // link înainte la cazul care îl citează pe acesta ca previousCaseId.
   const prevCase=c.previousCaseId?getCase(c.previousCaseId):null;
   const redoCase=CASES.find(x=>x.previousCaseId===c.id);
   const redoBannerHTML=(prevCase||redoCase)?`<div class="cd-redo-banner">${prevCase?`<a class="cd-redo-link" href="case.html?id=${prevCase.id}">↺ Legat de cazul precedent ${caseNumHTML(prevCase)} — ${prevCase.name}</a>`:''}${redoCase?`<a class="cd-redo-link" href="case.html?id=${redoCase.id}">↺ Continuare în cazul ${caseNumHTML(redoCase)} — ${redoCase.name}</a>`:''}</div>`:'';
-  root.innerHTML=`<div class="case-shell ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz ${caseNumHTML(c)}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div>${redoBannerHTML}<div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-muted);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}${bridgeSummaryHTML(c.bridges)}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă... (poți lipi și un screenshot cu Ctrl+V)"></textarea><div class="note-photo-pending-list" id="noteInputPhotoPreview" hidden></div><div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:8px"><div><input type="file" accept="image/*" multiple hidden id="noteInputPhotoInput"><button type="button" class="btn-mini" id="noteInputPhotoBtn">+ Foto</button></div><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=typeof displayLabStageStatus==='function'?displayLabStageStatus(c,sId):(c.stageStatuses?.[sId]||'neincepute');const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" ${isClinicView?'':'style="cursor:pointer" title="Click pentru a schimba starea"'}><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
+  // Etape de tratament (Mockup → PMMA → Finală etc.) — toate în ACELAȘI caz,
+  // istoricul fiind păstrat în c.phases. Afișăm firul doar dacă s-a folosit
+  // vreodată „+ Următoarea etapă"; altfel cazul arată exact ca înainte.
+  const phaseHistory=Array.isArray(c.phases)?c.phases:[];
+  const phaseTimelineHTML=(phaseHistory.length||c.currentPhaseLabel)?`<div class="cd-section cd-phase-section"><div class="cd-section-head"><span class="cd-section-title">Etape tratament</span></div><div class="cd-phase-timeline">${phaseHistory.map(p=>`<div class="cd-phase-item done"><span class="cd-phase-dot">✓</span><div><div class="cd-phase-label">${escHTML(p.label||'Etapă')}</div><div class="cd-phase-dates">${p.intrata||'—'} → ${p.finala||'—'}</div></div></div>`).join('')}<div class="cd-phase-item active"><span class="cd-phase-dot">●</span><div><div class="cd-phase-label">${escHTML(c.currentPhaseLabel||'Etapa curentă')}</div><div class="cd-phase-dates">${c.intrata||'—'} → ${c.finala||'—'}</div></div></div></div></div>`:'';
+  root.innerHTML=`<div class="case-shell ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz ${caseNumHTML(c)}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div>${redoBannerHTML}${phaseTimelineHTML}<div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-muted);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}${bridgeSummaryHTML(c.bridges)}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă... (poți lipi și un screenshot cu Ctrl+V)"></textarea><div class="note-photo-pending-list" id="noteInputPhotoPreview" hidden></div><div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:8px"><div><input type="file" accept="image/*" multiple hidden id="noteInputPhotoInput"><button type="button" class="btn-mini" id="noteInputPhotoBtn">+ Foto</button></div><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=typeof displayLabStageStatus==='function'?displayLabStageStatus(c,sId):(c.stageStatuses?.[sId]||'neincepute');const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" ${isClinicView?'':'style="cursor:pointer" title="Click pentru a schimba starea"'}><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
   applyBridgeConnectors(root.querySelector('.tc-display-wrap'),c.bridges);
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
   document.querySelector('.fisa-fmeta')?.replaceChildren(document.createTextNode('A5 · alb-negru'));
@@ -2674,6 +2746,7 @@ function renderCaseDetail(){
     e.stopPropagation();document.getElementById('caseActionsMenu')?.classList.remove('open');
     if(b.dataset.caseAction==='edit')openQuickEdit(c.id);
     if(b.dataset.caseAction==='advance')advance();
+    if(b.dataset.caseAction==='advance-phase')openAdvancePhaseModal(c.id);
     if(b.dataset.caseAction==='view-pdf')previewFisaPDF(c);
     if(b.dataset.caseAction==='pdf')generateFisaPDF(c);
     if(b.dataset.caseAction==='attach')attach();
@@ -3731,6 +3804,7 @@ function openNewCaseModal(defClinic,defDoctor){
     .map(x=>`<option value="${escAttr(prevCaseLabel(x))}">`).join('');
   openModal(`<div class="modal-head"><div><div class="modal-kicker">Flux organizat</div><div class="modal-title">Caz nou</div></div><button class="modal-close" type="button">×</button></div>
     <div class="modal-body modal-body-compact">
+      <div id="ncDupWarning"></div>
       <div class="case-wizard${clinicWizardClass}">
         <aside class="wizard-steps">
           <div class="wizard-step on"><span>1</span><div><b>Pacient</b><small>clinică și medic</small></div></div>
@@ -3915,11 +3989,30 @@ function openNewCaseModal(defClinic,defDoctor){
     s.innerHTML=Object.entries(bt).map(([t,ns])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${lb[t]}:</span><b>${ns.sort((a,b)=>a-b).join(', ')}</b></div>`).join('')+bridgeHTML;
     ncRefreshBridges();
   }
+  let ncDupConfirmed=false;
   document.getElementById('ncSave').addEventListener('click',async()=>{
     const saveBtn=document.getElementById('ncSave');
     if(saveBtn.disabled)return; // guard: previne dublu-click / dublu-submit → cazuri duplicate
     const last=document.getElementById('ncLast').value.trim();const first=document.getElementById('ncFirst').value.trim();
     if(!last&&!first){document.getElementById('ncLast').style.borderColor='#A32D2D';return}
+    // Avertisment caz duplicat: același nume + clinică + tip de lucrare deja existent.
+    // Nu blocăm salvarea — doar atenționăm, pentru cazuri reale ca #425/#415 (Furculiță Ion).
+    if(!ncDupConfirmed){
+      const dupName=(last+' '+first).trim();
+      const dupClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
+      const dupType=document.getElementById('ncType').value.trim()||allWorkTypes()[0]||'Lucrare';
+      const norm=s=>(s||'').toLowerCase().trim().replace(/\s+/g,' ');
+      const dup=CASES.find(x=>(typeof isValidCase==='function'?isValidCase(x):true)&&norm(x.name)===norm(dupName)&&x.clinic===dupClinic&&norm(x.type)===norm(dupType));
+      if(dup){
+        const box=document.getElementById('ncDupWarning');
+        if(box){
+          box.innerHTML=`<div class="nc-dup-warning"><div><div class="nc-dup-warning-title">Caz posibil deja existent</div><div class="nc-dup-warning-text">${caseNumHTML(dup)} — ${escHTML(dup.name)}, ${escHTML((getClinic(dup.clinic)||{}).name||dup.clinic||'')}, ${escHTML(dup.type)}</div><div class="nc-dup-warning-actions"><button class="btn-mini" type="button" id="ncDupOpen">Deschide cazul existent</button><button class="btn-mini primary" type="button" id="ncDupContinue">Continuă oricum</button></div></div></div>`;
+          document.getElementById('ncDupOpen')?.addEventListener('click',()=>{location.href=`case.html?id=${dup.id}`});
+          document.getElementById('ncDupContinue')?.addEventListener('click',()=>{ncDupConfirmed=true;box.innerHTML='';document.getElementById('ncSave')?.click()});
+        }
+        return;
+      }
+    }
     saveBtn.disabled=true;
     const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
     const bridgesOut=normalizeBridges(bridges);

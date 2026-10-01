@@ -133,6 +133,8 @@ function _dbToCase(row) {
     id:           row.id,
     seq:          row.seq            || null,
     previousCaseId: row.previous_case_id || null,
+    phases:       row.phases         || [],
+    currentPhaseLabel: row.current_phase_label || '',
     name:         row.name           || '',
     lastName:     row.last_name      || '',
     firstName:    row.first_name     || '',
@@ -169,6 +171,8 @@ function _caseToDb(c) {
   return {
     seq:            c.seq          || null,
     previous_case_id: c.previousCaseId || null,
+    phases:         c.phases       || [],
+    current_phase_label: c.currentPhaseLabel || '',
     name:           c.name         || '',
     last_name:      c.lastName     || '',
     first_name:     c.firstName    || '',
@@ -242,6 +246,7 @@ async function sbUpdateField(c, field, value) {
     noProba: 'no_proba', completedDate: 'completed_date',
     finalTech: 'final_tech', durationDays: 'duration_days',
     previousCaseId: 'previous_case_id',
+    phases: 'phases', currentPhaseLabel: 'current_phase_label',
   };
   const col = colMap[field];
   if (!col) return;
