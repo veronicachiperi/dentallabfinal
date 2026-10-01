@@ -438,6 +438,25 @@ async function moveCaseToStage(id,stageId){
   reRenderAll();
 }
 
+// Deblochează un caz 'blocat', restaurând etapa reală pe baza progresului salvat în stageStatuses
+async function unblockCase(id){
+  const c=getCase(id);if(!c)return;
+  const before=caseAuditSnapshot(c);
+  const stages=typeof getEtapeLabStages==='function'?getEtapeLabStages(c.type):[];
+  const target=(typeof resolveLabStageForCase==='function'&&resolveLabStageForCase(c))||stages[0]||'design';
+  c.stage=target;
+  c.notStarted=false;
+  c.assignee=(typeof primaryStageAssignee==='function'&&primaryStageAssignee(c,target))||c.assignee||null;
+  overrides.stages=overrides.stages||{};overrides.stages[c.id]=c.stage;
+  overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee};
+  saveOverrides(overrides);
+  if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED){
+    try{await sbSaveCase(c)}catch(e){console.warn('[sb sync]',e.message)}
+  }
+  auditCaseChangesFrom(c,before,'unblock_case');
+  reRenderAll();
+}
+
 function reRenderAll(){
   applyOverrides();
   if(typeof assignCaseNumbers==='function')assignCaseNumbers();
@@ -1500,7 +1519,7 @@ function renderKanbanCard(c){
       `<button class="kb-pop-item" type="button" data-act="open">Deschide cazul</button>`+
       (isAdminOrTech?`<div class="kb-pop-sep"></div><div class="kb-pop-label">Mută la etapă</div>${stageOpts}`+
       (currentStageAssignable?`<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="collaborators">Colaboratori...</button>`:'')+
-      `<div class="kb-pop-sep"></div><button class="kb-pop-item" type="button" data-act="block">Blochează temporar</button><button class="kb-pop-item" type="button" data-act="archive">Arhivează</button><button class="kb-pop-item danger" type="button" data-act="cancel">Anulează lucrarea</button><button class="kb-pop-item" type="button" data-act="reset">Clear all → Neînceput</button>`:'')+
+      `<div class="kb-pop-sep"></div>${blocked?`<button class="kb-pop-item" type="button" data-act="unblock">Deblochează</button>`:`<button class="kb-pop-item" type="button" data-act="block">Blochează temporar</button>`}<button class="kb-pop-item" type="button" data-act="archive">Arhivează</button><button class="kb-pop-item danger" type="button" data-act="cancel">Anulează lucrarea</button><button class="kb-pop-item" type="button" data-act="reset">Clear all → Neînceput</button>`:'')+
       (isAdminOrTech||user.role==='clinic'?`<button class="kb-pop-item danger" type="button" data-act="delete">Șterge lucrarea</button>`:'');
     card.appendChild(m);
     m.querySelectorAll('.kb-pop-item').forEach(it=>it.addEventListener('click',ev=>{
@@ -1510,6 +1529,7 @@ function renderKanbanCard(c){
       if(act==='dl-pdf'){generateFisaPDF(c)}
       if(act==='reset'&&confirm(`Resetezi progresul pentru ${c.name}?`))resetCaseToNotStarted(c);
       if(act==='block')moveCaseToStage(c.id,'blocat');
+      if(act==='unblock')unblockCase(c.id);
       if(act==='archive')archiveCase(c.id);
       if(act==='cancel')archiveCase(c.id,'anulat');
       if(act==='open')location.href=`case.html?id=${c.id}`;
@@ -2530,7 +2550,7 @@ function renderCaseDetail(){
   const backLabel=isClinicView?'← Portal clinică':'← Pipeline';
   const actionsMenu=isClinicView
     ?`<button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`
-    :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button><button type="button" data-case-action="block">Blochează temporar</button><button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`;
+    :`<button type="button" data-case-action="edit">Editare completă</button><button type="button" data-case-action="advance">Marchează etapă completă</button><button type="button" data-case-action="move">Mută la etapă...</button><button type="button" data-case-action="view-pdf">Fișă PDF — Vizualizează</button><button type="button" data-case-action="pdf">Fișă PDF — Descarcă</button><button type="button" data-case-action="attach">Atașează fișiere</button>${c.stage==='blocat'?`<button type="button" data-case-action="unblock">Deblochează</button>`:`<button type="button" data-case-action="block">Blochează temporar</button>`}<button type="button" data-case-action="archive">Arhivează</button><button type="button" data-case-action="cancel" class="danger">Anulează lucrarea</button><button type="button" data-case-action="reset">Clear all → Neînceput</button><button type="button" data-case-action="delete" class="danger">Șterge lucrarea</button>`;
   // Istoric pacient: bannerul de legătură — link înapoi la cazul anterior
   // legat (fie refacere, fie doar continuare a istoricului pacientului) și/sau
   // link înainte la cazul care îl citează pe acesta ca previousCaseId.
@@ -2658,6 +2678,7 @@ function renderCaseDetail(){
     if(b.dataset.caseAction==='pdf')generateFisaPDF(c);
     if(b.dataset.caseAction==='attach')attach();
     if(b.dataset.caseAction==='block')moveCaseToStage(c.id,'blocat');
+    if(b.dataset.caseAction==='unblock')unblockCase(c.id);
     if(b.dataset.caseAction==='archive')archiveCase(c.id);
     if(b.dataset.caseAction==='cancel')archiveCase(c.id,'anulat');
     if(b.dataset.caseAction==='reset'&&confirm('Resetezi TOT cazul la „neîncepute"? Toate etapele se pierd.')){
