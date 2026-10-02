@@ -461,17 +461,24 @@ async function unblockCase(id){
 // Finală), păstrând istoricul etapelor anterioare în c.phases. Cazul rămâne
 // UN SINGUR rând în tabel — doar producția din laborator (design/cam/etc.)
 // se resetează pentru etapa nouă, cu date de intrată/finală proprii.
-async function advanceCasePhase(id,nextLabel,newFinala){
+async function advanceCasePhase(id,nextLabel,newFinala,newType){
   const c=getCase(id);if(!c)return;
   const before=caseAuditSnapshot(c);
   c.phases=Array.isArray(c.phases)?c.phases.slice():[];
   c.phases.push({
     label:c.currentPhaseLabel||c.type||('Etapa '+(c.phases.length+1)),
+    type:c.type||'',
     intrata:c.intrata||'',
     finala:c.finala||'',
     completedAt:typeof fmtShortDate==='function'?fmtShortDate(new Date()):''
   });
   c.currentPhaseLabel=(nextLabel||'').trim()||'Etapă nouă';
+  // Tipul de lucrare poate diferi de la o etapă la alta (ex. Mockup = PMMA,
+  // Finală = Zirconiu stratificat) — fiecare tip își are propriul flux de
+  // etape de laborator (design/cam/prelucrare/ceramică), de-aia resetăm
+  // mai jos și stageStatuses, ca noul tip să-și calculeze singur pipeline-ul.
+  const trimmedType=(newType||'').trim();
+  if(trimmedType){c.type=trimmedType;if(typeof rememberWorkType==='function')rememberWorkType(trimmedType)}
   c.intrata=typeof fmtShortDate==='function'?fmtShortDate(new Date()):c.intrata;
   c.finala=newFinala||c.finala;
   c.probaDate='';c.noProba=true;
@@ -484,7 +491,7 @@ async function advanceCasePhase(id,nextLabel,newFinala){
   c.deadlineUrgent=typeof labDeadlineStatus==='function'?labDeadlineStatus(c).urgent:false;
   c.priority=typeof computePriority==='function'?computePriority(c):c.priority;
   overrides.stages=overrides.stages||{};overrides.stages[c.id]=c.stage;
-  overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],stage:c.stage,notStarted:c.notStarted,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,phases:c.phases,currentPhaseLabel:c.currentPhaseLabel,intrata:c.intrata,finala:c.finala,probaDate:c.probaDate,noProba:c.noProba};
+  overrides.edits=overrides.edits||{};overrides.edits[c.id]={...overrides.edits[c.id],type:c.type,stage:c.stage,notStarted:c.notStarted,stageStatuses:c.stageStatuses,assignees:c.assignees,assignee:c.assignee,phases:c.phases,currentPhaseLabel:c.currentPhaseLabel,intrata:c.intrata,finala:c.finala,probaDate:c.probaDate,noProba:c.noProba};
   saveOverrides(overrides);
   if(typeof sbSaveCase==='function'&&SUPABASE_CONFIGURED){
     try{await sbSaveCase(c)}catch(e){console.warn('[sb sync]',e.message)}
@@ -503,10 +510,12 @@ function openAdvancePhaseModal(id){
   const guess=suggestions[doneCount]||'';
   const today=new Date();const fD=new Date(today);fD.setDate(today.getDate()+7);
   const fDStr=typeof fmtShortDate==='function'?fmtShortDate(fD):'';
+  const typeOpts=allWorkTypes().map(t=>`<option value="${escAttr(t)}">${escHTML(t)}</option>`).join('');
   openModal(`<div class="modal-head"><div><div class="modal-kicker">Flux organizat</div><div class="modal-title">Următoarea etapă a tratamentului</div></div><button class="modal-close" type="button">×</button></div>
     <div class="modal-body modal-body-compact">
       <p style="font-size:12.5px;color:var(--text-dim);margin:0 0 12px">Etapa curentă (${escHTML(c.currentPhaseLabel||c.type||'Lucrare')}) se închide, iar producția din laborator se resetează pentru etapa nouă. Cazul rămâne același — #${c.seq||c.id}.</p>
       <div class="field"><label>Etapă nouă</label><input id="apLabel" list="apLabelList" value="${escAttr(guess)}" placeholder="ex. PMMA"><datalist id="apLabelList">${suggestions.map(s=>`<option value="${s}">`).join('')}</datalist></div>
+      <div class="field"><label>Tip de lucrare pentru etapa nouă <span style="font-weight:400;color:var(--text-dim)">— poate fi diferit de etapa anterioară (ex. PMMA → Zirconiu)</span></label><input id="apType" list="apTypeList" value="${escAttr(c.type||'')}" placeholder="ex. ZR FULL — sau scrie alt tip" autocomplete="off"><datalist id="apTypeList">${typeOpts}</datalist></div>
       <div class="field"><label>Dată finală nouă</label><div class="date-edit-btn" id="apFinala" data-val="${fDStr}"><span>${fDStr}</span><span class="cal-ico">&#128197;</span></div></div>
     </div>
     <div class="modal-foot"><button class="btn modal-close" type="button">Anulează</button><button class="btn primary" id="apSave" type="button">Avansează etapa</button></div>`);
@@ -518,9 +527,10 @@ function openAdvancePhaseModal(id){
   });
   document.getElementById('apSave')?.addEventListener('click',async()=>{
     const label=(document.getElementById('apLabel').value||'').trim();
+    const type=(document.getElementById('apType').value||'').trim();
     const finala=document.getElementById('apFinala').dataset.val||'';
     closeModal();
-    await advanceCasePhase(id,label,finala);
+    await advanceCasePhase(id,label,finala,type);
   });
 }
 
@@ -2628,7 +2638,7 @@ function renderCaseDetail(){
   // istoricul fiind păstrat în c.phases. Afișăm firul doar dacă s-a folosit
   // vreodată „+ Următoarea etapă"; altfel cazul arată exact ca înainte.
   const phaseHistory=Array.isArray(c.phases)?c.phases:[];
-  const phaseTimelineHTML=(phaseHistory.length||c.currentPhaseLabel)?`<div class="cd-section cd-phase-section"><div class="cd-section-head"><span class="cd-section-title">Etape tratament</span></div><div class="cd-phase-timeline">${phaseHistory.map(p=>`<div class="cd-phase-item done"><span class="cd-phase-dot">✓</span><div><div class="cd-phase-label">${escHTML(p.label||'Etapă')}</div><div class="cd-phase-dates">${p.intrata||'—'} → ${p.finala||'—'}</div></div></div>`).join('')}<div class="cd-phase-item active"><span class="cd-phase-dot">●</span><div><div class="cd-phase-label">${escHTML(c.currentPhaseLabel||'Etapa curentă')}</div><div class="cd-phase-dates">${c.intrata||'—'} → ${c.finala||'—'}</div></div></div></div></div>`:'';
+  const phaseTimelineHTML=(phaseHistory.length||c.currentPhaseLabel)?`<div class="cd-section cd-phase-section"><div class="cd-section-head"><span class="cd-section-title">Etape tratament</span></div><div class="cd-phase-timeline">${phaseHistory.map(p=>`<div class="cd-phase-item done"><span class="cd-phase-dot">✓</span><div><div class="cd-phase-label">${escHTML(p.label||'Etapă')}${p.type?` <span class="cd-phase-type">${escHTML(p.type)}</span>`:''}</div><div class="cd-phase-dates">${p.intrata||'—'} → ${p.finala||'—'}</div></div></div>`).join('')}<div class="cd-phase-item active"><span class="cd-phase-dot">●</span><div><div class="cd-phase-label">${escHTML(c.currentPhaseLabel||'Etapa curentă')}${c.type?` <span class="cd-phase-type">${escHTML(c.type)}</span>`:''}</div><div class="cd-phase-dates">${c.intrata||'—'} → ${c.finala||'—'}</div></div></div></div></div>`:'';
   root.innerHTML=`<div class="case-shell ${typeof isCaseBlocked==='function'&&isCaseBlocked(c)?'blocked':''}"><div class="cd-topbar"><a href="${backHref}" class="cd-back">${backLabel}</a><div class="spacer"></div><div class="case-actions"><button class="btn primary" id="caseActionsBtn" type="button">Acțiuni ▾</button><div class="case-actions-menu" id="caseActionsMenu">${actionsMenu}</div></div><input id="caseFileInput" type="file" multiple hidden></div><div class="cd-head"><div class="cd-clinic-line">${clinic.name} · Caz ${caseNumHTML(c)}</div><h1 class="cd-title">${c.name}</h1><div class="cd-doctor">Medic: ${c.doctor||'—'}</div></div>${redoBannerHTML}${phaseTimelineHTML}<div class="cd-grid"><div class="cd-main"><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Detalii caz</span></div><div class="cd-section-body"><div class="cd-kv-grid"><div><div class="cd-kv-label">Tip</div><div class="cd-kv-val"><span class="tag">${c.type}</span></div></div><div><div class="cd-kv-label">Culoare</div><div class="cd-kv-val">${c.color||'—'}</div></div><div><div class="cd-kv-label">Etapă</div><div class="cd-kv-val">${stageLabel}</div></div><div><div class="cd-kv-label">Intrată</div><div class="cd-kv-val editable-date" data-date-field="intrata">${c.intrata}</div></div><div><div class="cd-kv-label">Probă</div><div class="cd-kv-val bold-date editable-date" data-date-field="probaDate" style="${c.noProba?'color:var(--text-muted);font-style:italic':''}${c.noProba?';cursor:pointer':''}">${c.noProba?'Fără probă':(c.probaDate||'—')}</div></div><div><div class="cd-kv-label">Finală</div><div class="cd-kv-val bold-date editable-date ${c.late||deadlineUrgent?'late':''}" data-date-field="finala">${c.finala}</div></div><div><div class="cd-kv-label">Implant</div><div class="cd-kv-val">${c.implantType||'—'}</div></div><div><div class="cd-kv-label">Amprentă</div><div class="cd-kv-val">${c.amprentaType||'—'}</div></div><div><div class="cd-kv-label">Prioritate</div><div class="cd-kv-val">${c.priority}</div></div></div></div></div>${(c.teeth&&c.teeth.length)?`<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Schema dentară (FDI)</span><span class="cd-section-action">${c.teeth.length} dinți</span></div><div class="cd-section-body"><div class="tc-display-wrap"><div class="tc-display-row">${trow(upper)}</div><div class="tc-display-row">${trow(lower)}</div></div><div class="tc-summary" style="margin-top:10px">${Object.entries(byType).map(([t,n])=>`<div class="tc-summary-line"><span class="tc-sum-mini ${t}"></span><span>${labels[t]}:</span><b>${n.join(', ')}</b></div>`).join('')}${bridgeSummaryHTML(c.bridges)}</div></div></div>`:''}<div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Fișă de laborator</span></div><div class="fisa-attached"><div class="fisa-icon-pdf">PDF</div><div style="flex:1"><div class="fisa-fname">fisa-${c.id}.pdf</div><div class="fisa-fmeta">A4 · model color</div></div><button class="btn primary" id="dlFisaBtn">Descarcă</button></div>${renderUploadedFisaPDFs(c)}</div><div class="cd-section"><div class="cd-section-head"><span class="cd-section-title">Note & activitate</span></div><div class="cd-section-body"><textarea class="note-form-input" id="noteInput" placeholder="Adaugă o notă... (poți lipi și un screenshot cu Ctrl+V)"></textarea><div class="note-photo-pending-list" id="noteInputPhotoPreview" hidden></div><div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:8px"><div><input type="file" accept="image/*" multiple hidden id="noteInputPhotoInput"><button type="button" class="btn-mini" id="noteInputPhotoBtn">+ Foto</button></div><button class="btn primary" id="addNoteBtn">Trimite</button></div><div class="note-list" id="noteList"></div></div></div></div><aside class="cd-aside"><div class="aside-section"><h3 class="aside-title">Etape lab</h3><div class="tl-list">${stages.map(sId=>{const s=getStage(sId);const st=typeof displayLabStageStatus==='function'?displayLabStageStatus(c,sId):(c.stageStatuses?.[sId]||'neincepute');const cls=st==='finalizat'?'done':['in_lucru','la_proba','proba_aprobata','asteptare_bari','bari_finalizate','asteptare_raspuns','astept_aprobare'].includes(st)?'now':'';const techs=stageAssignees(c,sId).map(id=>getEmployee(id)).filter(Boolean);const m=st==='finalizat'?'finalizat':st==='in_lucru'?'în lucru':st==='la_proba'?'la probă':st==='proba_aprobata'?'probă aprobată':st==='asteptare_bari'?'așteaptă bare':st==='bari_finalizate'?'bare finalizate':st==='asteptare_raspuns'?'așteaptă răspuns':st==='astept_aprobare'?'așteaptă aprobare':'în așteptare';return `<div class="tl-item ${cls}" data-tl-stage="${sId}" data-case-id="${c.id}" ${isClinicView?'':'style="cursor:pointer" title="Click pentru a schimba starea"'}><span class="tl-marker ${cls}"></span><div><div class="tl-name">${s.name}</div><div class="tl-meta">${techs.length?`<span class="tl-tech-list">${techs.map(t=>`<span class="tl-tech ${t.id}" title="${escAttr(t.name)}">${t.initials}</span>`).join('')}</span>`:''}${m}</div></div></div>`}).join('')}</div></div><div class="aside-section"><h3 class="aside-title">Fișiere atașate</h3><div class="file-list" id="caseFileList">${renderAttachedFiles(c)}</div><button class="btn" id="attachCaseFileBtn" style="margin-top:10px;width:100%">+ Atașează fișier</button></div></aside></div></div>`;
   applyBridgeConnectors(root.querySelector('.tc-display-wrap'),c.bridges);
   document.getElementById('dlFisaBtn')?.addEventListener('click',()=>generateFisaPDF(c));
@@ -3823,6 +3833,7 @@ function openNewCaseModal(defClinic,defDoctor){
           <section class="wizard-panel">
             <div class="wizard-panel-title">Lucrare</div>
             <div class="field-row"><div class="field"><label>Tip</label><input id="ncType" list="ncTypeList" placeholder="ex. ZR FULL — sau scrie alt tip" autocomplete="off"><datalist id="ncTypeList">${tOpts}</datalist></div><div class="field"><label>Culoare</label><select id="ncColor">${colOpts}</select></div></div>
+            <div class="field"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:400"><input type="checkbox" id="ncMultiPhase"> Lucrare în mai multe etape <span style="font-weight:400;color:var(--text-dim)">(ex. Mockup → PMMA → Finală)</span></label><div id="ncPhaseBox" hidden style="margin-top:8px"><label>Eticheta primei etape</label><input id="ncPhaseLabel" list="ncPhaseLabelList" value="Mockup" placeholder="ex. Mockup"><datalist id="ncPhaseLabelList"><option value="Mockup"><option value="PMMA"><option value="Finală"></datalist><p style="font-size:11px;color:var(--text-dim);margin:6px 0 0">Cazul va avea un fir vizibil de etape; poți avansa la etapa următoare din pagina cazului, oricând.</p></div></div>
             <details class="tooth-details"${toothDetailsOpen}>
               <summary>Schema dentară <span>opțional</span></summary>
               <div class="tooth-details-body">
@@ -3900,6 +3911,9 @@ function openNewCaseModal(defClinic,defDoctor){
     else{btn.classList.remove('disabled');const sp=btn.querySelector('span');if(sp)sp.textContent='Alege data';btn.classList.add('is-empty');}
   });
   updateDeadlineAdvisor();
+  document.getElementById('ncMultiPhase')?.addEventListener('change',e=>{
+    const box=document.getElementById('ncPhaseBox');if(box)box.hidden=!e.target.checked;
+  });
   const tMap=new Map();
   let bridges=[];let bridgeMode=false;const brSel=new Set();
   const ncChartWrap=()=>document.getElementById('toothChartWrap');
@@ -4020,7 +4034,13 @@ function openNewCaseModal(defClinic,defDoctor){
     rememberWorkType(type);
     const caseClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
     const ncNoProba=document.getElementById('ncNoProba')?.checked||false;
+    const ncMultiPhase=document.getElementById('ncMultiPhase')?.checked||false;
+    const ncPhaseLabel=(document.getElementById('ncPhaseLabel')?.value||'').trim();
     const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:lockedDoctorName||document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,bridges:bridgesOut,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true,createdByRole:(getCurrentUser()||{}).role||'',createdTs:Date.now()};
+    // Lucrare în mai multe etape: setăm eticheta primei etape chiar la creare,
+    // ca firul de etape (Mockup → PMMA → Finală) să fie vizibil din start pe
+    // pagina cazului, fără să fie nevoie de un prim "+ Următoarea etapă".
+    if(ncMultiPhase)nc.currentPhaseLabel=ncPhaseLabel||'Mockup';
     // Refacere: leagă cazul nou de cel precedent, dacă utilizatorul a ales
     // unul din datalist-ul „Caz precedent" (potrivire exactă pe eticheta afișată).
     const prevCaseRaw=(document.getElementById('ncPrevCase')?.value||'').trim();

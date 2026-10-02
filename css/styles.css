@@ -424,6 +424,7 @@ button{font-family:inherit;cursor:pointer}
 .cd-phase-item.done .cd-phase-dot{color:#0F6E56}
 .cd-phase-item.active .cd-phase-dot{color:var(--info)}
 .cd-phase-label{font-size:12.5px;font-weight:500}
+.cd-phase-type{font-size:10px;font-weight:400;color:var(--text-muted);background:var(--bg);border:0.5px solid var(--border);border-radius:var(--radius-sm);padding:1px 5px;margin-left:2px}
 .cd-phase-dates{font-size:11px;color:var(--text-muted)}
 .nc-dup-warning{display:flex;gap:10px;align-items:flex-start;background:var(--warn-bg);border:0.5px solid var(--warn);border-radius:var(--radius-md);padding:10px 12px;margin:0 0 12px}
 .nc-dup-warning-title{font-size:13px;font-weight:500;color:var(--warn);margin:0 0 2px}
