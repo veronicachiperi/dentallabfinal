@@ -21,6 +21,13 @@ alter table public.cases
 alter table public.cases
   add column if not exists current_phase_label text default '';
 
+-- 3. Etapele planificate, NEÎNCEPUTE ÎNCĂ (alese la crearea cazului, în
+--    constructorul din modalul "Caz nou"): [{label, estFinala}, ...]
+--    Sunt "consumate" (eliminate din listă) pe măsură ce se avansează cu
+--    "+ Următoarea etapă" — prima din listă devine etapa curentă.
+alter table public.cases
+  add column if not exists phase_plan jsonb default '[]'::jsonb;
+
 -- Verificare rapidă: vezi coloanele tabelei
 -- select column_name from information_schema.columns
 -- where table_schema='public' and table_name='cases' order by column_name;
