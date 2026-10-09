@@ -4095,50 +4095,60 @@ function openNewCaseModal(defClinic,defDoctor){
       }
     }
     saveBtn.disabled=true;
-    const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
-    const bridgesOut=normalizeBridges(bridges);
-    const type=document.getElementById('ncType').value.trim()||allWorkTypes()[0]||'Lucrare';
-    rememberWorkType(type);
-    const caseClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
-    const ncNoProba=document.getElementById('ncNoProba')?.checked||false;
-    const ncMultiPhase=document.getElementById('ncMultiPhase')?.checked||false;
-    const ncPhaseList=ncMultiPhase?ncPhaseRows.map(r=>({label:(r.label||'').trim(),est:(r.est||'').trim()})).filter(r=>r.label):[];
-    const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:lockedDoctorName||document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,bridges:bridgesOut,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true,createdByRole:(getCurrentUser()||{}).role||'',createdTs:Date.now()};
-    // Lucrare în mai multe etape: utilizatorul a definit TOATE etapele la
-    // creare. Prima etapă din listă pornește cazul (currentPhaseLabel) ca
-    // firul de etape să fie vizibil din start; restul rămân în c.phasePlan,
-    // o coadă de etape planificate, consumată pe măsură ce se avansează.
-    if(ncMultiPhase&&ncPhaseList.length){
-      nc.currentPhaseLabel=ncPhaseList[0].label;
-      nc.phasePlan=ncPhaseList.slice(1).map(p=>({label:p.label,estFinala:p.est||''}));
+    // Totul de mai jos e învelit în try/catch: înainte, o eroare neprevăzută
+    // aici (ex. după „Continuă oricum") pica silențios — fără alert, fără
+    // salvare — și butonul rămânea blocat. Acum orice eroare e vizibilă și
+    // butonul se redeblochează, ca să poți încerca din nou.
+    try{
+      const teeth=[];tMap.forEach((type,n)=>teeth.push({n:Number(n),type}));
+      const bridgesOut=normalizeBridges(bridges);
+      const type=document.getElementById('ncType').value.trim()||allWorkTypes()[0]||'Lucrare';
+      rememberWorkType(type);
+      const caseClinic=lockedClinicId||document.getElementById('ncClinicLocked')?.value||document.getElementById('ncClinic').value;
+      const ncNoProba=document.getElementById('ncNoProba')?.checked||false;
+      const ncMultiPhase=document.getElementById('ncMultiPhase')?.checked||false;
+      const ncPhaseList=ncMultiPhase?ncPhaseRows.map(r=>({label:(r.label||'').trim(),est:(r.est||'').trim()})).filter(r=>r.label):[];
+      const nc={name:(last+' '+first).trim(),lastName:last,firstName:first,clinic:caseClinic,doctor:lockedDoctorName||document.getElementById('ncDoctor').value,type,color:document.getElementById('ncColor').value,stage:'design',intrata:readDateTimeInput('ncIntrata','ncIntrataTime'),probaDate:ncNoProba?'':readDateTimeInput('ncProba','ncProbaTime'),noProba:ncNoProba,finala:readDateTimeInput('ncFinala','ncFinalaTime'),teeth,bridges:bridgesOut,implantType:document.getElementById('ncImplant').value,amprentaType:document.getElementById('ncAmprenta').value,notes:notesFromTextArea(document.getElementById('ncNotes').value,''),assignees:{},stageStatuses:{},notStarted:true,createdByRole:(getCurrentUser()||{}).role||'',createdTs:Date.now()};
+      // Lucrare în mai multe etape: utilizatorul a definit TOATE etapele la
+      // creare. Prima etapă din listă pornește cazul (currentPhaseLabel) ca
+      // firul de etape să fie vizibil din start; restul rămân în c.phasePlan,
+      // o coadă de etape planificate, consumată pe măsură ce se avansează.
+      if(ncMultiPhase&&ncPhaseList.length){
+        nc.currentPhaseLabel=ncPhaseList[0].label;
+        nc.phasePlan=ncPhaseList.slice(1).map(p=>({label:p.label,estFinala:p.est||''}));
+      }
+      // Refacere: leagă cazul nou de cel precedent, dacă utilizatorul a ales
+      // unul din datalist-ul „Caz precedent" (potrivire exactă pe eticheta afișată).
+      const prevCaseRaw=(document.getElementById('ncPrevCase')?.value||'').trim();
+      if(prevCaseRaw){
+        const match=CASES.find(x=>(typeof isValidCase==='function'?isValidCase(x):true)&&prevCaseLabel(x)===prevCaseRaw);
+        if(match)nc.previousCaseId=match.id;
+      }
+      if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
+      // Numărul de caz permanent — atribuit o singură dată, la creare.
+      nc.seq=nextCaseSeq();
+      nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
+      nc.priority=computePriority(nc);
+      if(SUPABASE_CONFIGURED){try{await sbSaveCase(nc)}catch(e){alert('Eroare la salvare: '+e.message);saveBtn.disabled=false;return}}
+      else{persistNewCase(nc)}
+      // Guard against the realtime INSERT event adding the same row first
+      // (race condition that produced a duplicate row with default values).
+      const existing=CASES.find(x=>x.id===nc.id);
+      if(existing){const i=CASES.indexOf(existing);CASES[i]=nc;}
+      else CASES.unshift(nc);
+      // Punțile nu au coloană dedicată în DB — le păstrăm prin stratul local de
+      // overrides, keyed pe id-ul cazului (supraviețuiește reload-ului).
+      // Marcaj creator + punți — păstrate prin stratul local de overrides (supraviețuiesc reload-ului).
+      overrides.edits=overrides.edits||{};overrides.edits[nc.id]={...overrides.edits[nc.id],createdByRole:nc.createdByRole,createdTs:nc.createdTs,...(bridgesOut.length?{bridges:bridgesOut}:{})};saveOverrides(overrides);
+      if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
+      updateMainSummary();
+      if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
+      if(typeof renderDoctor==='function')renderDoctor();
+    }catch(e){
+      console.error('Eroare la salvarea cazului nou:',e);
+      alert('A apărut o eroare neașteptată la salvare: '+(e&&e.message?e.message:e)+'\n\nCazul NU a fost salvat. Poți încerca din nou.');
+      saveBtn.disabled=false;
     }
-    // Refacere: leagă cazul nou de cel precedent, dacă utilizatorul a ales
-    // unul din datalist-ul „Caz precedent" (potrivire exactă pe eticheta afișată).
-    const prevCaseRaw=(document.getElementById('ncPrevCase')?.value||'').trim();
-    if(prevCaseRaw){
-      const match=CASES.find(x=>(typeof isValidCase==='function'?isValidCase(x):true)&&prevCaseLabel(x)===prevCaseRaw);
-      if(match)nc.previousCaseId=match.id;
-    }
-    if(!SUPABASE_CONFIGURED)nc.id=nextCaseId();
-    // Numărul de caz permanent — atribuit o singură dată, la creare.
-    nc.seq=nextCaseSeq();
-    nc.deadlineUrgent=labDeadlineStatus(nc).urgent;
-    nc.priority=computePriority(nc);
-    if(SUPABASE_CONFIGURED){try{await sbSaveCase(nc)}catch(e){alert('Eroare la salvare: '+e.message);saveBtn.disabled=false;return}}
-    else{persistNewCase(nc)}
-    // Guard against the realtime INSERT event adding the same row first
-    // (race condition that produced a duplicate row with default values).
-    const existing=CASES.find(x=>x.id===nc.id);
-    if(existing){const i=CASES.indexOf(existing);CASES[i]=nc;}
-    else CASES.unshift(nc);
-    // Punțile nu au coloană dedicată în DB — le păstrăm prin stratul local de
-    // overrides, keyed pe id-ul cazului (supraviețuiește reload-ului).
-    // Marcaj creator + punți — păstrate prin stratul local de overrides (supraviețuiesc reload-ului).
-    overrides.edits=overrides.edits||{};overrides.edits[nc.id]={...overrides.edits[nc.id],createdByRole:nc.createdByRole,createdTs:nc.createdTs,...(bridgesOut.length?{bridges:bridgesOut}:{})};saveOverrides(overrides);
-    if(newCaseFiles.length)await storeCaseFiles(nc.id,newCaseFiles);closeModal();
-    updateMainSummary();
-    if(typeof renderTable==='function')renderTable();renderPipeline();renderClinic();
-    if(typeof renderDoctor==='function')renderDoctor();
   });
 }
 
